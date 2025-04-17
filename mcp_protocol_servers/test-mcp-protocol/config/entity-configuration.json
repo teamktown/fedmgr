@@ -1,0 +1,28 @@
+{
+  "sub": "http://localhost:3102",
+  "metadata": {
+    "federation_entity": {
+      "organization_name": "MCP Protocol Server test-mcp-protocol",
+      "contacts": [
+        "ops@test-mcp-protocol.local"
+      ],
+      "federation_fetch_endpoint": "http://localhost:3102/.well-known/openid-federation",
+      "trust_marks": []
+    },
+    "mcp_protocol": {
+      "protocol_version": "1.0",
+      "server_name": "test-mcp-protocol",
+      "description": "MCP Protocol Server: test-mcp-protocol",
+      "tools_endpoint": "http://localhost:3102/tools",
+      "resources_endpoint": "http://localhost:3102/resources",
+      "websocket_endpoint": "http://localhost:3102/mcp"
+    }
+  },
+  "authority_hints": [
+    "http://localhost:3001"
+  ],
+  "jwks": {
+    "keys": []
+  },
+  "iat": 1744922037
+}

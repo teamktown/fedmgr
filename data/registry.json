@@ -1,8 +1,12 @@
 {
-    "federations": ["alpha"],
-    "mcps": {
-      "MCPA": 3100,
-      "MCPB": 3101
-    }
+  "federations": [
+    "alpha"
+  ],
+  "mcps": {
+    "MCPA": 3100,
+    "MCPB": 3101
+  },
+  "mcpProtocolServers": {
+    "test-mcp-protocol": 3102
   }
-  
+}
