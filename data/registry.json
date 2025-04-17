@@ -1,0 +1,8 @@
+{
+    "federations": ["alpha"],
+    "mcps": {
+      "MCPA": 3100,
+      "MCPB": 3101
+    }
+  }
+  
