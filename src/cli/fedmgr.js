@@ -94,7 +94,11 @@ function bootstrapFederation(name) {
 
   fs.writeFileSync(entityConfigFile, JSON.stringify(config, null, 2))
 
-  const reg = loadRegistry()
+  const reg = loadRegistry() || { federations: [] }
+  if (!reg.federations) {
+    reg.federations = []
+  }
+  
   if (!reg.federations.includes(name)) {
     reg.federations.push(name)
     saveRegistry(reg)

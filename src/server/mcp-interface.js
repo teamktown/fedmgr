@@ -1,6 +1,6 @@
 /**
  * MCP Server Interface
- * 
+ *
  * Abstraction layer for managing MCP instances:
  * - Create and initialize MCP instances
  * - Route requests to appropriate MCP instances
@@ -14,7 +14,10 @@ const fs = require('fs');
 const path = require('path');
 const http = require('http');
 const EventEmitter = require('events');
+const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 const MCPProtocolServer = require('./mcp-protocol-server');
+const certificateUtils = require('./utils/certificate-utils');
 
 class MCPInterface extends EventEmitter {
   constructor(registryPath) {
@@ -85,6 +88,12 @@ class MCPInterface extends EventEmitter {
     execSync(`openssl genrsa -out ${keysPath}/mcp-private.pem 2048`);
     execSync(`openssl rsa -in ${keysPath}/mcp-private.pem -pubout -out ${keysPath}/mcp-public.pem`);
 
+    // Load the public key and convert to JWK format
+    const jwk = certificateUtils.loadPublicKeyAsJwk(
+      `${keysPath}/mcp-public.pem`,
+      { kid: `${name}-key-${Date.now()}`, use: 'sig' }
+    );
+
     // Create entity configuration
     const entityId = `http://localhost:${port}`;
     const now = Math.floor(Date.now() / 1000);
@@ -100,7 +109,7 @@ class MCPInterface extends EventEmitter {
         }
       },
       authority_hints: ["http://localhost:3001"],
-      jwks: { keys: [] },
+      jwks: { keys: [jwk] },
       iat: now
     };
 
@@ -141,14 +150,14 @@ class MCPInterface extends EventEmitter {
     const serverPath = path.resolve(__dirname, './mcp-server.js');
     console.log(`🚀 Starting MCP '${name}' on port ${port}...`);
     
-    const process = spawn('node', [serverPath, '--name', name, '--port', port], {
+    const childProcess = spawn('node', [serverPath, '--name', name, '--port', port], {
       stdio: 'inherit',
       env: { ...process.env, NAME: name, PORT: port.toString() }
     });
 
-    this.mcpProcesses.set(name, process);
+    this.mcpProcesses.set(name, childProcess);
     
-    process.on('exit', (code) => {
+    childProcess.on('exit', (code) => {
       console.log(`MCP '${name}' exited with code ${code}`);
       this.mcpProcesses.delete(name);
     });
@@ -166,8 +175,8 @@ class MCPInterface extends EventEmitter {
       return { success: false, message: `MCP '${name}' is not running` };
     }
 
-    const process = this.mcpProcesses.get(name);
-    process.kill();
+    const childProcess = this.mcpProcesses.get(name);
+    childProcess.kill();
     this.mcpProcesses.delete(name);
     
     return { success: true, message: `MCP '${name}' stopped` };
@@ -252,6 +261,7 @@ class MCPInterface extends EventEmitter {
 
     // Fetch entity statements from Federation Admin
     try {
+      // First, get the federation entity configuration
       const fedAdminResponse = await new Promise((resolve, reject) => {
         const req = http.request({
           hostname: 'localhost',
@@ -275,23 +285,79 @@ class MCPInterface extends EventEmitter {
         req.end();
       });
 
+      // Now get entity statements for each MCP
+      const federationEndpoint = '/federation';
+      const federationResponse = await new Promise((resolve, reject) => {
+        const req = http.request({
+          hostname: 'localhost',
+          port: 3001, // Federation Admin port
+          path: federationEndpoint,
+          method: 'GET'
+        }, (res) => {
+          let data = '';
+          res.on('data', (chunk) => {
+            data += chunk;
+          });
+          res.on('end', () => {
+            resolve(JSON.parse(data));
+          });
+        });
+
+        req.on('error', (error) => {
+          reject(error);
+        });
+        
+        req.end();
+      });
+
       // Distribute to all MCPs
       const results = [];
       for (const [name, port] of Object.entries(this.registry.mcps)) {
         try {
-          // In a real implementation, we would send the entity statements to each MCP
-          // For now, we'll just log that we would do this
-          console.log(`📡 Would distribute entity statements to MCP '${name}' on port ${port}`);
-          results.push({ name, success: true });
+          // Send the entity statements to each MCP
+          const response = await new Promise((resolve, reject) => {
+            const req = http.request({
+              hostname: 'localhost',
+              port: port,
+              path: '/entity-statements',
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              }
+            }, (res) => {
+              let data = '';
+              res.on('data', (chunk) => {
+                data += chunk;
+              });
+              res.on('end', () => {
+                resolve(JSON.parse(data));
+              });
+            });
+
+            req.on('error', (error) => {
+              reject(error);
+            });
+            
+            // Send the entity statements
+            req.write(JSON.stringify({
+              statements: federationResponse.statements
+            }));
+            
+            req.end();
+          });
+          
+          console.log(`📡 Distributed entity statements to MCP '${name}' on port ${port}`);
+          results.push({ name, success: true, response });
         } catch (error) {
+          console.error(`❌ Failed to distribute entity statements to MCP '${name}': ${error.message}`);
           results.push({ name, success: false, error: error.message });
         }
       }
 
-      return { 
-        success: true, 
+      return {
+        success: true,
         federation: federationName,
-        entityStatements: fedAdminResponse,
+        entityStatements: federationResponse.statements,
         distributionResults: results
       };
     } catch (error) {
@@ -344,6 +410,12 @@ class MCPInterface extends EventEmitter {
     execSync(`openssl genrsa -out ${keysPath}/mcp-private.pem 2048`);
     execSync(`openssl rsa -in ${keysPath}/mcp-private.pem -pubout -out ${keysPath}/mcp-public.pem`);
 
+    // Load the public key and convert to JWK format
+    const jwk = certificateUtils.loadPublicKeyAsJwk(
+      `${keysPath}/mcp-public.pem`,
+      { kid: `${name}-key-${Date.now()}`, use: 'sig' }
+    );
+
     // Create entity configuration
     const entityId = `http://localhost:${port}`;
     const now = Math.floor(Date.now() / 1000);
@@ -367,7 +439,7 @@ class MCPInterface extends EventEmitter {
         }
       },
       authority_hints: ["http://localhost:3001"],
-      jwks: { keys: [] },
+      jwks: { keys: [jwk] },
       iat: now
     };
 

@@ -2,6 +2,9 @@ const express = require('express')
 const fs = require('fs')
 const path = require('path')
 const crypto = require('crypto')
+const jwt = require('jsonwebtoken')
+const { execSync } = require('child_process')
+const certificateUtils = require('./utils/certificate-utils')
 
 const app = express()
 const port = process.env.PORT || 3001
@@ -28,6 +31,29 @@ if (!fs.existsSync(entityConfigPath)) {
 // Load Entity Configuration and Keys
 const entityConfig = JSON.parse(fs.readFileSync(entityConfigPath, 'utf-8'))
 const privateKey = fs.readFileSync(privateKeyPath, 'utf-8')
+
+// Convert public key to JWK and add to entity configuration if not already present
+if (!entityConfig.jwks || !entityConfig.jwks.keys || entityConfig.jwks.keys.length === 0) {
+  // Extract public key from private key
+  const publicKeyPath = path.join(fedRoot, 'keys/anchor-public.pem')
+  if (!fs.existsSync(publicKeyPath)) {
+    // Generate public key from private key if it doesn't exist
+    execSync(`openssl rsa -in ${privateKeyPath} -pubout -out ${publicKeyPath}`)
+  }
+  
+  // Load public key as JWK
+  const jwk = certificateUtils.loadPublicKeyAsJwk(publicKeyPath, {
+    kid: `federation-${fedName}-${Date.now()}`,
+    use: 'sig'
+  })
+  
+  // Update entity configuration with JWK
+  entityConfig.jwks = { keys: [jwk] }
+  
+  // Save updated entity configuration
+  fs.writeFileSync(entityConfigPath, JSON.stringify(entityConfig, null, 2))
+  console.log('💡 Added JWKS to entity configuration')
+}
 
 // Track trusted entities
 let trustedEntities = [];
@@ -96,15 +122,14 @@ app.post('/register', (req, res) => {
 
 // Generate an entity statement for a given entity
 function generateEntityStatement(subject) {
-  // In a real implementation, this would:
-  // 1. Create a proper JWT with header, payload, and signature
-  // 2. Sign it with the federation's private key
-  // 3. Include proper federation metadata
+  // Create a proper JWT with header, payload, and signature
+  // Sign it with the federation's private key
+  // Include proper federation metadata
   
   const now = Math.floor(Date.now() / 1000);
   
-  // Create a simulated entity statement
-  const statement = {
+  // Create the payload for the entity statement
+  const payload = {
     iss: entityConfig.sub, // Federation entity ID
     sub: subject, // Subject entity ID
     iat: now,
@@ -118,14 +143,28 @@ function generateEntityStatement(subject) {
     trust_marks: [
       {
         id: `${entityConfig.sub}/trust-marks/basic-entity`,
-        trust_mark: "simulated_trust_mark_jwt_would_go_here"
+        trust_mark: jwt.sign(
+          {
+            type: "basic-entity",
+            iss: entityConfig.sub,
+            sub: subject,
+            iat: now,
+            exp: now + 86400 // Valid for 24 hours
+          },
+          privateKey,
+          { algorithm: 'RS256' }
+        )
       }
-    ],
-    // In a real implementation, this would be a proper JWT signature
-    signature: "simulated_signature_" + crypto.randomBytes(8).toString('hex')
+    ]
   };
   
-  return statement;
+  // Sign the entity statement with the federation's private key
+  const token = certificateUtils.signJwt(payload, privateKeyPath, {
+    algorithm: 'RS256'
+    // No expiresIn needed as payload already has exp property
+  });
+  
+  return token;
 }
 
 // Entity resolution endpoint
@@ -141,17 +180,49 @@ app.get('/resolve', (req, res) => {
   // 2. Validate the entity's trust chain
   // 3. Return the resolved entity information
   
-  res.json({
-    entity_id,
-    status: 'resolved',
-    trust_chain: [
-      {
-        iss: entityConfig.sub,
-        sub: entity_id,
-        status: 'valid'
+  try {
+    // Fetch the entity's configuration
+    let entityConfiguration = null;
+    
+    try {
+      // In a real implementation, we would fetch this from the entity's endpoint
+      // For now, we'll simulate it based on our registry
+      const registry = loadRegistry();
+      const mcps = Object.entries(registry.mcps);
+      const mcp = mcps.find(([_, port]) => `http://localhost:${port}` === entity_id);
+      
+      if (mcp) {
+        const [name, port] = mcp;
+        const configPath = path.resolve(__dirname, `../../mcp_instances/${name}/config/entity-configuration.json`);
+        if (fs.existsSync(configPath)) {
+          entityConfiguration = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+        }
       }
-    ]
-  });
+    } catch (fetchError) {
+      console.error('Error fetching entity configuration:', fetchError);
+    }
+    
+    // Generate a signed entity statement for this entity
+    const entityStatement = generateEntityStatement(entity_id);
+    
+    // Return the resolved entity information with the signed statement
+    res.json({
+      entity_id,
+      status: 'resolved',
+      entity_configuration: entityConfiguration,
+      trust_chain: [
+        {
+          iss: entityConfig.sub,
+          sub: entity_id,
+          status: 'valid',
+          jwt: entityStatement
+        }
+      ]
+    });
+  } catch (error) {
+    console.error('Error resolving entity:', error);
+    res.status(500).json({ error: 'Failed to resolve entity', details: error.message });
+  }
 });
 
 // Trust mark status endpoint

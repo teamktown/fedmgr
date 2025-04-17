@@ -4,6 +4,8 @@ const WebSocket = require('ws')
 const EventEmitter = require('events')
 const path = require('path')
 const fs = require('fs')
+const jwt = require('jsonwebtoken')
+const certificateUtils = require('./utils/certificate-utils')
 
 const app = express()
 const server = http.createServer(app)
@@ -26,18 +28,29 @@ if (!name || !port) {
 const baseDir = path.resolve(__dirname, '../../mcp_instances', name)
 const configPath = path.join(baseDir, 'config')
 const entityConfigFile = path.join(configPath, 'entity-configuration.json')
+const keysPath = path.join(baseDir, 'keys')
+const publicKeyPath = path.join(keysPath, 'mcp-public.pem')
 const telemetryPath = '/ws/telemetry'
 
 // Entity statements received from MCP Interface
 let entityStatements = [];
 
-// Load entity configuration
+// Load entity configuration and public key
 let entityConfig = {};
+let publicKey = null;
+
 if (fs.existsSync(entityConfigFile)) {
   entityConfig = JSON.parse(fs.readFileSync(entityConfigFile, 'utf-8'));
   log('INFO', 'CONFIG_LOADED', `Entity configuration loaded for ${name}`);
 } else {
   log('ERROR', 'CONFIG_MISSING', `Entity configuration not found at ${entityConfigFile}`);
+}
+
+if (fs.existsSync(publicKeyPath)) {
+  publicKey = fs.readFileSync(publicKeyPath, 'utf-8');
+  log('INFO', 'KEY_LOADED', `Public key loaded for ${name}`);
+} else {
+  log('ERROR', 'KEY_MISSING', `Public key not found at ${publicKeyPath}`);
 }
 
 // Set up WebSocket for telemetry
@@ -113,8 +126,8 @@ app.get('/api', (req, res) => {
   // 3. Validate claims (exp, iss, aud, etc.)
   // 4. Check for revocation
   
-  // For now, we'll simulate validation
-  const validationResult = simulateTokenValidation(token);
+  // Validate the token
+  const validationResult = validateToken(token);
   
   if (validationResult.valid) {
     log('INFO', 'VALIDATION_PASSED', `Trust validation passed: ${validationResult.reason}`);
@@ -132,28 +145,73 @@ app.get('/api', (req, res) => {
   }
 });
 
-// Simulate token validation
-function simulateTokenValidation(token) {
-  // This is a placeholder for actual JWT validation logic
-  // In a real implementation, this would verify the token against the federation trust chain
+// Validate JWT token
+function validateToken(token) {
+  // This function verifies the token against the federation trust chain
   
-  // For demo purposes, we'll just check if the token is non-empty and has a valid format
   if (!token || token === 'none') {
     return { valid: false, reason: 'Missing token' };
   }
   
-  // Check if it looks like a JWT (three dot-separated segments)
-  const segments = token.split('.');
-  if (segments.length !== 3) {
-    return { valid: false, reason: 'Invalid token format' };
+  try {
+    // Check if it looks like a JWT (three dot-separated segments)
+    const segments = token.split('.');
+    if (segments.length !== 3) {
+      return { valid: false, reason: 'Invalid token format' };
+    }
+    
+    // For entity statements from our federation, we can verify directly
+    // In a real implementation, we would fetch the issuer's public key from their entity configuration
+    // and build a complete trust chain validation
+    
+    // First, decode the token without verification to check the issuer
+    const decoded = jwt.decode(token, { complete: true });
+    
+    if (!decoded) {
+      return { valid: false, reason: 'Failed to decode token' };
+    }
+    
+    // Check if this is a token we can verify with our known keys
+    // For tokens from other issuers, we would need to fetch their public key
+    if (decoded.payload.iss === 'http://localhost:3001') {
+      // This is from our federation, so we can verify it
+      // In a production system, we would fetch the federation's public key from a trusted source
+      
+      // For this demo, we'll use a hard-coded federation public key path
+      const fedPublicKeyPath = path.resolve(__dirname, '../../federations/alpha/keys/anchor-public.pem');
+      
+      if (!fs.existsSync(fedPublicKeyPath)) {
+        return { valid: false, reason: 'Federation public key not available' };
+      }
+      
+      // Use certificate utilities to verify the token
+      const verificationResult = certificateUtils.verifyJwt(token, fedPublicKeyPath, {
+        algorithms: ['RS256']
+      });
+      
+      if (verificationResult.valid) {
+        return {
+          valid: true,
+          reason: 'Token signature verified',
+          payload: verificationResult.payload
+        };
+      } else {
+        return {
+          valid: false,
+          reason: verificationResult.reason
+        };
+      }
+    } else {
+      // For other issuers, we would need to fetch their public key
+      // This is a simplified implementation
+      return { valid: false, reason: `Unknown issuer: ${decoded.payload.iss}` };
+    }
+  } catch (error) {
+    return {
+      valid: false,
+      reason: `Token validation failed: ${error.message}`
+    };
   }
-  
-  // In a real implementation, we would:
-  // - Decode the JWT
-  // - Verify the signature using keys from the federation
-  // - Validate claims (exp, iss, aud, etc.)
-  
-  return { valid: true, reason: 'Token format valid (simulated validation)' };
 }
 
 // Health check endpoint
