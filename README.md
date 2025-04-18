@@ -62,9 +62,7 @@ Confirm that the issuer is part of a known federation via metadata chaining
 Emit structured telemetry to the fedmgr dashboard
 
 🗂️ Project Structure
-bash
-Copy
-Edit
+```bash
 fedmgr/
 ├── /src          → All source code (CLI + services)
 │   ├── cli/      → Command handlers and core `fedmgr` logic
@@ -79,6 +77,8 @@ fedmgr/
 │   ├── mcp-behavior.md
 │   └── telemetry.md
 └── README.md
+```
+
 📍 Status
 -  Federation Admin server scaffolding
 -  MCP telemetry via WebSocket
