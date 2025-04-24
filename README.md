@@ -18,16 +18,19 @@ Inspired by tools like `kubectl`, `vault`, and `terraform`, `fedmgr` provides a 
 ## 🧰 Core Commands
 
 ```bash
+
 fedmgr create fed <federation-name>          # Bootstrap a new trust anchor and federation
 fedmgr create mcp <name>                     # Spawn a new MCP instance and register with a federation
 fedmgr list entities                         # List all federated entities
 fedmgr visualize                             # Show trust graph and entity telemetry
 fedmgr call <mcp> --token <jwt>              # Simulate a call to an MCP with an OIDC token
 
+```
+
 🧠 Architecture Overview
-mermaid
-Copy
-Edit
+
+```mermaid
+
 graph TD
   subgraph Federation
     Anchor[Trust Anchor]
@@ -49,6 +52,7 @@ graph TD
   style FedAdmin fill:#bbf,stroke:#222
   style MCP1 fill:#bfb,stroke:#222
   style MCP2 fill:#bfb,stroke:#222
+```
 Each MCP can:
 
 Validate tokens issued by trusted OIDC OPs
@@ -58,9 +62,7 @@ Confirm that the issuer is part of a known federation via metadata chaining
 Emit structured telemetry to the fedmgr dashboard
 
 🗂️ Project Structure
-bash
-Copy
-Edit
+```bash
 fedmgr/
 ├── /src          → All source code (CLI + services)
 │   ├── cli/      → Command handlers and core `fedmgr` logic
@@ -75,31 +77,22 @@ fedmgr/
 │   ├── mcp-behavior.md
 │   └── telemetry.md
 └── README.md
+```
+
 📍 Status
- Federation Admin server scaffolding
-
- MCP telemetry via WebSocket
-
- Dynamic trust validation logic
-
- Visualization canvas via D3.js
-
- democtl commands for local orchestration
+-  Federation Admin server scaffolding
+-  MCP telemetry via WebSocket
+- Dynamic trust validation logic
+- Visualization canvas via D3.js
+- democtl commands for local orchestration
 
 🔮 Future Enhancements
- Proxy OP support (Google/Azure → local federation)
-
- Federation replay/simulation scripting
-
- Multi-tenant sandboxing
-
- JWE encryption + assurance tagging
+- Proxy OP support (Google/Azure → local federation)
+ - Federation replay/simulation scripting
+ - Multi-tenant sandboxing
+-  JWE encryption + assurance tagging
 
 🛠️ Requirements
-Node.js ≥ v18
-
-VSCode (for full developer UX)
-
-mkcert (optional, if using TLS locally)
-
-📢 License
+- Node.js ≥ v18
+- VSCode (for full developer UX)
+- mkcert (optional, if using TLS locally)
