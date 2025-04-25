@@ -10,7 +10,7 @@ COMPOSE_FILE="docker-compose.generated.yml"
 MCP_COUNT=3
 FED_NAME="fed-alpha"
 OP_NAME="oidc-op"
-OP_IMAGE="sphereon/oidc-federation-op:latest"
+OP_IMAGE="sphereon/openid-federation-server:latest"
 WORKDIR="$(pwd)"
 
 # Define local package paths - ASSUMES PACKAGES ARE ALREADY BUILT IN THE CURRENT DIRECTORY
@@ -109,3 +109,5 @@ networks:
 EOF
 
 echo "✅ $COMPOSE_FILE generated with $MCP_COUNT MCPs, OP '$OP_NAME', and Fedmgr service."
+cp "$COMPOSE_FILE" "$WORKDIR/docker-compose.yaml"
+echo "🔧 To start the services, run: docker-compose -f $COMPOSE_FILE up --build"

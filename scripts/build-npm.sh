@@ -23,4 +23,5 @@ echo "@letsfederate/fedmgr packaged successfully."
 cd ../../ # Return to the root directory
 
 echo "" # Add a newline for better readability
-echo "NPM packages built successfully."
+echo "NPM packages built successfully and are in ./src/mcp-core and ./src/fedmgr respectively"
+echo "you will need to rebuild the corresponding docker images to use the new packages"
