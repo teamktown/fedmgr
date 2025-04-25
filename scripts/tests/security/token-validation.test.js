@@ -14,42 +14,44 @@ const logger = new TestLogger('TEST-SEC-001', 'TokenValidation');
 
 // Mock data for tests
 const mockKeyPair = {
-  privateKey: `-----BEGIN PRIVATE KEY-----
-MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC7VJTUt9Us8cKj
-MzEfYyjiWA4R4/M2bS1GB4t7NXp98C3SC6dVMvDuictGeurT8jNbvJZHtCSuYEvu
-NMoSfm76oqFvAp8Gy0iz5sxjZmSnXyCdPEovGhLa0VzMaQ8s+CLOyS56YyCFGeJZ
-agU5TGvQ2wPpscSB8PiVRyHmGAQLAgMBAAECggEADEEwgkjZfFDR84LWbNHFhbMW
-xKVz0sOKwA+BKUQ6uYRSMazSuWQcKDLzS47LgOQ9nQ+5AE3R7nfZH9V9cA+jYRG8
-8tOxl3/iZdKjIJgLAcNcWQfFjhS2CKtZIoMEV6fz1Y8jP6UUKxXhemI4WBxY1qKh
-+NKgJtBfnbFOMQKBgQDd9GSpJXytcKg4p5tvbcWLIK5BIdzjkBIG6pjMAcTPQaW9
-ZUj/KLwDiCmtUYatLCT0LtYSYMk3ETXY/Nf0PKs4Z/YvQsQ/ecZnQQouH5hSFnb7
-ib2+3ZiwaiO0D8nUWxHNs6EbHsXXPmAJEDmQRsZR9V1/UQKBgQDX7z2b+7XtJPYT
-4VH3QQIZlgnYQG9GCjQ/gqVQDz1qEwP2O5+Qh4VX7Ips1INpNjIQj7c5S1iV0kVX
-2nxPVwjB1YL0wSnNcHjn0YSiMJtFEDMzpBuAZ4YFIJe2F5x3+UKOBJYdUIrCgqH7
-YBTTegFDQKBgQCbduKXLXOWUdVHmCZtI5FGzGbQjVnBnTjEpkpfLDPRh89ZWjRvM
-jGQEU3jJTVOYQYl7EesqpxJxE+cNXV/vFXZ2DL4h3G5UcyXlHNJcehXboFjv0/Cn
-LfEj4kQIcO3ZR/Jyh0nfFYdGCjGEBhBIXmMJ5GcpyXSGU4eJGEBvUQKBgGTnClK8
-vLgSFELU1Pzl7dEgksQUw/wOLXVfRqz8ZMlSgo1Wd5Su++EYELzCCvx+54wTu0WD
-sgkOqXTRsYeOQo+x+TnDqZ8h7VRfUMwPh0f8lTjRDyyQeJXBYUzDsnDYlSlgLvB7
-QQKBgAGMs8i6Exk0p1H0S7HQkIjVeZnwJ0jehHOZroUH6TPmWUhTo9VnGkZOFFeK
-s5zKQzvZFYxKQKyVklQCl5vvL7oZ5752ofhODLcHpSMjYA4hMQQkRwrwuv6+Lk5+
-DRqGgEhpTu5zMKZU8oKHcZ7GbKMcnfMJM8gJLI8K0ZtYyZcg
------END PRIVATE KEY-----`,
-  publicKey: `-----BEGIN PUBLIC KEY-----
-MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAu1SU1LfVLPHCozMxH2Mo
-4lgOEePzNm0tRgeLezV6ffAt0gunVTLw7onLRnrq0/IzW7yWR7QkrmBL7jTKEn5u
-+qKhbwKfBstIs+bMY2Zkp18gnTxKLxoS2tFczGkPLPgizskuemMghRniWWoFOUxr
-0NsD6bHEgfD4lUch5hgECwIDAQAB
------END PUBLIC KEY-----`
+  privateKey: null,
+  publicKey: null
+};
+
+// Generate a key pair for testing
+const generateKeyPair = () => {
+  const keyPair = crypto.generateKeyPairSync('rsa', {
+    modulusLength: 2048,
+    publicKeyEncoding: {
+      type: 'spki',
+      format: 'pem'
+    },
+    privateKeyEncoding: {
+      type: 'pkcs8',
+      format: 'pem'
+    }
+  });
+  
+  mockKeyPair.privateKey = keyPair.privateKey;
+  mockKeyPair.publicKey = keyPair.publicKey;
 };
 
 // Helper function to create a JWT
 const createJWT = (payload, privateKey, options = {}) => {
-  return jwt.sign(payload, privateKey, {
+  // Don't set expiresIn if the payload already has exp
+  const hasExp = payload && typeof payload === 'object' && payload.exp !== undefined;
+  
+  const signOptions = {
     algorithm: 'RS256',
-    expiresIn: '1h',
     ...options
-  });
+  };
+  
+  // Only add expiresIn if exp is not in the payload and expiresIn is not in options
+  if (!hasExp && options.expiresIn === undefined) {
+    signOptions.expiresIn = '1h';
+  }
+  
+  return jwt.sign(payload, privateKey, signOptions);
 };
 
 // Helper function to verify a JWT
@@ -69,25 +71,14 @@ describe('Token Validation Security', () => {
     // Set up test environment
     jest.clearAllMocks();
     
-    // Create a temporary directory for test keys if it doesn't exist
-    const testKeysDir = path.join(__dirname, '../../..', 'test-keys');
-    if (!fs.existsSync(testKeysDir)) {
-      fs.mkdirSync(testKeysDir, { recursive: true });
-    }
-    
-    // Write test keys to files
-    fs.writeFileSync(path.join(testKeysDir, 'private.pem'), mockKeyPair.privateKey);
-    fs.writeFileSync(path.join(testKeysDir, 'public.pem'), mockKeyPair.publicKey);
+    // Generate a fresh key pair for each test
+    generateKeyPair();
   });
   
   afterEach(() => {
-    // Clean up test environment
-    const testKeysDir = path.join(__dirname, '../../..', 'test-keys');
-    if (fs.existsSync(testKeysDir)) {
-      fs.unlinkSync(path.join(testKeysDir, 'private.pem'));
-      fs.unlinkSync(path.join(testKeysDir, 'public.pem'));
-      fs.rmdirSync(testKeysDir);
-    }
+    // Reset key pair
+    mockKeyPair.privateKey = null;
+    mockKeyPair.publicKey = null;
   });
   
   test('should validate a properly signed JWT', () => {
@@ -171,8 +162,8 @@ describe('Token Validation Security', () => {
       jti: crypto.randomBytes(16).toString('hex')
     };
     
-    // Sign the payload
-    const token = createJWT(payload, mockKeyPair.privateKey, { expiresIn: undefined });
+    // Sign the payload - don't pass any options to avoid conflicts with exp in payload
+    const token = createJWT(payload, mockKeyPair.privateKey, {});
     
     // Verify the token
     const verified = verifyJWT(token, mockKeyPair.publicKey);
@@ -246,5 +237,67 @@ describe('Token Validation Security', () => {
     expect(verified.error).toContain('invalid signature');
     
     logger.info('Tampered JWT test completed');
+  });
+  test('should reject a request with missing JWT', () => {
+    logger.info('Starting missing JWT test');
+
+    // Simulate a request without a token
+    const token = undefined; // Or null, or an empty string depending on how the server handles it
+
+    // Attempt to verify the missing token (this is a simplified test, the actual server logic would handle this)
+    // In a real scenario, this would involve making an HTTP request to a protected endpoint without the Authorization header.
+    // For this unit test, we'll simulate the verification failure.
+    const verified = verifyJWT(token, mockKeyPair.publicKey);
+
+    // Check that the verification failed
+    expect(verified.error).toBeDefined();
+    expect(verified.error).toContain('jwt must be provided');
+
+    logger.info('Missing JWT test completed');
+  });
+  
+  test('should reject a malformed JWT', () => {
+    logger.info('Starting malformed JWT test');
+    
+    // Create a malformed token (not a valid JWT format)
+    const malformedToken = 'this-is-not-a-valid-jwt-token';
+    
+    // Attempt to verify the malformed token
+    const verified = verifyJWT(malformedToken, mockKeyPair.publicKey);
+    
+    // Check that the verification failed
+    expect(verified.error).toBeDefined();
+    expect(verified.error).toContain('jwt malformed');
+    
+    logger.info('Malformed JWT test completed');
+  });
+  
+  test('should reject a JWT with invalid claims', () => {
+    logger.info('Starting invalid claims test');
+    
+    // Create a payload with missing required claims
+    const payload = {
+      // Missing 'sub' claim
+      iss: 'https://federation.example.org',
+      aud: 'https://api.example.org',
+      iat: Math.floor(Date.now() / 1000),
+      exp: Math.floor(Date.now() / 1000) + 3600,
+      jti: crypto.randomBytes(16).toString('hex')
+    };
+    
+    // Sign the payload
+    const token = createJWT(payload, mockKeyPair.privateKey);
+    
+    // Verify the token with required claims check
+    const verified = verifyJWT(token, mockKeyPair.publicKey, {
+      complete: true,
+      subject: 'https://mcp.example.org' // Required subject that doesn't match
+    });
+    
+    // Check that the verification failed
+    expect(verified.error).toBeDefined();
+    expect(verified.error).toContain('jwt subject invalid');
+    
+    logger.info('Invalid claims test completed');
   });
 });

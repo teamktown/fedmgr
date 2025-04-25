@@ -107,6 +107,132 @@ function bootstrapFederation(name) {
   console.log(`✅ Federation '${name}' initialized at ${fedPath}`)
 }
 
+/**
+ * Reads the federation entity configuration file.
+ * @param {string} name - Name of the federation
+ * @returns {object | null} The federation configuration object, or null if not found.
+ */
+function readFederationConfig(name) {
+  const fedPath = path.resolve(__dirname, '../../federations', name);
+  const entityConfigFile = path.join(fedPath, 'config', 'entity-configuration.json');
+  if (fs.existsSync(entityConfigFile)) {
+    const content = fs.readFileSync(entityConfigFile, 'utf8');
+    return JSON.parse(content);
+  }
+  return null;
+}
+
+/**
+ * Writes the federation entity configuration file.
+ * @param {string} name - Name of the federation
+ * @param {object} config - The federation configuration object
+ */
+function writeFederationConfig(name, config) {
+  const fedPath = path.resolve(__dirname, '../../federations', name);
+  const entityConfigFile = path.join(fedPath, 'config', 'entity-configuration.json');
+  fs.writeFileSync(entityConfigFile, JSON.stringify(config, null, 2));
+}
+
+/**
+ * Create a new Operator configuration within a federation
+ * @param {string} fedName - Name of the federation
+ * @param {string} opName - Name of the Operator
+ */
+function createOp(fedName, opName) {
+  const fedConfig = readFederationConfig(fedName);
+  if (!fedConfig) {
+    console.error(`❌ Federation '${fedName}' not found.`);
+    process.exit(1);
+  }
+
+  // Basic operator creation logic - this would be expanded based on spec details
+  // For now, just add a placeholder entry or similar to the config
+  if (!fedConfig.metadata.operators) {
+    fedConfig.metadata.operators = {};
+  }
+
+  if (fedConfig.metadata.operators[opName]) {
+    console.log(`⚠️ Operator '${opName}' already exists in federation '${fedName}'.`);
+    return; // Or prompt for overwrite
+  }
+
+  // Generate keys for the operator (simplified)
+  const opKeysPath = path.resolve(__dirname, `../../federations/${fedName}/keys/operators`);
+  fs.mkdirSync(opKeysPath, { recursive: true });
+  execSync(`openssl genrsa -out ${opKeysPath}/${opName}-private.pem 2048`);
+  execSync(`openssl rsa -in ${opKeysPath}/${opName}-private.pem -pubout -out ${opKeysPath}/${opName}-public.pem`);
+
+  // Add operator info to federation config (simplified)
+  fedConfig.metadata.operators[opName] = {
+    name: opName,
+    public_key_path: `federations/${fedName}/keys/operators/${opName}-public.pem`
+    // More details would be added based on spec
+  };
+
+  writeFederationConfig(fedName, fedConfig);
+  console.log(`✅ Operator '${opName}' created in federation '${fedName}'.`);
+}
+
+/**
+ * Add an MCP to a federation (simplified)
+ * @param {string} fedName - Name of the federation
+ * @param {string} mcpName - Name of the MCP
+ */
+function addMcpToFederation(fedName, mcpName) {
+  const fedConfig = readFederationConfig(fedName);
+  if (!fedConfig) {
+    console.error(`❌ Federation '${fedName}' not found.`);
+    process.exit(1);
+  }
+
+  // This is a simplified approach. A real implementation would likely
+  // involve more complex interaction, possibly via mcpInterface,
+  // to register the MCP's entity ID and metadata with the federation.
+  // For now, we'll just add the MCP name to a list in the federation config.
+  if (!fedConfig.metadata.associated_mcps) {
+    fedConfig.metadata.associated_mcps = [];
+  }
+
+  if (fedConfig.metadata.associated_mcps.includes(mcpName)) {
+    console.log(`⚠️ MCP '${mcpName}' is already associated with federation '${fedName}'.`);
+    return;
+  }
+
+  fedConfig.metadata.associated_mcps.push(mcpName);
+  writeFederationConfig(fedName, fedConfig);
+  console.log(`✅ MCP '${mcpName}' associated with federation '${fedName}'.`);
+}
+
+/**
+ * Delete a federation
+ * @param {string} name - Name of the federation
+ */
+function deleteFederation(name) {
+  const fedPath = path.resolve(__dirname, '../../federations', name);
+
+  if (!fs.existsSync(fedPath)) {
+    console.log(`⚠️ Federation '${name}' not found at ${fedPath}`);
+    return;
+  }
+
+  // Remove the federation directory
+  fs.rmSync(fedPath, { recursive: true, force: true });
+  console.log(`✅ Federation '${name}' directory removed.`);
+
+  // Update the registry
+  const reg = loadRegistry() || { federations: [] };
+  if (reg.federations) {
+    reg.federations = reg.federations.filter(f => f !== name);
+    saveRegistry(reg);
+    console.log(`✅ Federation '${name}' removed from registry.`);
+  } else {
+     console.log(`⚠️ Federation '${name}' not found in registry.`);
+  }
+
+  console.log(`✅ Federation '${name}' deleted.`);
+}
+
+
 program
   .name('fedmgr')
   .description('CLI to manage federated MCPs and trust environments')
@@ -114,18 +240,32 @@ program
 
 program
   .command('create')
-  .description('Create resources: federation, MCP instance, or MCP Protocol server')
-  .argument('<type>', 'resource type: fed, mcp, or mcp-protocol')
-  .argument('<name>', 'resource name (e.g., alpha or MCPA)')
-  .action((type, name) => {
+  .description('Create resources: federation, operator, MCP instance, or MCP Protocol server')
+  .argument('<type>', 'resource type: fed, op, mcp, or mcp-protocol')
+  .argument('<name>', 'resource name (e.g., alpha, OperatorA, MCPA)')
+  .option('--federation <fed_name>', 'Specify the federation for op or mcp types')
+  .action((type, name, options) => {
     if (type === 'fed') {
-      bootstrapFederation(name)
+      bootstrapFederation(name);
+    } else if (type === 'op') {
+      if (!options.federation) {
+        console.error(`❌ Option '--federation' is required for type 'op'.`);
+        program.help();
+      } else {
+        createOp(options.federation, name);
+      }
     } else if (type === 'mcp') {
-      createMcp(name)
+       if (!options.federation) {
+        console.error(`❌ Option '--federation' is required for type 'mcp'.`);
+        program.help();
+      } else {
+        addMcpToFederation(options.federation, name);
+      }
     } else if (type === 'mcp-protocol') {
-      createMcpProtocolServer(name)
+      createMcpProtocolServer(name);
     } else {
-      console.error(`❌ Unknown type '${type}'`)
+      console.error(`❌ Unknown type '${type}'`);
+      program.help();
     }
   })
 
@@ -152,6 +292,28 @@ program
     
     console.log()
   })
+
+program
+  .command('delete')
+  .description('Delete resources: federation')
+  .argument('<type>', 'resource type: fed')
+  .argument('<name>', 'resource name (e.g., alpha)')
+  .action((type, name) => {
+    if (type === 'fed') {
+      deleteFederation(name);
+    } else {
+      console.error(`❌ Unknown type '${type}' for delete command.`);
+      program.help();
+    }
+  });
+
+program
+  .command('help')
+  .description('Outputs trust metadata and connection info (basic help)')
+  .action(() => {
+    program.help(); // Use commander's built-in help for now
+    // TODO: Implement more detailed help output as per spec if needed
+  });
 
 program
   .command('call')

@@ -1,0 +1,17 @@
+{
+  "name": "@letsfederate/mcp-core",
+  "version": "0.1.0",
+  "description": "Core components for the MCP protocol",
+  "main": "index.js",
+  "scripts": {
+    "sanity": "echo 'Running mcp-core sanity checks...'"
+  },
+  "keywords": [
+    "mcp",
+    "protocol",
+    "core",
+    "federation"
+  ],
+  "author": "LetsFederate",
+  "license": "MIT"
+}

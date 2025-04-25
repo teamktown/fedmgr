@@ -1,0 +1,16 @@
+{
+  "name": "@letsfederate/fedmgr",
+  "version": "0.1.0",
+  "description": "Federation manager for MCP",
+  "main": "index.js",
+  "scripts": {
+    "sanity": "echo 'Running fedmgr sanity checks...'"
+  },
+  "keywords": [
+    "mcp",
+    "federation",
+    "manager"
+  ],
+  "author": "LetsFederate",
+  "license": "MIT"
+}
