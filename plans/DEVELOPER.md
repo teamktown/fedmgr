@@ -1,39 +1,22 @@
-# 🧑‍💻 Developer Onboarding – fedmgr Project
+# 👨‍💻 Developer Guide: `fedmgr`
 
-Welcome to the **fedmgr** project! This document captures the goals, architecture, and relevant specifications for developers contributing to the CLI tool and orchestration layer for federated identity using OIDC, OpenID Federation, and simulated MCP servers.
-
----
-
-## 🎯 Project Goals
-
-`fedmgr` is a CLI and orchestration tool that:
-
-- Bootstraps federated trust environments with OpenID Federation 1.0
-- Spins up and manages **Master Control Program (MCP)** servers that act as identity consumers
-- Creates **Trust Anchors** and **Entity Statements**
-- Simulates federated token validation, including telemetry
-- Supports a web-based **chat UI** and **D3.js visualization** of trust graphs
-- Is designed for demos, reproducible documentation, and research experimentation
+This guide describes how to extend and maintain the federated trust framework, with a focus on modularity, test-driven development (TDD), and automation.
 
 ---
 
-## 📦 Project Structure
+## 🧪 Tests First (TDD)
 
-```
-fedmgr/
-├── /src          → All source code (CLI, services, UI)
-│   ├── cli/      → `fedmgr` command implementations
-│   ├── server/   → MCP + Federation Admin server logic
-│   └── web/      → Web chat interface + graph visualization (D3.js)
-├── /public       → Static assets (e.g., index.html, favicon)
-├── /docs         → Project documentation and specifications
-├── /scripts      → Startup helpers (e.g. federation bootstrap, entity registration)
-├── /test         → Test cases for CLI and server modules
-├── /plans        → Markdown planning files (e.g. federation.md, telemetry.md)
-└── README.md     → High-level project overview
-```
+Define tests in `plans/TESTS.md` before implementation.
 
----
+Examples:
+- MCP accepts valid JWT
+- MCP rejects unsigned or untrusted JWT (expected `401`)
+- Federation trust anchors resolve properly
+- `fedmgr` emits federation metadata via `fedmgr help`
+
+Run tests:
+```bash
+npm run test
 
 ## 🧠 Core Concepts
 
@@ -46,20 +29,67 @@ fedmgr/
 - **MCP (Master Control Program)**:
   - A service that validates OIDC tokens using trust policies
   - Part of a simulated federated environment
-
----
-
-## 🧪 Key CLI Use Cases
-
-```bash
-fedmgr create fed alpha             # Bootstrap trust anchor "alpha"
-fedmgr create mcp MCPA             # Start a new MCP (MCPA), register to fed 'alpha'
-fedmgr list entities               # Show registered federated entities
-fedmgr visualize                   # Launch webapp with D3.js trust graph
-fedmgr call MCPA --token <jwt>     # Simulate OIDC-authenticated call to MCPA
 ```
 
 ---
+
+## 🛠️ CLI Commands
+
+```bash
+fedmgr create fed <name>      # Bootstrap trust anchor
+fedmgr create op <name>       # Register OP
+fedmgr create mcp <name>      # Register MCP with JWKS and config
+fedmgr help                   # Emit trust metadata for MCP integration
+fedmgr delete fed <name>      # Destroy federation and rotate keys
+```
+
+---
+
+## 📦 Build and Publish
+
+To build and validate packages:
+```bash
+scripts/build-npm.sh
+```
+
+This:
+- Runs lint + test (`npm run sanity`)
+- Packs `.tgz` archives
+- Optionally publishes to npm
+
+---
+
+## 🐳 Setup and Compose
+
+Run `scripts/setup.sh` to:
+- Generate `docker-compose.generated.yml`
+- Bootstrap services with config
+- Use mounted folders from `config/`
+
+---
+
+## 🔌 Agent/AI Tooling
+
+MCPs support endpoints for VSCode/GitHub Copilot integration:
+- `/whoami`: reveals active JWT user claims
+- `/showtrust`: reveals loaded trust anchors
+- `/stats`: displays usage metrics
+- `/status`: service health and config sync
+## 🔗 References
+
+- OpenID Connect Core 1.0 – https://openid.net/specs/openid-connect-core-1_0.html
+- OAuth 2.0 Framework – https://tools.ietf.org/html/rfc6749
+- OpenID Federation 1.0 – https://openid.net/specs/openid-federation-1_0.html
+- JSON Web Token (JWT) – https://datatracker.ietf.org/doc/html/rfc7519
+- D3.js Library – https://d3js.org/
+---
+
+## 🚀 NPM Structure
+
+- `@letsfederate/mcp-core` – Reusable server logic
+- `@letsfederate/fedmgr` – CLI tools and config utilities
+
+All are versioned and scoped to support modular use.
 
 ## 🌐 Web Interface
 
@@ -71,45 +101,4 @@ fedmgr call MCPA --token <jwt>     # Simulate OIDC-authenticated call to MCPA
   - Federation Anchors
   - OIDC OPs
   - Trust links and graph edges
-
----
-
-## ✅ Current Status
-
-- [x] Federation Admin MCP with metadata endpoint
-- [x] MCP Server framework with JWT validation and telemetry
-- [x] WebSocket telemetry channels per MCP
-- [ ] CLI-based `democtl` command framework (in progress)
-- [ ] Dynamic D3.js trust graph (in progress)
-- [ ] Token flow simulation with trust validation (in progress)
-
----
-
-## 🔒 Deferred Feature (Backlog)
-
-**OIDC OP Proxying:**
-- The idea of letting the local OIDC OP act as a broker (receiving ID Tokens from Azure/Google and minting local JWTs into the federation) is deferred for now.
-- This would require upstream client registration, token validation, and sub remapping.
-- Notes available, but not part of initial product requirements.
-
----
-
-## 🔗 References
-
-- OpenID Connect Core 1.0 – https://openid.net/specs/openid-connect-core-1_0.html
-- OAuth 2.0 Framework – https://tools.ietf.org/html/rfc6749
-- OpenID Federation 1.0 – https://openid.net/specs/openid-federation-1_0.html
-- JSON Web Token (JWT) – https://datatracker.ietf.org/doc/html/rfc7519
-- D3.js Library – https://d3js.org/
-
----
-
-## 📥 Getting Started
-
-- Clone the repo
-- `npm install`
-- Run `scripts/bootstrap-fed.sh` or `scripts/start-dev.sh` to initialize a federation and launch example MCP servers
-- Visit `http://localhost:3000` to access the web UI
-
-> For any questions, refer to `/plans` and `/docs` or ping the `fedmgr` core team.
 
