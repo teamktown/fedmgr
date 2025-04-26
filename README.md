@@ -17,15 +17,21 @@ Inspired by tools like `kubectl`, `vault`, and `terraform`, `fedmgr` provides a 
 
 ## 🧰 Core Commands
 
+You can use `fedmgr` through NPX without installing it globally:
+
 ```bash
-
-fedmgr create fed <federation-name>          # Bootstrap a new trust anchor and federation
-fedmgr create mcp <name>                     # Spawn a new MCP instance and register with a federation
-fedmgr list entities                         # List all federated entities
-fedmgr visualize                             # Show trust graph and entity telemetry
-fedmgr call <mcp> --token <jwt>              # Simulate a call to an MCP with an OIDC token
-
+# Using NPX (recommended)
+npx @letsfederate/fedmgr create fed <federation-name>    # Bootstrap a new trust anchor and federation
+npx @letsfederate/fedmgr create mcp <name>               # Spawn a new MCP instance and register with a federation
+npx @letsfederate/fedmgr list entities                   # List all federated entities
+npx @letsfederate/fedmgr visualize                       # Show trust graph and entity telemetry
+npx @letsfederate/fedmgr call <mcp> --token <jwt>        # Simulate a call to an MCP with an OIDC token
 ```
+
+This approach:
+- Avoids global installation
+- Prevents version conflicts
+- Ensures you're always using the latest version
 
 🧠 Architecture Overview
 
@@ -92,7 +98,25 @@ fedmgr/
  - Multi-tenant sandboxing
 -  JWE encryption + assurance tagging
 
-🛠️ Requirements
+## 🛠️ Requirements
 - Node.js ≥ v18
 - VSCode (for full developer UX)
 - mkcert (optional, if using TLS locally)
+
+## 📚 Documentation
+
+### Core Documentation
+- [Quickstart Guide](docs/quickstart.md) - Get started with fedmgr
+- [Federation Manager Quickstart](docs/fedmgr-quickstart.md) - Detailed guide for using the fedmgr CLI
+- [NPX Usage Guide](docs/npx-usage-guide.md) - How to use fedmgr with NPX
+- [Architecture Overview (April 2025)](docs/architecture-april2025.md) - System architecture and components
+- [Certificate Handling](docs/certificate-handling.md) - How certificates are managed in the federation
+
+### Specifications
+- [Federation Manager Specification](docs/specs/fedmgr-spec.md) - Detailed specification for the fedmgr component
+- [MCP Core Specification](docs/specs/mcp-core-spec.md) - Specification for the MCP core component
+- [NPX Improvement Specification](docs/specs/improvement-add-npx.md) - Specification for NPX capabilities
+
+### Examples and Testing
+- [Example Test Run](docs/example-01-testrun.md) - Example of a test run
+- [Testing Documentation](docs/testing.md) - How to test the system
