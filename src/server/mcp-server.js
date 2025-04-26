@@ -65,6 +65,14 @@ wss.on('connection', ws => {
   })
 })
 
+/**
+ * Creates a log entry with the specified level, event, and detail, outputs it to the console, and emits it to subscribed listeners.
+ *
+ * @param {string} level - The severity level of the log entry (e.g., 'info', 'error').
+ * @param {string} event - The event name or type being logged.
+ * @param {string} detail - Additional details about the event.
+ * @returns {Object} The constructed log entry object.
+ */
 function log(level, event, detail) {
   const logEntry = {
     timestamp: new Date().toISOString(),
@@ -192,7 +200,14 @@ app.get('/api', (req, res) => {
   }
 });
 
-// Validate JWT token
+/**
+ * Validates a JWT token against the federation trust chain.
+ *
+ * Determines if the provided token is present, correctly formatted, and issued by a recognized federation member. If the issuer is known, verifies the token's signature using the federation's public key. Returns an object indicating validity, reason, and, if valid, the decoded payload.
+ *
+ * @param {string} token - The JWT token to validate.
+ * @returns {{ valid: boolean, reason: string, payload?: object }} Validation result, including the decoded payload if verification succeeds.
+ */
 function validateToken(token) {
   // This function verifies the token against the federation trust chain
   

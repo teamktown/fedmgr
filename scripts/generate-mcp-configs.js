@@ -3,6 +3,14 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
+/**
+ * Generates cryptographic keys and an entity configuration file for an MCP instance.
+ *
+ * Creates necessary directories, generates a 2048-bit RSA key pair, converts the public key to JWK format, and writes an entity configuration JSON file containing metadata and key information for the specified instance.
+ *
+ * @param {string} instanceName - The name of the MCP instance for which to generate configuration.
+ * @param {string} federationTrustAnchor - The federation trust anchor URL to include in the entity configuration.
+ */
 async function generateMcpConfig(instanceName, federationTrustAnchor) {
     const instanceDir = path.join(__dirname, '..', 'mcp_instances', instanceName);
     const keysDir = path.join(instanceDir, 'keys');
@@ -57,6 +65,11 @@ const instances = [
     { name: 'test-mcp2', trustAnchor: 'http://localhost:3001' }
 ];
 
+/**
+ * Generates configuration files for all defined MCP instances using a common federation trust anchor.
+ *
+ * Iterates over each MCP instance and invokes configuration generation with the specified trust anchor URL.
+ */
 async function main() {
     const federationTrustAnchor = 'http://localhost:3001'; // Assuming test-federation runs on port 3001
 

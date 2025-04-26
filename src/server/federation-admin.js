@@ -255,9 +255,12 @@ app.get('/health', (req, res) => {
 });
 
 /**
- * Fetch entity statements from a federation authority
- * @param {string} federationUrl - URL of the federation authority
- * @returns {Promise<Object>} - Promise resolving to the entity statements
+ * Retrieves the entity statements from a federation authority's OpenID Federation endpoint.
+ *
+ * @param {string} federationUrl - The base URL of the federation authority.
+ * @returns {Promise<Object>} Resolves with the parsed entity statements JSON.
+ *
+ * @throws {Error} If the HTTP request fails or the response is not successful.
  */
 async function fetchEntityStatements(federationUrl) {
   try {
@@ -280,10 +283,11 @@ async function fetchEntityStatements(federationUrl) {
 }
 
 /**
- * Distribute entity statements to federation members
- * @param {Object} entityStatement - Entity statement to distribute
- * @param {Array<string>} members - Array of member URLs
- * @returns {Promise<Object>} - Promise resolving to the distribution result
+ * Sends an entity statement to multiple federation member URLs and aggregates the results.
+ *
+ * @param {Object} entityStatement - The entity statement to distribute.
+ * @param {Array<string>} members - URLs of federation members to receive the statement.
+ * @returns {Promise<Object>} An object summarizing the distribution outcome, including per-member results and a count of successful deliveries.
  */
 async function distributeEntityStatements(entityStatement, members) {
   try {
@@ -324,9 +328,10 @@ async function distributeEntityStatements(entityStatement, members) {
 }
 
 /**
- * Validate a trust chain for an entity
- * @param {string} entityId - Entity ID to validate
- * @returns {Promise<Object>} - Promise resolving to the validation result
+ * Returns a mock validation result indicating a valid trust chain for the specified entity.
+ *
+ * @param {string} entityId - The entity ID whose trust chain is being validated.
+ * @returns {Promise<Object>} A promise that resolves to an object with a validity flag and a single-link trust chain.
  */
 async function validateTrustChain(entityId) {
   // This function is already mocked in the tests, but we'll provide a minimal implementation

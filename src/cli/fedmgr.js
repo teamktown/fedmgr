@@ -54,8 +54,11 @@ function createMcp(name) {
 }
 
 /**
- * Bootstrap a new federation
- * @param {string} name - Name of the federation
+ * Initializes a new federation directory with keys and configuration files.
+ *
+ * Creates the necessary directory structure, generates RSA key pairs for the federation anchor, and writes a default entity configuration JSON file. Updates the registry to include the new federation. Logs a warning if the federation already exists.
+ *
+ * @param {string} name - The name of the federation to initialize.
  */
 function bootstrapFederation(name) {
   const fedPath = path.resolve(__dirname, '../../federations', name)
@@ -108,9 +111,10 @@ function bootstrapFederation(name) {
 }
 
 /**
- * Reads the federation entity configuration file.
- * @param {string} name - Name of the federation
- * @returns {object | null} The federation configuration object, or null if not found.
+ * Loads and parses the entity configuration for a given federation.
+ *
+ * @param {string} name - The federation's name.
+ * @returns {object|null} The parsed configuration object if the file exists, or null if not found.
  */
 function readFederationConfig(name) {
   const fedPath = path.resolve(__dirname, '../../federations', name);
@@ -123,9 +127,12 @@ function readFederationConfig(name) {
 }
 
 /**
- * Writes the federation entity configuration file.
- * @param {string} name - Name of the federation
- * @param {object} config - The federation configuration object
+ * Writes the given configuration object to the specified federation's entity configuration file.
+ *
+ * Overwrites the existing `entity-configuration.json` file for the federation with the provided configuration.
+ *
+ * @param {string} name - The name of the federation.
+ * @param {object} config - The configuration object to write.
  */
 function writeFederationConfig(name, config) {
   const fedPath = path.resolve(__dirname, '../../federations', name);
@@ -134,9 +141,15 @@ function writeFederationConfig(name, config) {
 }
 
 /**
- * Create a new Operator configuration within a federation
- * @param {string} fedName - Name of the federation
- * @param {string} opName - Name of the Operator
+ * Creates a new Operator within a specified federation, generating RSA key pairs and updating the federation's configuration.
+ *
+ * If the Operator already exists in the federation, the function logs a warning and does not overwrite the existing entry.
+ *
+ * @param {string} fedName - The name of the federation to add the Operator to.
+ * @param {string} opName - The name of the Operator to create.
+ *
+ * @remark
+ * Exits the process if the specified federation does not exist.
  */
 function createOp(fedName, opName) {
   const fedConfig = readFederationConfig(fedName);
@@ -174,9 +187,12 @@ function createOp(fedName, opName) {
 }
 
 /**
- * Add an MCP to a federation (simplified)
- * @param {string} fedName - Name of the federation
- * @param {string} mcpName - Name of the MCP
+ * Associates an MCP instance with a federation by adding its name to the federation's configuration.
+ *
+ * If the federation does not exist, the process exits with an error. If the MCP is already associated, a warning is logged and no changes are made.
+ *
+ * @param {string} fedName - The name of the federation.
+ * @param {string} mcpName - The name of the MCP to associate.
  */
 function addMcpToFederation(fedName, mcpName) {
   const fedConfig = readFederationConfig(fedName);
@@ -204,8 +220,11 @@ function addMcpToFederation(fedName, mcpName) {
 }
 
 /**
- * Delete a federation
- * @param {string} name - Name of the federation
+ * Deletes a federation by removing its directory and updating the registry.
+ *
+ * Removes the federation's directory from the filesystem and deletes its entry from the registry if present. Logs status messages for each step.
+ *
+ * @param {string} name - The name of the federation to delete.
  */
 function deleteFederation(name) {
   const fedPath = path.resolve(__dirname, '../../federations', name);
