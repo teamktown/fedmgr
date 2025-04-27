@@ -6,6 +6,9 @@
   "scripts": {
     "sanity": "echo 'Running fedmgr sanity checks...'"
   },
+  "bin": {
+    "fedmgr": "./src/cli/fedmgr.js"
+  },
   "keywords": [
     "mcp",
     "federation",
