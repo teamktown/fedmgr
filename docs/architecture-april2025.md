@@ -108,7 +108,9 @@ graph TD
 *   **mcp-1, mcp-2, mcp-3**: Each built from `Dockerfile.mcp-core`, exposing different ports (4001, 4002, 4003) mapped to container port 3000. They mount `./data` for persistent storage and their specific instance configuration from `./mcp_instances/`.
 *   **federated_net**: A bridge network allowing all services to communicate with each other using their service names.
 
-## 4. NPM Package Integration into Docker
+## 4. NPM Package Integration and Execution Models
+
+### 4.1 Docker Integration
 
 The `Dockerfile.fedmgr` and `Dockerfile.mcp-core` demonstrate how the local NPM packages (`@letsfederate/fedmgr` and `@letsfederate/mcp-core`) are integrated into their respective Docker containers.
 
@@ -121,6 +123,39 @@ The process involves:
 5.  Defining the `CMD` to run the main script of the installed package (e.g., `node node_modules/@letsfederate/fedmgr/dist/cli/fedmgr.js`).
 
 This approach ensures that the Docker images are built with the specific versions of the local packages, making the containers self-contained and portable.
+
+### 4.2 NPX Execution Model
+
+The `@letsfederate/fedmgr` package is designed to be executable via NPX, allowing users to run the CLI without requiring a global installation:
+
+```bash
+npx @letsfederate/fedmgr <command>
+```
+
+This execution model works through the following mechanism:
+
+1. The package's `package.json` includes a `bin` field that maps the command name `fedmgr` to the CLI entry point script:
+   ```json
+   "bin": {
+     "fedmgr": "./src/cli/fedmgr.js"
+   }
+   ```
+
+2. The CLI entry point script (`src/cli/fedmgr.js`) includes a shebang line (`#!/usr/bin/env node`) that tells the system to execute it using Node.js.
+
+3. When a user runs `npx @letsfederate/fedmgr`, NPX:
+   - Downloads the package temporarily (if not already installed)
+   - Identifies the binary defined in the `bin` field
+   - Makes it executable
+   - Runs it with the provided arguments
+
+This approach offers several advantages:
+- Users don't need to install the package globally
+- It prevents version conflicts between different projects
+- It ensures users always run the latest version
+- It simplifies the setup process for new users
+
+The NPX execution model is particularly well-suited for the `fedmgr` CLI, which is primarily used for management and bootstrapping tasks rather than as a runtime dependency.
 
 ## 5. Configuration Management
 

@@ -66,9 +66,9 @@ Before implementing functionality, define the following tests:
   - Inject environment variables and config volumes
 
 ### Step 3: CLI Extension
-- `fedmgr create fed <name>` → generates trust anchor
-- `fedmgr create op <name>` → adds OP to fed and starts service
-- `fedmgr create mcp <name>` → adds an MCP, joins the federation
+- `npx @letsfederate/fedmgr create fed <name>` → generates trust anchor
+- `npx @letsfederate/fedmgr create op <name>` → adds OP to fed and starts service
+- `npx @letsfederate/fedmgr create mcp <name>` → adds an MCP, joins the federation
 
 ### Step 4: JWT Validation in MCPs
 - Middleware verifies JWT:
@@ -130,7 +130,7 @@ By the end of this flow:
 
 Use the CLI to dismantle the federation environment:
 ```bash
-fedmgr delete fed <fed_name>
+npx @letsfederate/fedmgr delete fed <fed_name>
 ```
 This will:
 - Remove trust anchor keys and metadata
@@ -141,4 +141,3 @@ This will:
 - Allow new federation enrollment with newly minted credentials
 
 Use this to reset between test runs or after each demo cycle.
-
