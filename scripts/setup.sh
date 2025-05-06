@@ -2,6 +2,9 @@
 # setup.sh - Dynamically generates docker-compose.yaml for MCP federation demo
 # Defensive and reproducible setup script
 
+export OIDC_PROVIDER_PORT=${OIDC_PROVIDER_PORT:-6432}
+export OIDC_PROVIDER_INTERNAL_PORT=${OIDC_PROVIDER_INTERNAL_PORT:-3000}
+
 set -euo pipefail
 IFS=$'\n\t'
 
@@ -44,7 +47,7 @@ cat >> "$COMPOSE_FILE" <<EOF
   $OP_NAME:
     image: $OP_IMAGE
     ports:
-      - "3000:3000"
+      - "6432:3000"
     volumes:
       - ./config/oidc-op:/config
     environment:

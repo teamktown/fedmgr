@@ -6,6 +6,7 @@ const path = require('path')
 const fs = require('fs')
 const http = require('http')
 const MCPInterface = require('../server/mcp-interface')
+const { registerAuthCommands, getToken } = require('./auth-commands')
 
 const program = new Command()
 const registryPath = path.resolve(__dirname, '../../data/registry.json')
@@ -319,14 +320,35 @@ program
   .command('call')
   .description('Send a JWT-authenticated request to an MCP')
   .argument('<mcp>', 'target MCP name')
-  .requiredOption('--token <jwt>', 'JWT token to use')
+  .option('--token <jwt>', 'JWT token to use (overrides stored token)')
+  .option('--provider <provider>', 'Auth provider to use (local-oidc-op or github)', 'local-oidc-op')
   .action(async (mcp, options) => {
     try {
+      // Get token from options or from stored tokens
+      let token = options.token;
+      
+      if (!token) {
+        const storedToken = getToken(options.provider);
+        
+        if (!storedToken) {
+          console.error(`❌ No token found for provider '${options.provider}'. Please login first:`);
+          console.log(`  fedmgr login ${options.provider}`);
+          process.exit(1);
+        }
+        
+        token = storedToken.access_token || storedToken.id_token;
+        
+        if (!token) {
+          console.error(`❌ Invalid token format for provider '${options.provider}'. Please login again.`);
+          process.exit(1);
+        }
+      }
+      
       // Use the MCP Interface to route the request
       const response = await mcpInterface.routeRequest(mcp, {
         path: '/api',
         headers: {
-          Authorization: `Bearer ${options.token}`
+          Authorization: `Bearer ${token}`
         }
       });
       
@@ -420,5 +442,8 @@ program
       console.error(`❌ Unknown action '${action}'`);
     }
   });
+
+// Register authentication commands
+registerAuthCommands(program);
 
 program.parse()

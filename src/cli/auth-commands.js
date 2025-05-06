@@ -2,6 +2,7 @@
  * Authentication Commands for the fedmgr CLI
  */
 
+
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -10,6 +11,12 @@ const { URL } = require('url');
 const crypto = require('crypto');
 const fetch = require('node-fetch');
 const open = require('open');
+
+
+require('dotenv').config();
+
+// Use environment variables for default values
+const OIDC_PROVIDER_URL = process.env.OIDC_PROVIDER_URL || 'http://localhost:6432';
 
 // Store tokens in user's home directory
 const TOKEN_STORE_PATH = path.join(os.homedir(), '.fedmgr-tokens.json');
@@ -68,8 +75,8 @@ function deleteToken(provider) {
  * @returns {Promise<Object>} Token response
  */
 async function localOidcLogin(options) {
-  const { username, password, opUrl = 'http://localhost:3000', federation = 'fed-alpha' } = options;
-  
+ const { username, password, opUrl = OIDC_PROVIDER_URL, federation = 'fed-alpha' } = options;
+
   // First, discover endpoints from the OIDC provider
   const discoveryUrl = `${opUrl}/.well-known/openid-configuration`;
   console.log(`Discovering OIDC configuration from ${discoveryUrl}...`);
@@ -264,7 +271,7 @@ function registerAuthCommands(program) {
     .option('--username <username>', 'Username for local-oidc-op')
     .option('--password <password>', 'Password for local-oidc-op')
     .option('--federation <name>', 'Federation to use', 'fed-alpha')
-    .option('--op-url <url>', 'OIDC Provider URL for local-oidc-op', 'http://localhost:3000')
+    .option('--op-url <url>', 'OIDC Provider URL for local-oidc-op', OIDC_PROVIDER_URL)
     .option('--client-id <id>', 'Client ID for GitHub OAuth', 'fedmgr-github-client')
     .action(async (provider, options) => {
       try {
