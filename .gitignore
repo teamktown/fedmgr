@@ -134,3 +134,14 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+#letsfederate
+mcp_instances/
+federations/
+test-results/*
+
+# automatically build files
+docker-compose.yaml
+docker-compose.generated.yaml
+Dockerfile.fedmgr
+Dockerfile.mcp-core 
