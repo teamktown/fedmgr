@@ -1,3 +1,4 @@
+#REMOVE THIS FILE
 #!/usr/bin/env bash
 #TODO
 echo "reviewed may6 cp: 21:00, consider EOL'ing this or converging it with the other one"

@@ -1,4 +1,7 @@
 #!/bin/bash
+source .env
+# This script builds the NPM packages for @letsfederate/mcp-core and @letsfederate/fedmgr
+# and moves them to the ../build/npm directory.
 
 set -e
 
@@ -9,9 +12,10 @@ npm install
 npm run sanity
 npm pack
 # make the ../build/npm directory if it does not exist
-mkdir -p ../build/npm
+mkdir -p ../${FEDMGR_BUILD_DIR}/npm
+
 # move the package to ../build/npm
-mv *.tgz ../build/npm
+mv *.tgz ../${FEDMGR_BUILD_DIR}/npm
 
 echo "@letsfederate/mcp-core packaged successfully into ../build/npm."
 cd ../../ # Return to the root directory
@@ -25,7 +29,8 @@ npm install
 npm run sanity
 npm pack
 # move the package to ../build/npm
-mv *.tgz ../build/npm
+
+mv *.tgz ../${FEDMGR_BUILD_DIR}/npm
 
 echo "@letsfederate/fedmgr packaged successfully."
 cd ../../ # Return to the root directory
