@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+#TODO
+echo "reviewed may6 cp: 21:00, consider EOL'ing this or converging it with the other one"
+exit(1)
+
 set -e
 
 FED_NAME=${1:-alpha}
