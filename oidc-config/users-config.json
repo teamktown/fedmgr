@@ -1,0 +1,50 @@
+{
+  "Users": [
+    {
+      "SubjectId": "1",
+      "Username": "admin",
+      "Password": "admin",
+      "Claims": [
+        {
+          "Type": "name",
+          "Value": "Admin User"
+        },
+        {
+          "Type": "email",
+          "Value": "admin@example.com"
+        },
+        {
+          "Type": "federation",
+          "Value": "fed-alpha"
+        },
+        {
+          "Type": "role",
+          "Value": "admin"
+        }
+      ]
+    },
+    {
+      "SubjectId": "2",
+      "Username": "operator",
+      "Password": "operator",
+      "Claims": [
+        {
+          "Type": "name",
+          "Value": "Operator User"
+        },
+        {
+          "Type": "email",
+          "Value": "operator@example.com"
+        },
+        {
+          "Type": "federation",
+          "Value": "fed-alpha"
+        },
+        {
+          "Type": "role",
+          "Value": "operator"
+        }
+      ]
+    }
+  ]
+}

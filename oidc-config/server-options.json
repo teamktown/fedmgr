@@ -1,0 +1,35 @@
+{
+  "ServerOptions": {
+    "IssuerUri": "http://localhost:8080",
+    "AccessTokenJwtType": "JWT"
+  },
+  "ApiResources": [
+    {
+      "Name": "federation-api",
+      "Scopes": ["federation-api"],
+      "UserClaims": ["sub", "name", "email", "federation"]
+    }
+  ],
+  "ApiScopes": [
+    {
+      "Name": "federation-api",
+      "UserClaims": ["sub", "name", "email", "federation"]
+    },
+    {
+      "Name": "openid"
+    },
+    {
+      "Name": "profile"
+    }
+  ],
+  "IdentityResources": [
+    {
+      "Name": "openid",
+      "UserClaims": ["sub"]
+    },
+    {
+      "Name": "profile",
+      "UserClaims": ["name", "email", "federation"]
+    }
+  ]
+}

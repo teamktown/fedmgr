@@ -2,7 +2,6 @@
  * Authentication Commands for the fedmgr CLI
  */
 
-
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -12,11 +11,12 @@ const crypto = require('crypto');
 const fetch = require('node-fetch');
 const open = require('open');
 
-
 require('dotenv').config();
 
 // Use environment variables for default values
-const OIDC_PROVIDER_URL = process.env.OIDC_PROVIDER_URL || 'http://localhost:6432';
+const OIDC_PROVIDER_URL = process.env.OIDC_PROVIDER_URL || 'http://localhost:8080';
+const OIDC_CLIENT_ID = process.env.OIDC_CLIENT_ID || 'fedmgr-cli';
+const OIDC_CLIENT_SECRET = process.env.OIDC_CLIENT_SECRET || 'fedmgr-cli-secret';
 
 // Store tokens in user's home directory
 const TOKEN_STORE_PATH = path.join(os.homedir(), '.fedmgr-tokens.json');
@@ -71,11 +71,19 @@ function deleteToken(provider) {
 
 /**
  * Authenticate with local OIDC OP using Resource Owner Password Credentials grant
+ * Updated to work with oidc-server-mock
  * @param {Object} options - Authentication options
  * @returns {Promise<Object>} Token response
  */
 async function localOidcLogin(options) {
- const { username, password, opUrl = OIDC_PROVIDER_URL, federation = 'fed-alpha' } = options;
+  const { 
+    username, 
+    password, 
+    opUrl = OIDC_PROVIDER_URL, 
+    clientId = OIDC_CLIENT_ID,
+    clientSecret = OIDC_CLIENT_SECRET,
+    federation = 'fed-alpha' 
+  } = options;
 
   // First, discover endpoints from the OIDC provider
   const discoveryUrl = `${opUrl}/.well-known/openid-configuration`;
@@ -101,20 +109,101 @@ async function localOidcLogin(options) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
-        'Accept': 'application/json'
+        'Accept': 'application/json',
+        'Authorization': `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`
       },
       body: new URLSearchParams({
         grant_type: 'password',
         username,
         password,
-        client_id: 'fedmgr-cli', // Default client ID (should be registered with the OP)
         scope: 'openid profile'
       }).toString()
     });
     
     if (!tokenResponse.ok) {
-      const error = await tokenResponse.json();
-      throw new Error(`Authentication failed: ${error.error_description || error.error || tokenResponse.statusText}`);
+      const errorData = await tokenResponse.text();
+      let errorMsg;
+      try {
+        const error = JSON.parse(errorData);
+        errorMsg = error.error_description || error.error || tokenResponse.statusText;
+      } catch (e) {
+        errorMsg = errorData || tokenResponse.statusText;
+      }
+      throw new Error(`Authentication failed: ${errorMsg}`);
+    }
+    
+    const token = await tokenResponse.json();
+    
+    // Add federation information to the token
+    token.federation = federation;
+    token.provider = 'local-oidc-op';
+    token.timestamp = Date.now();
+    
+    return token;
+  } catch (error) {
+    console.error(`Authentication failed: ${error.message}`);
+    throw error;
+  }
+}
+
+/**
+ * Authenticate with OIDC server using Client Credentials grant
+ * Added to support oidc-server-mock client credentials flow
+ * @param {Object} options - Authentication options
+ * @returns {Promise<Object>} Token response
+ */
+async function clientCredentialsLogin(options) {
+  const { 
+    opUrl = OIDC_PROVIDER_URL, 
+    clientId = OIDC_CLIENT_ID,
+    clientSecret = OIDC_CLIENT_SECRET,
+    scope = 'openid profile',
+    federation = 'fed-alpha' 
+  } = options;
+
+  // First, discover endpoints from the OIDC provider
+  const discoveryUrl = `${opUrl}/.well-known/openid-configuration`;
+  console.log(`Discovering OIDC configuration from ${discoveryUrl}...`);
+  
+  try {
+    const discoveryResponse = await fetch(discoveryUrl);
+    if (!discoveryResponse.ok) {
+      throw new Error(`Failed to discover OIDC configuration: ${discoveryResponse.statusText}`);
+    }
+    
+    const config = await discoveryResponse.json();
+    const tokenEndpoint = config.token_endpoint;
+    
+    if (!tokenEndpoint) {
+      throw new Error('Token endpoint not found in OIDC configuration');
+    }
+    
+    console.log(`Authenticating with client credentials...`);
+    
+    // Request token using client credentials grant
+    const tokenResponse = await fetch(tokenEndpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Accept': 'application/json',
+        'Authorization': `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`
+      },
+      body: new URLSearchParams({
+        grant_type: 'client_credentials',
+        scope
+      }).toString()
+    });
+    
+    if (!tokenResponse.ok) {
+      const errorData = await tokenResponse.text();
+      let errorMsg;
+      try {
+        const error = JSON.parse(errorData);
+        errorMsg = error.error_description || error.error || tokenResponse.statusText;
+      } catch (e) {
+        errorMsg = errorData || tokenResponse.statusText;
+      }
+      throw new Error(`Authentication failed: ${errorMsg}`);
     }
     
     const token = await tokenResponse.json();
@@ -267,12 +356,14 @@ function registerAuthCommands(program) {
   program
     .command('login')
     .description('Authenticate with a provider')
-    .argument('<provider>', 'Authentication provider (local-oidc-op or github)')
+    .argument('<provider>', 'Authentication provider (local-oidc-op, client-credentials or github)')
     .option('--username <username>', 'Username for local-oidc-op')
     .option('--password <password>', 'Password for local-oidc-op')
     .option('--federation <name>', 'Federation to use', 'fed-alpha')
-    .option('--op-url <url>', 'OIDC Provider URL for local-oidc-op', OIDC_PROVIDER_URL)
-    .option('--client-id <id>', 'Client ID for GitHub OAuth', 'fedmgr-github-client')
+    .option('--op-url <url>', 'OIDC Provider URL', OIDC_PROVIDER_URL)
+    .option('--client-id <id>', 'Client ID for OAuth flows', OIDC_CLIENT_ID)
+    .option('--client-secret <secret>', 'Client secret for OAuth flows', OIDC_CLIENT_SECRET)
+    .option('--scope <scope>', 'OAuth scope', 'openid profile')
     .action(async (provider, options) => {
       try {
         let token;
@@ -290,9 +381,22 @@ function registerAuthCommands(program) {
             username: options.username,
             password: options.password,
             opUrl: options.opUrl,
+            clientId: options.clientId,
+            clientSecret: options.clientSecret,
             federation: options.federation
           });
         } 
+        else if (provider === 'client-credentials') {
+          console.log('🔐 Authenticating with client credentials...');
+          
+          token = await clientCredentialsLogin({
+            opUrl: options.opUrl,
+            clientId: options.clientId,
+            clientSecret: options.clientSecret,
+            scope: options.scope,
+            federation: options.federation
+          });
+        }
         else if (provider === 'github') {
           console.log('🔐 Authenticating with GitHub...');
           
@@ -303,7 +407,7 @@ function registerAuthCommands(program) {
         } 
         else {
           console.error(`❌ Unsupported provider: ${provider}`);
-          console.log('Supported providers: local-oidc-op, github');
+          console.log('Supported providers: local-oidc-op, client-credentials, github');
           process.exit(1);
         }
         
@@ -399,5 +503,6 @@ module.exports = {
   saveToken,
   deleteToken,
   localOidcLogin,
+  clientCredentialsLogin,
   githubOAuthLogin
 };

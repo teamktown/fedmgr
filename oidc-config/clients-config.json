@@ -1,0 +1,22 @@
+{
+  "Clients": [
+    {
+      "ClientId": "fedmgr-cli",
+      "ClientSecrets": ["fedmgr-cli-secret"],
+      "Description": "Federation Manager CLI client",
+      "AllowedGrantTypes": ["password", "client_credentials"],
+      "AllowedScopes": ["openid", "profile", "federation-api"],
+      "ClientClaimsPrefix": "",
+      "AlwaysSendClientClaims": true,
+      "AlwaysIncludeUserClaimsInIdToken": true,
+      "AccessTokenLifetime": 3600,
+      "IdentityTokenLifetime": 3600,
+      "ClientClaims": [
+        {
+          "Type": "federation",
+          "Value": "fed-alpha"
+        }
+      ]
+    }
+  ]
+}
