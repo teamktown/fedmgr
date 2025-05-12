@@ -1,4 +1,7 @@
-#!/bin/bash
+#!/bin/bashd
+
+source .env
+set -e
 
 # Build the package
 ./scripts/build-npm.sh

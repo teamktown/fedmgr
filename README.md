@@ -1,6 +1,8 @@
 # fedctl# 🛰️ fedmgr – Federated Identity Orchestrator
 
-`fedmgr` is a developer tool and orchestration engine for building, managing, and testing **identity federations** across **MCP servers**, **OIDC providers**, and **trust anchors**.
+`fedmgr` is tooling and orchestration engine for building, managing, and testing **identity federations** across **MCP servers**, **OIDC providers**, and **trust anchors**.
+
+Inspired by tools like `kubectl`, `vault`, and `terraform`, `fedmgr` provides a modern CLI + UI interface for federated identity experimentation and trust zone simulation.
 
 It enables you to:
 
@@ -11,11 +13,29 @@ It enables you to:
 - Simulate cross-federation identity flows
 - Inspect telemetry of token validation and request activity
 
-Inspired by tools like `kubectl`, `vault`, and `terraform`, `fedmgr` provides a modern CLI + UI interface for federated identity experimentation and trust zone simulation.
-
 ---
+# Why?
+OIDC Federation technology offers more scaleable trust than the current MCP bilateral model.
 
-## 🧰 Core Commands
+Current MCP authorization techniques where each user has to be authorized to each service creates an N by M problem;  N participants having to trust M endpoints so an big oh order of O(n*m). It scales poorly when 1 user needs M MCP endpoints each requiring authorization, which of course may not align in expiry or other reasons.
+
+OIDC Federation's multi-lateral hierachical trust model scales much better. There is a fixed enrollment cost of Y effort 'to join the federation' and the user when they sign in is already authorized  **with an endpoint from within the OIDC federation** thus an order of O(Y) effort. Additional benefits are that revocation / termination of a session in synonmous across all location where employed and not fragmented in authentication into each MCP  
+
+## But is it practical?
+
+Yes. Existing cases like R&E federation demonstrate the scale.  
+
+Less talked about but of even more utility is the 'federation of one OP' or 'internal federation'.  
+- A campus has 10x more services or endpoints internally than they export and still want to the same benefit from federation. 
+- The same for businesses.  Why force users to authorize at each endpoint when they can have their OIDC Federation minted token be effectively trusted and more easily managed?
+
+## What this repo does
+
+- is the starting home for the `fedmgr` NPX package
+- has an example federation to demonstrate the benefits and limitations of the solution
+
+
+## 🧰 Core FedMgr Commands
 
 You can use `fedmgr` through NPX without installing it globally:
 
