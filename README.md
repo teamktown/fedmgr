@@ -1,10 +1,10 @@
 # fedctl# 🛰️ fedmgr – Federated Identity Orchestrator
 
-`fedmgr` is tooling and orchestration engine for building, managing, and testing **identity federations** across **MCP servers**, **OIDC providers**, and **trust anchors**.
+`fedmgr` is tooling and orchestration engine for building , managing, and testing **identity federations** across **MCP servers**, **OIDC providers**, and **trust anchors**. 
 
-Inspired by tools like `kubectl`, `vault`, and `terraform`, `fedmgr` provides a modern CLI + UI interface for federated identity experimentation and trust zone simulation.
+Inspired by tools like `kubectl`, `vault`, or `terraform` ,  `fedmgr` provides a modern CLI + UI interface for federated identity experimentation and trust zone simulation.  
 
-It enables you to:
+Capabilities:
 
 - Bootstrap trust anchors
 - Mint and manage federation metadata
@@ -15,45 +15,36 @@ It enables you to:
 
 ---
 # Why?
-OIDC Federation technology offers more scaleable trust than the current MCP bilateral model.
 
-Current MCP authorization techniques where each user has to be authorized to each service creates an N by M problem;  N participants having to trust M endpoints so an big oh order of O(n*m). It scales poorly when 1 user needs M MCP endpoints each requiring authorization, which of course may not align in expiry or other reasons.
+Current MCP authorization techniques are lacklustre when it comes to scaling them up. 
+Having each user  to be authorized to each service creates an N by M problem. N participants having to trust M endpoints so an big oh order of O(n*m). In other words, when 1 user needs M MCP endpoints each requiring authorization, it may suffer from misalignment of expiry of authorizations or a myriad other reasons. When 1 user changes to 10,000 or 1,000,000 this problem really reveals itself.
 
-OIDC Federation's multi-lateral hierachical trust model scales much better. There is a fixed enrollment cost of Y effort 'to join the federation' and the user when they sign in is already authorized  **with an endpoint from within the OIDC federation** thus an order of O(Y) effort. Additional benefits are that revocation / termination of a session in synonmous across all location where employed and not fragmented in authentication into each MCP  
+OIDC Federation's multi-lateral hierachical trust model avoids the N by M scaling problem.
+The approach has only a fixed enrollment cost of Y effort 'to join the federation' which in turn will mean users who sign in will have been minted a credential already capable of participating in a trust model  **with an endpoint from within the OIDC federation**.
 
-## But is it practical?
+On scaling alone this is an order of O(Y) effort. Additional benefits are revocation / termination of a session can happen with low configuration effort and ensuring trust* across MCPs becomes a bit easier and not fragmented in authentication into each MCP  
 
-Yes. Existing cases like R&E federation demonstrate the scale.  
+**trust is a big topic and is the backlog to document practices as we use the technology.
+
+## But is this practical?
+
+Yes. 
+
+Existing cases like R&E federation demonstrate that multi-lateral trust models scale to 1000's of endpoints of RP's and OP's. See edugain.org for the largest multi-lateral trust fabric. There the RPs are web based, and the advent or AI's MCP model means MCP are the new RPs.
 
 Less talked about but of even more utility is the 'federation of one OP' or 'internal federation'.  
-- A campus has 10x more services or endpoints internally than they export and still want to the same benefit from federation. 
-- The same for businesses.  Why force users to authorize at each endpoint when they can have their OIDC Federation minted token be effectively trusted and more easily managed?
+- even in R&E's model, campus' usually ahve 10x more services or endpoints internally than they export. They still want the benefit of multi-lateral federation. 
+- The same for businesses and even more so (IMO).  Why force users to authorize at each endpoint when they can have their OIDC Federation minted token be effectively trusted and more easily managed?
 
-## What this repo does
+# What's in this repo 
 
-- is the starting home for the `fedmgr` NPX package
-- has an example federation to demonstrate the benefits and limitations of the solution
+- The builder for the `fedmgr` NPM package
+- Example(s) of the federation in action using a boilerplate docker environment of
+  - mock OP, 
+  - some other MCP's 
+  - possibly a visual representation of the trust model
 
-
-## 🧰 Core FedMgr Commands
-
-You can use `fedmgr` through NPX without installing it globally:
-
-```bash
-# Using NPX (recommended)
-npx @letsfederate/fedmgr create fed <federation-name>    # Bootstrap a new trust anchor and federation
-npx @letsfederate/fedmgr create mcp <name>               # Spawn a new MCP instance and register with a federation
-npx @letsfederate/fedmgr list entities                   # List all federated entities
-npx @letsfederate/fedmgr visualize                       # Show trust graph and entity telemetry
-npx @letsfederate/fedmgr call <mcp> --token <jwt>        # Simulate a call to an MCP with an OIDC token
-```
-
-This approach:
-- Avoids global installation
-- Prevents version conflicts
-- Ensures you're always using the latest version
-
-🧠 Architecture Overview
+# 🧠 Architecture Overview
 
 ```mermaid
 
@@ -86,6 +77,36 @@ Validate tokens issued by trusted OIDC OPs
 Confirm that the issuer is part of a known federation via metadata chaining
 
 Emit structured telemetry to the fedmgr dashboard
+
+
+# Quickstart
+
+- build and locally install the NPM to access the NPX commands
+- bootstrap a local federation that creates a trust anchor and registers a few MCP servers
+- run the docker compose up -d to see it in action.
+
+
+
+
+
+## 🧰 Core FedMgr Commands
+
+You can use `fedmgr` through NPX without installing it globally:
+
+```bash
+# Using NPX (recommended)
+npx @letsfederate/fedmgr create fed <federation-name>    # Bootstrap a new trust anchor and federation
+npx @letsfederate/fedmgr create mcp <name>               # Spawn a new MCP instance and register with a federation
+npx @letsfederate/fedmgr list entities                   # List all federated entities
+npx @letsfederate/fedmgr visualize                       # Show trust graph and entity telemetry
+npx @letsfederate/fedmgr call <mcp> --token <jwt>        # Simulate a call to an MCP with an OIDC token
+```
+
+This approach:
+- Avoids global installation
+- Prevents version conflicts
+- Ensures you're always using the latest version
+
 
 🗂️ Project Structure
 ```bash

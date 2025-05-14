@@ -31,17 +31,16 @@
   },
   "homepage": "https://github.com/teamktown/fedmgr#readme",
   "dependencies": {
+    "@letsfederate/fedmgr": "file:build/npm/letsfederate-fedmgr-0.1.0.tgz",
+    "@letsfederate/mcp-core": "file:build/npm/letsfederate-mcp-core-0.1.0.tgz",
     "commander": "^11.1.0",
     "dotenv": "^16.5.0",
     "express": "^4.18.2",
     "jsonwebtoken": "^9.0.2",
-    "node-fetch": "^2.7.0",
+    "node-fetch": "^3.3.2",
     "node-jose": "^2.2.0",
     "open": "^8.4.0",
-    "ws": "^8.16.0",
- "@letsfederate/mcp-core": "file:build/npm/letsfederate-mcp-core-1.2.3.tgz",
-  "@letsfederate/fedmgr": "file:build/npm/letsfederate-fedmgr-1.2.3.tgz"
-
+    "ws": "^8.16.0"
   },
   "devDependencies": {
     "chai": "^4.3.7",

@@ -1,38 +1,37 @@
 #!/bin/bash
+
 source .env
 set -e
 
 #verify fedmgr command is available
-if ! command -v fedmgr &> /dev/null
-then
+if [ ! command -v fedmgr &> /dev/null ]; then
     echo "fedmgr could not be found, please install it first with npm install ../build/npm/letsfederate-mcp-fedmgr-*.tgz "
     echo "or run the install-npm.sh script"
     exit
 fi
 # Check if the FEDMGR_FED_REG environment variable is set
+
 if [ -z "$FEDMGR_FED_REG" ]; then
   echo "Error: FEDMGR_FED_REG environment variable is not set."
   echo "Please set it to the path where you want to store the federation registry."
   exit 1
 fi
+if [ -z "$FEDMGR_DEF_FED" ]; then
+  echo "Error: FEDMGR_DEF_FED environment variable is not set."
+  echo "Please set it to the default federation name in the .env file."
+  exit 1
+fi
 
 
 # Initialize the federation
-echo "Bootstrapping federation 'alpha'..."
+echo "Bootstrapping federation ..."
 
 # Ensure the data directory exists
 mkdir -p ${FEDMGR_FED_REG}
 
 
-#ensure fedmgr is installed
-if ! command -v fedmgr &> /dev/null
-then
-    echo "fedmgr could not be found, please install it first with "
-    exit
-fi
-
 # Create an empty registry file if it doesn't exist
-if [ ! -f ${FEDMGR_FED_REG/registry.json ]; then
+if [ ! -f ${FEDMGR_FED_REG}/registry.json ]; then
   echo '{
     "federations": [],
     "mcps": {},
@@ -42,8 +41,10 @@ if [ ! -f ${FEDMGR_FED_REG/registry.json ]; then
 fi
 
 # Create the federation using the fedmgr CLI
-fedmgr create fed alpha
+fedmgr create fed ${FEDMGR_DEF_FED} 
+#--registry ${FEDMGR_FED_REG}/registry.json --entity-id ${FEDMGR_DEF_FED} --federation-entity-id ${FEDMGR_DEF_FED} --federation-name ${FEDMGR_DEF_FED} --federation-description "Federation for $FEDMGR_DEF_FED" --federation-contacts "admin@${FEDMGR_DEF_FED}.local" --federation-organization-name "fedmgr Federation $FEDMGR_DEF_FED" --federation-fetch-endpoint "${FEDMGR_DEF_FED}/federation" --trust-marks "[]"
+# --federation-entity-id ${FEDMGR_DEF_FED} --federation-name ${FEDMGR_DEF_FED} --federation-description "Federation for $FEDMGR_DEF_FED" --federation-contacts "admin@${FEDMGR_DEF_FED}.local" --federation-organization-name "fedmgr Federation $FEDMGR_DEF_FED" --federation-fetch-endpoint "${FEDMGR_DEF_FED}/federation" --trust-marks "[]"
 
-echo "Federation 'alpha' bootstrapped successfully"
+echo "Federation '${FEDMGR_DEF_FED}' bootstrapped successfully"
 echo "Now you can run the reference docker compose testbed or hand manage the endpoints:"
 # echo "docker-compose -f docker-compose.oidc.yml up -d"
