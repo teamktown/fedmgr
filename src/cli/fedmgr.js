@@ -9,7 +9,18 @@ const MCPInterface = require('../server/mcp-interface')
 const { registerAuthCommands, getToken } = require('./auth-commands')
 
 const program = new Command()
-const registryPath = path.resolve(__dirname, '../../data/registry.json')
+
+// Read environment variables or use default paths
+const FEDMGR_HOME = process.env.FEDMGR_HOME || path.resolve(__dirname, '../..'); // Default to fedmgr root if not set
+const FEDMGR_FEDERATIONS_DIR = process.env.FEDMGR_FEDERATIONS_DIR || path.join(FEDMGR_HOME, 'federations');
+const FEDMGR_FED_REG = process.env.FEDMGR_FED_REG || path.join(FEDMGR_HOME, 'data', 'fed-reg'); // Default path based on current structure
+
+// Ensure federations directory exists
+if (!fs.existsSync(FEDMGR_FEDERATIONS_DIR)) {
+    fs.mkdirSync(FEDMGR_FEDERATIONS_DIR, { recursive: true });
+}
+
+const registryPath = path.join(FEDMGR_FED_REG, 'registry.json');
 const mcpInterface = new MCPInterface(registryPath)
 
 // Helper to load registry state
@@ -59,7 +70,7 @@ function createMcp(name) {
  * @param {string} name - Name of the federation
  */
 function bootstrapFederation(name) {
-  const fedPath = path.resolve(__dirname, '../../federations', name)
+  const fedPath = path.join(FEDMGR_FEDERATIONS_DIR, name)
   const keysPath = path.join(fedPath, 'keys')
   const configPath = path.join(fedPath, 'config')
   const entityConfigFile = path.join(configPath, 'entity-configuration.json')
@@ -114,7 +125,7 @@ function bootstrapFederation(name) {
  * @returns {object | null} The federation configuration object, or null if not found.
  */
 function readFederationConfig(name) {
-  const fedPath = path.resolve(__dirname, '../../federations', name);
+  const fedPath = path.join(FEDMGR_FEDERATIONS_DIR, name);
   const entityConfigFile = path.join(fedPath, 'config', 'entity-configuration.json');
   if (fs.existsSync(entityConfigFile)) {
     const content = fs.readFileSync(entityConfigFile, 'utf8');
@@ -129,7 +140,7 @@ function readFederationConfig(name) {
  * @param {object} config - The federation configuration object
  */
 function writeFederationConfig(name, config) {
-  const fedPath = path.resolve(__dirname, '../../federations', name);
+  const fedPath = path.join(FEDMGR_FEDERATIONS_DIR, name);
   const entityConfigFile = path.join(fedPath, 'config', 'entity-configuration.json');
   fs.writeFileSync(entityConfigFile, JSON.stringify(config, null, 2));
 }
@@ -158,7 +169,7 @@ function createOp(fedName, opName) {
   }
 
   // Generate keys for the operator (simplified)
-  const opKeysPath = path.resolve(__dirname, `../../federations/${fedName}/keys/operators`);
+  const opKeysPath = path.join(FEDMGR_FEDERATIONS_DIR, fedName, 'keys', 'operators');
   fs.mkdirSync(opKeysPath, { recursive: true });
   execSync(`openssl genrsa -out ${opKeysPath}/${opName}-private.pem 2048`);
   execSync(`openssl rsa -in ${opKeysPath}/${opName}-private.pem -pubout -out ${opKeysPath}/${opName}-public.pem`);
@@ -209,7 +220,7 @@ function addMcpToFederation(fedName, mcpName) {
  * @param {string} name - Name of the federation
  */
 function deleteFederation(name) {
-  const fedPath = path.resolve(__dirname, '../../federations', name);
+  const fedPath = path.join(FEDMGR_FEDERATIONS_DIR, name);
 
   if (!fs.existsSync(fedPath)) {
     console.log(`⚠️ Federation '${name}' not found at ${fedPath}`);

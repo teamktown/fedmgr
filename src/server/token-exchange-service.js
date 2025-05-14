@@ -11,6 +11,7 @@ const fetch = require('node-fetch');
 const jwt = require('jsonwebtoken');
 const fs = require('fs');
 const path = require('path');
+const config = require('../config');
 
 class TokenExchangeService {
   constructor(options = {}) {
@@ -156,7 +157,7 @@ class TokenExchangeService {
     };
     
     // Sign with a mock key (in a real implementation, this would be the federation's private key)
-    const privateKeyPath = path.resolve(__dirname, '../../federations/alpha/keys/anchor-private.pem');
+    const privateKeyPath = path.join(config.federations.directory, 'alpha/keys/anchor-private.pem');
     let privateKey;
     
     try {

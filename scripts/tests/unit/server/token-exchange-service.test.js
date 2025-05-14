@@ -1,10 +1,9 @@
 const TokenExchangeService = require('../../../../src/server/token-exchange-service');
+// Mock fetch before requiring it
+jest.mock('node-fetch', () => jest.fn());
 const fetch = require('node-fetch');
 const jwt = require('jsonwebtoken');
 const fs = require('fs');
-
-// Mock fetch for testing
-jest.mock('node-fetch', () => jest.fn());
 
 // Mock jwt for testing
 jest.mock('jsonwebtoken', () => ({
@@ -134,7 +133,7 @@ describe('Token Exchange Service', () => {
       );
       
       expect(fs.readFileSync).toHaveBeenCalledWith(
-        expect.stringContaining('/federations/alpha/keys/anchor-private.pem'),
+        expect.stringContaining(process.env.FEDMGR_FEDERATIONS_DIR + '/alpha/keys/anchor-private.pem'),
         'utf8'
       );
     });

@@ -6,6 +6,12 @@
 
 const TestLogger = require('../fixtures/test-logger');
 const logger = new TestLogger('TEST-INT-001', 'MCPFederation');
+const setupTestData = require('../fixtures/setup-test-data');
+
+// Ensure test federation data is available
+beforeAll(() => {
+  setupTestData.setupTestData();
+});
 
 // Mock data for tests
 const mockData = {

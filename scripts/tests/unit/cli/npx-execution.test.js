@@ -10,6 +10,9 @@ const path = require('path');
 const { suppressConsoleOutput, restoreConsoleOutput } = require('../../fixtures/setup');
 const TestLogger = require('../../fixtures/test-logger');
 
+// Ensure setup is required to set environment variables
+require('../../fixtures/setup');
+
 const logger = new TestLogger('TEST-UNIT-CLI-001', 'NPXExecution');
 
 // Helper function to execute NPX commands
@@ -38,7 +41,7 @@ const executeNpxCommand = (args) => {
 
 // Helper function to clean up test resources
 const cleanupTestResources = (fedName) => {
-  const fedPath = path.resolve(__dirname, '../../../../federations', fedName);
+  const fedPath = path.join(process.env.FEDMGR_FEDERATIONS_DIR, fedName);
   if (fs.existsSync(fedPath)) {
     fs.rmSync(fedPath, { recursive: true, force: true });
     logger.info(`Cleaned up test federation: ${fedName}`);
@@ -110,7 +113,7 @@ describe('NPX Execution of fedmgr CLI', () => {
       expect(result.output).toContain('Federation \'test-npx-fed\' initialized');
       
       // Verify the federation directory was created
-      const fedPath = path.resolve(__dirname, '../../../../federations/test-npx-fed');
+      const fedPath = path.join(process.env.FEDMGR_FEDERATIONS_DIR, 'test-npx-fed');
       expect(fs.existsSync(fedPath)).toBe(true);
       
       // Verify the federation configuration file was created
@@ -138,7 +141,7 @@ describe('NPX Execution of fedmgr CLI', () => {
       expect(result.output).toContain('MCP \'test-npx-mcp\' associated with federation \'test-npx-fed\'');
       
       // Verify the federation configuration was updated
-      const configPath = path.resolve(__dirname, '../../../../federations/test-npx-fed/config/entity-configuration.json');
+      const configPath = path.join(process.env.FEDMGR_FEDERATIONS_DIR, 'test-npx-fed/config/entity-configuration.json');
       const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
       expect(config.metadata.associated_mcps).toContain('test-npx-mcp');
     });

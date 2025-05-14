@@ -5,10 +5,14 @@
  */
 
 const { spawn } = require('child_process');
+// Mock node-fetch to avoid ESM issues
+jest.mock('node-fetch', () => jest.fn());
 const fetch = require('node-fetch');
 const fs = require('fs');
 const path = require('path');
 const TestLogger = require('../fixtures/test-logger');
+require('../fixtures/setup'); // Ensure environment variables are set up
+const setupTestData = require('../fixtures/setup-test-data');
 
 const logger = new TestLogger('TEST-E2E-001', 'FederationWorkflow');
 
@@ -127,16 +131,23 @@ describe('Federation Workflow', () => {
   beforeAll(async () => {
     logger.info('Setting up federation workflow test');
     
-    // Create test directories if they don't exist
+    // Create test federation data
+    setupTestData.setupTestData();
+    
+    // Create additional test-specific directories
+    const federationsDir = process.env.FEDMGR_FEDERATIONS_DIR;
+    logger.info(`Using federations directory: ${federationsDir}`);
+    
     const testDirs = [
-      `mcp_instances/${TEST_CONFIG.federationName}/config`,
-      `mcp_instances/${TEST_CONFIG.mcp1Name}/config`,
-      `mcp_instances/${TEST_CONFIG.mcp2Name}/config`
+      path.join(federationsDir, TEST_CONFIG.federationName, 'config'),
+      path.join(federationsDir, TEST_CONFIG.mcp1Name, 'config'),
+      path.join(federationsDir, TEST_CONFIG.mcp2Name, 'config')
     ];
     
     testDirs.forEach(dir => {
       if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });
+        logger.info(`Created test directory: ${dir}`);
       }
     });
     

@@ -6,6 +6,7 @@ const jwt = require('jsonwebtoken')
 const { execSync } = require('child_process')
 const fetch = require('node-fetch')
 const certificateUtils = require('./utils/certificate-utils')
+const config = require('../config')
 
 const app = express()
 const port = process.env.PORT || 3001
@@ -18,10 +19,10 @@ for (let i = 0; i < args.length; i += 2) {
   if (args[i] === '--federation') fedName = args[i + 1];
 }
 
-const fedRoot = path.join(__dirname, '../../federations', fedName)
+const fedRoot = path.join(config.federations.directory, fedName)
 const entityConfigPath = path.join(fedRoot, 'config/entity-configuration.json')
 const privateKeyPath = path.join(fedRoot, 'keys/anchor-private.pem')
-const registryPath = path.resolve(__dirname, '../../data/registry.json')
+const registryPath = config.federations.registryPath
 
 // Check if entity configuration exists
 if (!fs.existsSync(entityConfigPath)) {

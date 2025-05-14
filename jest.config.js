@@ -25,7 +25,8 @@ module.exports = {
   // An array of regexp pattern strings that are matched against all source file paths
   // If a file matches, it will not be transformed
   transformIgnorePatterns: [
-    '/node_modules/'
+    // Allow ESM modules to be transformed
+    '/node_modules/(?!(node-fetch|fetch-blob|formdata-polyfill|data-uri-to-buffer|web-streams-polyfill)/)'
   ],
   
   // Indicates whether each individual test should be reported during the run
@@ -55,7 +56,12 @@ module.exports = {
   ],
   
   // A map from regular expressions to paths to transformers
-  transform: {},
+  transform: {
+    "node_modules/node-fetch/.*": "<rootDir>/jest-transform-stub.js",
+    "node_modules/fetch-blob/.*": "<rootDir>/jest-transform-stub.js",
+    "node_modules/formdata-polyfill/.*": "<rootDir>/jest-transform-stub.js",
+    "node_modules/web-streams-polyfill/.*": "<rootDir>/jest-transform-stub.js"
+  },
   
   // The paths to modules that run some code to configure or set up the testing environment
   setupFiles: [

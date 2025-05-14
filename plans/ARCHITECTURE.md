@@ -171,8 +171,11 @@ graph TD
     Ensure all files are in predictable paths for docker-compose.generated.yml to mount
 
 ### Recommended File Layout per Federation
+
+Federation data is stored in a directory configured by the `FEDMGR_FEDERATIONS_DIR` environment variable. The default location is `${FEDMGR_HOME}/federations`. Within this directory, a recommended structure per federation is as follows:
+
 ```bash
-/config/
+${FEDMGR_FEDERATIONS_DIR}/
   fed-alpha/
     trust-anchor/
       jwks.json
@@ -190,8 +193,11 @@ graph TD
   the_empire/
     ...
 ```
+
+The federation registry file path is specified by the `FEDMGR_FED_REG` environment variable.
+
 ### Sample implementation
-Use node-jose or jose package to generate 
+Use node-jose or jose package to generate
 ```ts
 import { generateKeyPair, exportJWK, SignJWT } from 'jose'
 
@@ -203,7 +209,9 @@ async function createKeyPairAndJWKS(name: string) {
 
   const jwks = { keys: [jwkPub] }
 
-  await fs.promises.writeFile(`config/${name}/jwks.json`, JSON.stringify(jwks, null, 2))
+  // Note: File path should be relative to FEDMGR_FEDERATIONS_DIR
+  await fs.promises.writeFile(`${process.env.FEDMGR_FEDERATIONS_DIR}/${name}/trust-anchor/jwks.json`, JSON.stringify(jwks, null, 2))
+
 
   return { publicKey, privateKey }
 }

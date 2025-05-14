@@ -1,4 +1,9 @@
 // Only showing the modified validateToken function, the rest of the file remains unchanged
+const path = require('path');
+const fs = require('fs');
+const jwt = require('jsonwebtoken');
+const config = require('../config');
+const certificateUtils = require('./utils/certificate-utils');
 
 // Validate JWT token
 async function validateToken(token) {
@@ -28,7 +33,7 @@ async function validateToken(token) {
     // Check if this is a token from our federation or from the OIDC server
     if (issuer === 'http://localhost:3001') {
       // This is from our federation, so we can verify it
-      const fedPublicKeyPath = path.resolve(__dirname, '../../federations/alpha/keys/anchor-public.pem');
+      const fedPublicKeyPath = path.join(config.federations.directory, 'alpha/keys/anchor-public.pem');
       
       if (!fs.existsSync(fedPublicKeyPath)) {
         return { valid: false, reason: 'Federation public key not available' };
