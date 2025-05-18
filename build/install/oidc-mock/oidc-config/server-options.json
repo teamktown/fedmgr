@@ -1,0 +1,4 @@
+{
+  "IssuerUri": "http://localhost:8080",
+  "AccessTokenJwtType": "JWT"
+}

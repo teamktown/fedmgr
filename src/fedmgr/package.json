@@ -7,13 +7,42 @@
     "sanity": "echo 'Running fedmgr sanity checks...'"
   },
   "bin": {
-    "fedmgr": "./src/cli/fedmgr.js"
+    "fedmgr": "./fedmgr.js"
+  },
+  "files": [
+    "fedmgr.js",
+    "auth-commands.js",
+    "server/",
+    "cli/",
+    "utils/",
+    "config.js"
+  ],
+  "dependencies": {
+    "open": "^9.0.0",
+    "commander": "^11.1.0",
+    "dotenv": "^16.5.0",
+    "express": "^4.18.2",
+    "jsonwebtoken": "^9.0.2",
+    "node-fetch": "^3.3.2",
+    "node-jose": "^2.2.0",
+    "ws": "^8.16.0"
+
+
+    
+  },
+  "devDependencies": {
+    "jest": "^29.0.0",
+    "jest-junit": "^16.0.0",
+    "mocha": "^10.0.0",
+    "chai": "^4.3.7",
+    "sinon": "^15.0.0",
+    "supertest": "^6.3.3"
   },
   "keywords": [
     "mcp",
     "federation",
     "manager"
   ],
-  "author": "LetsFederate",
-  "license": "MIT"
+  "author": "Chris Phillips (c) 2025",
+  "license": "Apache 2 with Attribution"
 }

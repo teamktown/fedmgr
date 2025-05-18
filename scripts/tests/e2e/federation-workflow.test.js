@@ -32,7 +32,7 @@ const startServer = (name, port) => {
   logger.info(`Starting ${name} on port ${port}`);
   
   const serverProcess = spawn('node', [
-    'src/server/mcp-server.js',
+    'src/fedmgr/mcp-server.js',
     '--name', name,
     '--port', port.toString()
   ], {

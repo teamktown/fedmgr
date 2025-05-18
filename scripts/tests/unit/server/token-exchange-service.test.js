@@ -1,4 +1,4 @@
-const TokenExchangeService = require('../../../../src/server/token-exchange-service');
+const TokenExchangeService = require('../../../../src/fedmgr/server/token-exchange-service');
 // Mock fetch before requiring it
 jest.mock('node-fetch', () => jest.fn());
 const fetch = require('node-fetch');

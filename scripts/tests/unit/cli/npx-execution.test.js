@@ -19,7 +19,7 @@ const logger = new TestLogger('TEST-UNIT-CLI-001', 'NPXExecution');
 const executeNpxCommand = (args) => {
   try {
     // Get the absolute path to the CLI script
-    const cliPath = path.resolve(__dirname, '../../../../src/cli/fedmgr.js');
+    const cliPath = path.resolve(__dirname, '../../../../src/fedmgr.js');
     
     // Execute the command directly using Node.js to simulate NPX execution
     const output = execSync(`node ${cliPath} ${args}`, {

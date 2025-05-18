@@ -2,7 +2,7 @@
 const path = require('path');
 const fs = require('fs');
 const jwt = require('jsonwebtoken');
-const config = require('../config');
+const config = require('./config');
 const certificateUtils = require('./utils/certificate-utils');
 
 // Validate JWT token

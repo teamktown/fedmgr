@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 
+
 const { Command } = require('commander')
 const { execSync, spawnSync, spawn } = require('child_process')
 const path = require('path')
 const fs = require('fs')
 const http = require('http')
-const MCPInterface = require('../server/mcp-interface')
+const MCPInterface = require('./server/mcp-interface')
 const { registerAuthCommands, getToken } = require('./auth-commands')
 
 const program = new Command()
@@ -80,8 +81,22 @@ function bootstrapFederation(name) {
     return
   }
 
-  fs.mkdirSync(keysPath, { recursive: true })
+  // Create federation directory
+  try {
+  fs.mkdirSync(keysPath, { recursive: true });
+} catch (error) {
+  console.error(`❌ Failed to create directory '${keysPath}':`, error.message);
+  process.exit(1); // Exit the process with a failure code
+}
+
+  try {
   fs.mkdirSync(configPath, { recursive: true })
+} catch (error) {
+  console.error(`❌ Failed to create config directory '${configPath}':`, error.message);
+  process.exit(1); // Exit the process with a failure code
+}
+
+
 
   execSync(`openssl genrsa -out ${keysPath}/anchor-private.pem 2048`)
   execSync(`openssl rsa -in ${keysPath}/anchor-private.pem -pubout -out ${keysPath}/anchor-public.pem`)

@@ -239,7 +239,7 @@ describe('MCP Server Initialization', () => {
     // Run the test in an isolated module environment
     jest.isolateModules(() => {
       // Import the MCP server (this will execute the file)
-      require('../../../../src/server/mcp-server');
+      require('../../../../src/fedmgr/server/mcp-server');
       
       // Verify that express was initialized
       expect(mockExpress).toHaveBeenCalled();
@@ -274,7 +274,7 @@ describe('MCP Server Initialization', () => {
     // Run the test in an isolated module environment
     jest.isolateModules(() => {
       // Import the MCP server (this will execute the file)
-      require('../../../../src/server/mcp-server');
+      require('../../../../src/fedmgr/server/mcp-server');
       
       // Verify that process.exit was called with code 1 using our defensive helper
       const exitCalled = assertMockCalled(mockExit, 'process.exit');
@@ -313,7 +313,7 @@ describe('MCP Server Initialization', () => {
     // Run the test in an isolated module environment
     jest.isolateModules(() => {
       // Import the MCP server (this will execute the file)
-      require('../../../../src/server/mcp-server');
+      require('../../../../src/fedmgr/server/mcp-server');
       
       // Verify that process.exit was called with code 1 using our defensive helper
       const exitCalled = assertMockCalled(mockExit, 'process.exit');

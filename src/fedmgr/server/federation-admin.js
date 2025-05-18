@@ -19,10 +19,12 @@ for (let i = 0; i < args.length; i += 2) {
   if (args[i] === '--federation') fedName = args[i + 1];
 }
 
-const fedRoot = path.join(config.federations.directory, fedName)
-const entityConfigPath = path.join(fedRoot, 'config/entity-configuration.json')
-const privateKeyPath = path.join(fedRoot, 'keys/anchor-private.pem')
-const registryPath = config.federations.registryPath
+// Use FEDMGR_FEDERATIONS_DIR env var or default to /usr/src/app/federations
+const federationsDir = process.env.FEDMGR_FEDERATIONS_DIR || '/usr/src/app/federations';
+const fedRoot = path.join(federationsDir, fedName);
+const entityConfigPath = path.join(fedRoot, 'config/entity-configuration.json');
+const privateKeyPath = path.join(fedRoot, 'keys/anchor-private.pem');
+const registryPath = config.federations.registryPath;
 
 // Check if entity configuration exists
 if (!fs.existsSync(entityConfigPath)) {

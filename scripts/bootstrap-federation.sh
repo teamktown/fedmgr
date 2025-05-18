@@ -1,7 +1,35 @@
 #!/bin/bash
 
+
+# Check if the .env file exists
+if [ ! -f .env ]; then
+  echo "Error: .env file not found."
+  exit 1
+fi
+set -a # Automatically export all variables to the environment
+# Load environment variables from .env file
 source .env
+set +a # Stop automatically exporting variables
+
 set -e
+
+# check if FEDMGR_HOME is set
+if [ -z "$FEDMGR_HOME" ]; then
+  echo "Error: FEDMGR_HOME environment variable is not set."
+  echo "Please set it to the path where the fedmgr code tree is either via an .env setting or environment variable."
+  exit 1
+fi
+# check if FEDMGR_BUILD_DIR is set
+if [ -z "$FEDMGR_BUILD_DIR" ]; then
+  echo "Error: FEDMGR_BUILD_DIR environment variable is not set."
+  echo "Please set it to the path where you want to store the build artifacts."
+  exit 1
+  else
+    echo "## Using build directory: $FEDMGR_BUILD_DIR"
+fi
+
+set -e
+
 
 #verify fedmgr command is available
 if [ ! command -v fedmgr &> /dev/null ]; then
