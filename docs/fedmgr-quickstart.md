@@ -74,13 +74,26 @@ docker-compose -f docker-compose.generated.yml ps
 
 ## 4. Using the Fedmgr CLI
 
-The `fedmgr` CLI allows you to create and manage federations, operators, and MCP instances.
+The `fedmgr` CLI allows you to create and manage federations, operators, and MCP instances. You can use it either through NPX or directly if installed globally.
+
+### Using NPX (Recommended)
+
+NPX allows you to run the `fedmgr` CLI without installing it globally:
+
+```bash
+npx @letsfederate/fedmgr <command>
+```
+
+This approach:
+- Avoids global installation
+- Prevents version conflicts
+- Ensures you're always using the latest version
 
 ### Creating a Federation
 
 ```bash
 # Create a new federation named "alpha"
-fedmgr create fed alpha
+npx @letsfederate/fedmgr create fed alpha
 ```
 
 This command:
@@ -92,7 +105,7 @@ This command:
 
 ```bash
 # Add an OP named "op1" to the "alpha" federation
-fedmgr create op op1 --federation alpha
+npx @letsfederate/fedmgr create op op1 --federation alpha
 ```
 
 This command:
@@ -103,10 +116,10 @@ This command:
 
 ```bash
 # Add an MCP named "mcp1" to the "alpha" federation
-fedmgr create mcp mcp1 --federation alpha
+npx @letsfederate/fedmgr create mcp mcp1 --federation alpha
 
 # Add another MCP
-fedmgr create mcp mcp2 --federation alpha
+npx @letsfederate/fedmgr create mcp mcp2 --federation alpha
 ```
 
 These commands associate the MCPs with the federation.
@@ -117,7 +130,7 @@ After creating the federation and adding components, distribute the entity state
 
 ```bash
 # Distribute entity statements from the "alpha" federation
-fedmgr distribute alpha
+npx @letsfederate/fedmgr distribute alpha
 ```
 
 This command:
@@ -130,7 +143,7 @@ To view all components in your federation:
 
 ```bash
 # List all federations, MCPs, and MCP Protocol servers
-fedmgr list
+npx @letsfederate/fedmgr list
 ```
 
 ## 5. Verifying Trust and Functionality
@@ -271,7 +284,7 @@ When you're done or need to reset the environment:
 
 ```bash
 # Delete the "alpha" federation
-fedmgr delete fed alpha
+npx @letsfederate/fedmgr delete fed alpha
 ```
 
 This command:

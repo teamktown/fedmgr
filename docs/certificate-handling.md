@@ -33,11 +33,11 @@ Key characteristics:
 
 Certificates are generated in the following components:
 
-1. **MCP Instance Creation** (`src/server/mcp-interface.js:createMcp`):
+1. **MCP Instance Creation** (`src/fedmgr/mcp-interface.js:createMcp`):
    - When a new MCP instance is created
    - Keys stored in `mcp_instances/<name>/keys/`
 
-2. **MCP Protocol Server Creation** (`src/server/mcp-interface.js:createMcpProtocolServer`):
+2. **MCP Protocol Server Creation** (`src/fedmgr/mcp-interface.js:createMcpProtocolServer`):
    - When a new MCP Protocol server is created
    - Keys stored in `mcp_protocol_servers/<name>/keys/`
 
@@ -97,7 +97,7 @@ const statement = {
 };
 ```
 
-2. **Token Validation** (`src/server/mcp-server.js:simulateTokenValidation`):
+2. **Token Validation** (`src/fedmgr/mcp-server.js:simulateTokenValidation`):
    - Currently simulates validation
    - In production, would verify JWT signatures using public keys
 
