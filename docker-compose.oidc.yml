@@ -1,0 +1,49 @@
+services:
+  oidc-server-mock:
+    image: ghcr.io/soluto/oidc-server-mock:latest
+    ports:
+      - "8080:80"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - SERVER_OPTIONS_PATH=/tmp/config/server-options.json
+      - CLIENTS_CONFIGURATION_PATH=/tmp/config/clients-config.json
+      - USERS_CONFIGURATION_PATH=/tmp/config/users-config.json
+    volumes:
+      - ${OIDC_MOCK_CONFIG_DIR_REL}:/tmp/oidc-config
+      - ./build/install/oidc-mock/oidc-config:/tmp/config
+
+    networks:
+      - federation-net
+
+  token-exchange-service:
+    build: 
+      context: .
+      dockerfile: Dockerfile.token-exchange
+      args:
+        FEDMGR_BUILD_REL_NPM_DIR: ${FEDMGR_BUILD_REL_NPM_DIR}
+    ports:
+      - "3457:3457"
+    environment:
+      - FEDERATION_ADMIN_URL=http://federation-admin:3001
+      - OIDC_PROVIDER_URL=http://oidc-server-mock:80
+    networks:
+      - federation-net
+    depends_on:
+      - oidc-server-mock
+
+  federation-admin:
+    build:
+      context: .
+      dockerfile: Dockerfile.federation-admin
+      args:
+        FEDMGR_BUILD_REL_NPM_DIR: ${FEDMGR_BUILD_REL_NPM_DIR}
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./build/install/federations:/usr/src/app/federations
+      - ./build/install/fed-reg:/usr/src/app/data
+    networks:
+      - federation-net
+networks:
+  federation-net:
+    driver: bridge
