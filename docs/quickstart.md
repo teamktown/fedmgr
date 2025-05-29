@@ -6,6 +6,8 @@ This guide walks you through bootstrapping a trust environment using Sphereon's 
 
 ## 📁 Project Setup Structure
 
+The project utilizes environment variables for configuring key paths. The primary configuration file is the `.env` file in the project root.
+
 ```
 fedmgr/
 ├── config/
@@ -23,6 +25,17 @@ fedmgr/
 │   └── TESTS.md               # Test-driven dev scaffolding
 └── quickstart.md              # ← You Are Here
 ```
+
+---
+
+## ⚙️ Configuration via Environment Variables
+
+Key paths for federation data and the registry are managed through environment variables defined in the `.env` file:
+
+*   `FEDMGR_FEDERATIONS_DIR`: Specifies the directory where federation data (trust anchors, entity configurations, keys) is stored. Defaults to `${FEDMGR_HOME}/federations`.
+*   `FEDMGR_FED_REG`: Specifies the path for the federation registry file.
+
+To change the default locations, update the corresponding variables in your `.env` file.
 
 ---
 

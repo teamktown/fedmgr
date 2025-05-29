@@ -1,190 +1,140 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>fedmgr: Federation Trust Visualizer</title>
-  <script src="https://d3js.org/d3.v7.min.js"></script>
-  <style>
-    body {
-      font-family: 'Arial', sans-serif;
-      margin: 0;
-      padding: 0;
-      background: #000;
-      color: #0f0;
-    }
-    #graph {
-      width: 100vw;
-      height: 60vh;
-      background: radial-gradient(circle at center, #111 0%, #000 100%);
-    }
-    #controls {
-      display: flex;
-      align-items: center;
-      padding: 5px 10px;
-      background: #111;
-      border-top: 1px solid #333;
-    }
-    #chat-input {
-      flex: 1;
-      background: #000;
-      color: #0f0;
-      border: 1px solid #333;
-      padding: 5px;
-      font-family: monospace;
-      font-size: 0.9em;
-    }
-    #send-btn, #login-btn, #theme-toggle {
-      margin-left: 10px;
-      padding: 5px 10px;
-      background: #222;
-      border: 1px solid #444;
-      color: #0f0;
-      cursor: pointer;
-      font-size: 0.8em;
-    }
-    #telemetry-container {
-      height: 25vh;
-      background: #111;
-      color: #0f0;
-      font-family: monospace;
-      font-size: 0.9em;
-      border-top: 1px solid #333;
-      display: flex;
-      flex-direction: column;
-    }
-    #telemetry-title {
-      padding: 5px 10px;
-      background: #222;
-      font-weight: bold;
-      border-bottom: 1px solid #444;
-    }
-    #log {
-      flex: 1;
-      overflow-y: scroll;
-      padding: 10px;
-    }
-    .tooltip {
-      position: absolute;
-      background: #222;
-      color: #fff;
-      padding: 5px 10px;
-      border: 1px solid #888;
-      border-radius: 4px;
-      pointer-events: none;
-      font-size: 0.8em;
-    }
-    #token-container {
-      margin: 10px;
-      padding: 10px;
-      background: #111;
-      color: #0f0;
-      font-family: monospace;
-      word-wrap: break-word;
-      border: 1px solid #444;
-      display: none;
-    }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Federation Demo</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .container { background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0; }
+        .token { background: #e8f4f8; padding: 10px; border-radius: 4px; word-break: break-all; }
+        .success { color: green; }
+        .error { color: red; }
+        button { background: #007cba; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #005a8b; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        .api-response { background: #f0f8ff; padding: 10px; border-radius: 4px; margin: 10px 0; }
+    </style>
 </head>
 <body>
-  <svg id="graph"></svg>
-
-  <div id="controls">
-    <input type="text" id="chat-input" placeholder="Enter fedmgr command..." />
-    <button id="send-btn">Send</button>
-    <button id="login-btn">Sign in with GitHub</button>
-    <button id="theme-toggle">Toggle Theme</button>
-  </div>
-
-  <div id="token-container"></div>
-
-  <div id="telemetry-container">
-    <div id="telemetry-title">🛰️ Federation Trust Console</div>
-    <div id="log">[telemetry console initializing...]</div>
-  </div>
-
-  <div id="mcp-protocol-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 100;">
-    <div style="position: relative; width: 80%; max-width: 800px; margin: 50px auto; background: #111; border: 1px solid #444; padding: 20px; color: #0f0;">
-      <button id="close-modal" style="position: absolute; top: 10px; right: 10px; background: #222; border: 1px solid #444; color: #0f0; cursor: pointer;">×</button>
-      <h2 id="modal-title" style="margin-top: 0;">MCP Protocol Server Details</h2>
-      <div id="modal-content" style="max-height: 70vh; overflow-y: auto;"></div>
+    <h1>🛰️ Federation Demo</h1>
+    
+    <div class="container">
+        <h2>Authentication Status</h2>
+        <div id="auth-status">Not authenticated</div>
+        <div id="user-info" style="display: none;">
+            <p><strong>User:</strong> <span id="username"></span></p>
+            <p><strong>Token:</strong></p>
+            <div id="token-display" class="token"></div>
+        </div>
+        <button id="login-btn" onclick="login()">Login with GitHub</button>
+        <button id="logout-btn" onclick="logout()" style="display: none;">Logout</button>
     </div>
-  </div>
-  <div class="tooltip" id="tooltip" style="display:none;"></div>
 
-  <script>
-    // DOM Elements
-    const chatInput = document.getElementById('chat-input');
-    const sendBtn = document.getElementById('send-btn');
-    const loginBtn = document.getElementById('login-btn');
-    const themeToggle = document.getElementById('theme-toggle');
-    const logBox = document.getElementById('log');
-    const graphSvg = d3.select('#graph');
-    const tooltip = d3.select('#tooltip');
-    const tokenContainer = document.getElementById('token-container');
+    <div class="container">
+        <h2>MCP API Test</h2>
+        <button id="test-api-btn" onclick="testMcpApi()" disabled>Test MCP API</button>
+        <div id="api-results"></div>
+    </div>
 
-    // State
-    let federations = [];
-    let mcps = [];
-    let mcpProtocolServers = [];
-    let telemetrySockets = {};
-    let darkTheme = true;
+    <script>
+        let currentToken = null;
+        let currentUser = null;
 
-    // WebSocket connection
-    const serverWs = new WebSocket(`ws://${window.location.host}/ws`);
+        // Check for token in URL hash
+        window.addEventListener('load', () => {
+            const hash = window.location.hash.substring(1);
+            const params = new URLSearchParams(hash);
+            const token = params.get('token');
+            const user = params.get('user');
+            
+            if (token && user) {
+                currentToken = token;
+                currentUser = user;
+                updateAuthStatus(true);
+                // Clear the hash
+                window.location.hash = '';
+            }
+        });
 
-    // Utility: log lines
-    function logLine(msg, level='info') {
-      const div = document.createElement('div');
-      div.textContent = `[${new Date().toISOString()}] ${msg}`;
-      if (level==='error') div.style.color='#f55';
-      if (level==='success') div.style.color='#5f5';
-      if (level==='warning') div.style.color='#ff5';
-      logBox.appendChild(div);
-      logBox.scrollTop = logBox.scrollHeight;
-    }
+        function login() {
+            window.location.href = '/login';
+        }
 
-    // Parse token from URL hash
-    window.addEventListener('load', () => {
-      const hash = window.location.hash;
-      if (hash.startsWith('#token=')) {
-        const token = decodeURIComponent(hash.slice(7));
-        tokenContainer.textContent = token;
-        tokenContainer.style.display = 'block';
-        logLine('✅ Received token', 'success');
-        window.location.hash='';
-      }
-    });
+        function logout() {
+            currentToken = null;
+            currentUser = null;
+            updateAuthStatus(false);
+        }
 
-    // Login flow
-    loginBtn.addEventListener('click', () => {
-      logLine('🔗 Redirecting to GitHub for login...');
-      window.location.href = '/login';
-    });
+        function updateAuthStatus(isAuthenticated) {
+            const authStatus = document.getElementById('auth-status');
+            const userInfo = document.getElementById('user-info');
+            const loginBtn = document.getElementById('login-btn');
+            const logoutBtn = document.getElementById('logout-btn');
+            const testApiBtn = document.getElementById('test-api-btn');
 
-    // Theme toggle
-    themeToggle.addEventListener('click', () => {
-      darkTheme = !darkTheme;
-      document.body.style.background = darkTheme ? '#000' : '#fff';
-      document.body.style.color = darkTheme ? '#0f0' : '#333';
-    });
+            if (isAuthenticated) {
+                authStatus.innerHTML = '<span class="success">✅ Authenticated</span>';
+                userInfo.style.display = 'block';
+                document.getElementById('username').textContent = currentUser;
+                document.getElementById('token-display').textContent = currentToken.substring(0, 100) + '...';
+                loginBtn.style.display = 'none';
+                logoutBtn.style.display = 'inline-block';
+                testApiBtn.disabled = false;
+            } else {
+                authStatus.innerHTML = '<span class="error">❌ Not authenticated</span>';
+                userInfo.style.display = 'none';
+                loginBtn.style.display = 'inline-block';
+                logoutBtn.style.display = 'none';
+                testApiBtn.disabled = true;
+                document.getElementById('api-results').innerHTML = '';
+            }
+        }
 
-    // Command handler (omitted for brevity, unchanged)
-    // ... existing handleFedmgrCommand implementation ...
+        async function testMcpApi() {
+            if (!currentToken) {
+                alert('Please login first');
+                return;
+            }
 
-    // WebSocket handlers
-    serverWs.onopen = () => { logLine('🔌 Connected to fedmgr server','success'); serverWs.send(JSON.stringify({type:'get_status'})); };
-    serverWs.onmessage = event => { /* existing status update */ };
-    serverWs.onclose = () => logLine('🔌 Disconnected','warning');
-    serverWs.onerror = err => logLine(`❌ WS error: ${err.message}`,'error');
+            const resultsDiv = document.getElementById('api-results');
+            resultsDiv.innerHTML = '<p>Testing MCP API...</p>';
 
-    // Initialize log
-    logLine('🚀 Federation Trust Visualizer initialized');
-    logLine('💡 Type "help" for available commands');
+            try {
+                const response = await fetch('http://localhost:4001/api', {
+                    headers: {
+                        'Authorization': `Bearer ${currentToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
 
-    // Functions: updateVisualization, connectToMcpTelemetry, showMcpProtocolDetails, etc. unchanged
-    // ... rest of existing script ...
-
-  </script>
+                const data = await response.json();
+                
+                if (response.ok) {
+                    resultsDiv.innerHTML = `
+                        <div class="api-response">
+                            <h3 class="success">✅ MCP API Success</h3>
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                        </div>
+                    `;
+                } else {
+                    resultsDiv.innerHTML = `
+                        <div class="api-response">
+                            <h3 class="error">❌ MCP API Error</h3>
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                resultsDiv.innerHTML = `
+                    <div class="api-response">
+                        <h3 class="error">❌ Network Error</h3>
+                        <p>${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+    </script>
 </body>
 </html>
