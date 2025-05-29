@@ -1,40 +1,39 @@
-# --- Build Stage ---
-# Use Node.js 20 LTS on the latest compatible Alpine version as the builder
-FROM node:current-alpine3.21 AS builder  
+FROM node:current-alpine3.21 AS builder
 
 ARG FEDMGR_BUILD_REL_NPM_DIR
 RUN test -n "$FEDMGR_BUILD_REL_NPM_DIR" || (echo "FEDMGR_BUILD_REL_NPM_DIR build arg is required" && exit 1)
-
 
 WORKDIR /usr/src/app
 
 # Copy the packaged application
 COPY ${FEDMGR_BUILD_REL_NPM_DIR}/letsfederate-mcp-core-*.tgz ./
 
-# Install the package using npm
-# --omit=dev: Ensures only production dependencies are installed
-# --ignore-scripts: Enhances security by not running arbitrary package scripts
+# Install the package
 RUN npm install ./letsfederate-mcp-core-*.tgz --omit=dev --ignore-scripts
 
-# --- Production Stage ---
-# Use a fresh  image for the final stage
+# Install additional dependencies for MCP server
+RUN npm install sqlite3 express jsonwebtoken node-fetch
+
 FROM node:current-alpine3.21 AS final
+
+# Install OpenSSL (though MCP server doesn't need it, keeping consistent)
+RUN apk add --no-cache openssl
 
 WORKDIR /usr/src/app
 
-# Create a non-root user and group
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+# Create necessary directories with proper ownership
+RUN mkdir -p /usr/src/app/data && \
+    chown -R node:node /usr/src/app
 
-# Copy only the installed application and node_modules from the builder stage
-# Set ownership directly during copy
-COPY --chown=appuser:appgroup --from=builder /usr/src/app/node_modules ./node_modules
+# Copy from builder
+COPY --chown=node:node --from=builder /usr/src/app/node_modules ./node_modules
 
-# Switch to the non-root user before running the application
-USER appuser
+# Create bootstrap script for MCP
+COPY --chown=node:node scripts/mcp-bootstrap.sh ./bootstrap.sh
+RUN chmod +x ./bootstrap.sh
 
-# Expose port (Uncomment and change if your app listens on a specific port)
-# EXPOSE 3000
+USER node
 
-# Define the command to run the application
-# The entrypoint script is inside node_modules as per the original CMD
-CMD ["node", "node_modules/@letsfederate/mcp-core/dist/server.js"]
+EXPOSE 4001
+
+CMD ["./bootstrap.sh"]

@@ -1,17 +1,18 @@
 {
   "name": "@letsfederate/mcp-core",
   "version": "0.1.0",
-  "description": "Core components for the MCP protocol",
-  "main": "index.js",
+  "description": "MCP Core Server for Federation",
+  "main": "mcp-server.js",
   "scripts": {
-    "sanity": "echo 'Running mcp-core sanity checks...'"
+    "start": "node mcp-server.js",
+    "test": "jest"
   },
-  "keywords": [
-    "mcp",
-    "protocol",
-    "core",
-    "federation"
-  ],
-  "author": "LetsFederate",
+  "dependencies": {
+    "express": "^4.18.2",
+    "jsonwebtoken": "^9.0.2",
+    "node-fetch": "^2.6.7"
+  },
+  "keywords": ["mcp", "federation", "openid"],
+  "author": "Your Name",
   "license": "MIT"
 }

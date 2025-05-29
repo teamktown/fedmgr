@@ -6,7 +6,7 @@
 MCP_ID=${MCP_ID:-mcp-demo}
 DATA_DIR="/usr/src/app/data"
 
-# Create directories
+# Create directories (should already exist with proper permissions)
 mkdir -p "$DATA_DIR"
 
 # Create default trust store if it doesn't exist
@@ -33,4 +33,5 @@ export TRUST_STORE_PATH="$DATA_DIR/trust-store.json"
 export STATS_STORAGE_PATH="$DATA_DIR/stats.json"
 
 echo "🤖 Starting MCP Server..."
-exec node node_modules/@letsfederate/mcp-core/dist/server.js
+# Fix the module path - it should be mcp-server.js, not dist/server.js
+exec node node_modules/@letsfederate/mcp-core/mcp-server.js

@@ -78,8 +78,50 @@ const privateKey = fs.readFileSync(privateKeyPath, 'utf-8')
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
 
-// Serve static files for the UI
+// Serve static files for the UI - fix the path
 app.use(express.static(path.join(__dirname, '../../../public')))
+
+// Add a root route as fallback
+app.get('/', (req, res) => {
+  // Check if index.html exists in the expected location
+  const indexPath = path.join(__dirname, '../../../public/index.html')
+  if (fs.existsSync(indexPath)) {
+    res.sendFile(indexPath)
+  } else {
+    // Fallback HTML if index.html not found
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Federation Demo</title>
+        <style>
+          body { font-family: Arial, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; }
+          .container { background: #f5f5f5; padding: 20px; border-radius: 8px; margin: 20px 0; }
+          button { background: #007cba; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; }
+          button:hover { background: #005a8b; }
+        </style>
+      </head>
+      <body>
+        <h1>🛰️ Federation Demo</h1>
+        <div class="container">
+          <h2>Quick Start</h2>
+          <p>Federation Admin is running!</p>
+          <button onclick="window.location.href='/login'">Login with GitHub</button>
+          <p><strong>Status:</strong> Federation "${fedName}" is active</p>
+          <p><strong>OAuth:</strong> ${GITHUB_CLIENT_ID ? 'Enabled' : 'Disabled'}</p>
+        </div>
+        <div class="container">
+          <h2>API Endpoints</h2>
+          <ul>
+            <li><a href="/health">Health Check</a></li>
+            <li><a href="/.well-known/openid-federation">Federation Metadata</a></li>
+          </ul>
+        </div>
+      </body>
+      </html>
+    `)
+  }
+})
 
 // GitHub OAuth endpoints
 app.get('/login', (req, res) => {
@@ -170,11 +212,12 @@ app.get('/oauth/callback', async (req, res) => {
       }
     })
 
-    // Redirect with token
-    res.redirect(`/index.html#token=${encodeURIComponent(federationToken)}&user=${encodeURIComponent(user.login)}`)
+    // Redirect with token - use the current domain
+    const redirectUrl = `/?token=${encodeURIComponent(federationToken)}&user=${encodeURIComponent(user.login)}`
+    res.redirect(redirectUrl)
   } catch (err) {
     console.error('OAuth callback error:', err)
-    res.status(500).send('Authentication failed')
+    res.status(500).send(`Authentication failed: ${err.message}`)
   }
 })
 
@@ -189,7 +232,8 @@ app.get('/health', (req, res) => {
     status: 'healthy', 
     federation: fedName, 
     entity_id: entityConfig.sub,
-    github_oauth: !!(GITHUB_CLIENT_ID && GITHUB_CLIENT_SECRET)
+    github_oauth: !!(GITHUB_CLIENT_ID && GITHUB_CLIENT_SECRET),
+    timestamp: new Date().toISOString()
   })
 })
 

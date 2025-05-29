@@ -1,53 +1,42 @@
 FROM node:current-alpine3.21 AS builder
 
-# build argument for the relative path to the npm package directory
 ARG FEDMGR_BUILD_REL_NPM_DIR
 RUN test -n "$FEDMGR_BUILD_REL_NPM_DIR" || (echo "FEDMGR_BUILD_REL_NPM_DIR build arg is required" && exit 1)
 
 WORKDIR /usr/src/app
 
 # Copy the packaged application
-RUN echo `pwd` "copying the package into the container from ${FEDMGR_BUILD_REL_NPM_DIR} "
-
 COPY ${FEDMGR_BUILD_REL_NPM_DIR}/letsfederate-fedmgr-*.tgz ./
 
-# Install the package using npm
-# --omit=dev: Ensures only production dependencies are installed
-# --ignore-scripts: Enhances security by not running arbitrary package scripts
+# Install the package
 RUN npm install ./letsfederate-fedmgr-*.tgz --omit=dev --ignore-scripts
 
-# --- Production Stage ---
-# Use a fresh  image for the final stage
+# Install additional dependencies for federation admin
+RUN npm install sqlite3 express jsonwebtoken node-fetch dotenv
+
 FROM node:current-alpine3.21 AS final
+
+# Install OpenSSL which is needed for key generation
+RUN apk add --no-cache openssl
 
 WORKDIR /usr/src/app
 
-# Create a non-root user and group
-# Create a non-root user and group with explicit UID/GID 1000
-# user node exists but if it didn't, do this
-#RUN addgroup -g 1000 -S appgroup && adduser -u 1000 -G appgroup -S appuser
+# Create necessary directories with proper ownership
+RUN mkdir -p /usr/src/app/data/keys /usr/src/app/data/config /usr/src/app/public && \
+    chown -R node:node /usr/src/app
 
-
-# Create directories and set ownership BEFORE switching user
-# TODO This is an ephemeral location OR mounted volume outside the container 
-
-RUN mkdir -p /usr/src/app/federations /usr/src/app/data \
-    && chown -R node:node /usr/src/app/federations /usr/src/app/data
-
+# Copy from builder
 COPY --chown=node:node --from=builder /usr/src/app/node_modules ./node_modules
+
+# Copy the public directory for static files
+COPY --chown=node:node public/ ./public/
+
+# Create bootstrap script
+COPY --chown=node:node scripts/docker-bootstrap.sh ./bootstrap.sh
+RUN chmod +x ./bootstrap.sh
 
 USER node
 
-
-
-
-
-# Expose the federation admin port
 EXPOSE 3001
 
-# Run the Federation Admin server
-#TODO CP:May17:Concession:
-# the notion that this container is only for the alpha federation is a bit of a hack, but it works for now
-# If you want to run multiple federations, you can create separate containers for each federation
-# or modify the CMD to accept a federation name as an argument
-CMD ["node", "node_modules/@letsfederate/fedmgr/server/federation-admin.js", "--federation", "alpha"]
+CMD ["./bootstrap.sh"]

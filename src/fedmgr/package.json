@@ -1,48 +1,25 @@
 {
   "name": "@letsfederate/fedmgr",
   "version": "0.1.0",
-  "description": "Federation manager for MCP",
-  "main": "index.js",
-  "scripts": {
-    "sanity": "echo 'Running fedmgr sanity checks...'"
-  },
+  "description": "Federation Manager CLI and Server",
+  "main": "fedmgr.js",
   "bin": {
     "fedmgr": "./fedmgr.js"
   },
-  "files": [
-    "fedmgr.js",
-    "auth-commands.js",
-    "server/",
-    "cli/",
-    "utils/",
-    "config.js"
-  ],
+  "scripts": {
+    "start": "node fedmgr.js",
+    "test": "jest"
+  },
   "dependencies": {
-    "open": "^9.0.0",
-    "commander": "^11.1.0",
-    "dotenv": "^16.5.0",
+    "commander": "^9.4.1",
     "express": "^4.18.2",
     "jsonwebtoken": "^9.0.2",
-    "node-fetch": "^3.3.2",
-    "node-jose": "^2.2.0",
-    "ws": "^8.16.0"
-
-
-    
+    "node-fetch": "^2.6.7",
+    "dotenv": "^16.3.1",
+    "ws": "^8.14.2",
+    "open": "^8.4.0"
   },
-  "devDependencies": {
-    "jest": "^29.0.0",
-    "jest-junit": "^16.0.0",
-    "mocha": "^10.0.0",
-    "chai": "^4.3.7",
-    "sinon": "^15.0.0",
-    "supertest": "^6.3.3"
-  },
-  "keywords": [
-    "mcp",
-    "federation",
-    "manager"
-  ],
-  "author": "Chris Phillips (c) 2025",
-  "license": "Apache 2 with Attribution"
+  "keywords": ["federation", "mcp", "cli", "openid"],
+  "author": "Your Name",
+  "license": "MIT"
 }

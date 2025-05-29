@@ -1,116 +1,74 @@
 #!/bin/bash
-# setup.sh - Dynamically generates docker-compose.yaml for MCP federation demo
-# Defensive and reproducible setup script
 
-export OIDC_PROVIDER_PORT=${OIDC_PROVIDER_PORT:-6432}
-export OIDC_PROVIDER_INTERNAL_PORT=${OIDC_PROVIDER_INTERNAL_PORT:-3000}
+# Complete setup script for the federation demo
 
-set -euo pipefail
-IFS=$'\n\t'
+set -e
 
-# Config
-COMPOSE_FILE="docker-compose.generated.yml"
-MCP_COUNT=3
-FED_NAME="fed-alpha"
-OP_NAME="oidc-op"
-OP_IMAGE="sphereon/openid-federation-server:latest"
-WORKDIR="$(pwd)"
+echo "🚀 Setting up Federation Demo..."
 
-# Define local package paths - ASSUMES PACKAGES ARE ALREADY BUILT IN THE CURRENT DIRECTORY
-MCP_CORE_PKG="./src/mcp-core/letsfederate-mcp-core-*.tgz"
-FEDMGR_PKG="./src/fedmgr/letsfederate-fedmgr-*.tgz"
-
-# Check requirements
-command -v docker >/dev/null || { echo >&2 "❌ Docker is required."; exit 1; }
-command -v jq >/dev/null || { echo >&2 "❌ jq is required for config parsing."; exit 1; }
-
-# Check if local packages exist
-if ! compgen -G "$MCP_CORE_PKG" > /dev/null; then
-    echo >&2 "❌ MCP core package not found: $MCP_CORE_PKG"
-    exit 1
-fi
-if ! compgen -G "$FEDMGR_PKG" > /dev/null; then
-    echo >&2 "❌ Fedmgr package not found: $FEDMGR_PKG"
+# Check if .env file exists
+if [ ! -f ".env" ]; then
+    echo "⚠️  .env file not found. Please create one from .env.example"
+    echo "   cp .env.example .env"
+    echo "   # Edit .env with your GitHub OAuth credentials"
     exit 1
 fi
 
-# Initialize base file
-echo "🔧 Initializing $COMPOSE_FILE..."
-cat > "$COMPOSE_FILE" <<EOF
-version: '3.8'
-services:
-EOF
+# Source environment variables
+source .env
 
-# Add OP block
-cat >> "$COMPOSE_FILE" <<EOF
+# Check required environment variables
+if [ -z "$GITHUB_CLIENT_ID" ] || [ -z "$GITHUB_CLIENT_SECRET" ]; then
+    echo "❌ Missing required environment variables:"
+    echo "   GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET must be set in .env"
+    exit 1
+fi
 
-  $OP_NAME:
-    image: $OP_IMAGE
-    ports:
-      - "6432:3000"
-    volumes:
-      - ./config/oidc-op:/config
-    environment:
-      - NODE_ENV=production
-      - FED_NAME=$FED_NAME
-    networks:
-      - federated_net
-EOF
+# Build npm packages
+echo "�� Building npm packages..."
+./scripts/build-npm.sh
 
-# Add Fedmgr service
-echo "⚙️ Adding Fedmgr service..."
-cat >> "$COMPOSE_FILE" <<EOF
+# Clean up any existing containers and volumes
+echo "🧹 Cleaning up existing containers..."
+docker-compose down -v
 
-  fedmgr:
-    build:
-      context: .
-      dockerfile: Dockerfile.fedmgr
-    volumes:
-      - ./federations:/app/federations
-      - ./mcp_instances:/app/mcp_instances
-    environment:
-      - FEDMGR_FEDERATIONS_DIR=/app/federations
-      - FEDMGR_MCP_INSTANCES_DIR=/app/mcp_instances
-    networks:
-      - federated_net
-EOF
+# Initialize volumes with proper permissions
+echo "🔧 Initializing volumes..."
+docker-compose run --rm volume-init
 
+# Start the services
+echo "🚀 Starting services..."
+docker-compose up --build -d
 
-# Add MCPs
-for i in $(seq 1 $MCP_COUNT); do
-  MCP_ID="mcp-$i"
-  MCP_PORT=$((4000 + i))
-  echo "⚙️ Adding MCP $MCP_ID..."
-  cat >> "$COMPOSE_FILE" <<EOF
+# Wait for services to be ready
+echo "⏳ Waiting for services to start..."
+sleep 10
 
-  $MCP_ID:
-    build:
-      context: .
-      dockerfile: Dockerfile.mcp-core
-    ports:
-      - "$MCP_PORT:3000"
-    volumes:
-      - ./data:/app/data
-      - ./mcp_instances/$MCP_ID:/app/mcp_instances/$MCP_ID
-    environment:
-      - FED_NAME=$FED_NAME
-      - MCP_ID=$MCP_ID
-      - TRUST_STORE_PATH=/app/data/trust-store.json # Example path, adjust as needed
-      - STATS_STORAGE_PATH=/app/data/stats.json # Example path, adjust as needed
-      - MCP_CONFIG_PATH=/app/mcp_instances/$MCP_ID/config.json # Example path, adjust as needed
-    networks:
-      - federated_net
-EOF
-done
+# Check service health
+echo "🏥 Checking service health..."
+if curl -f http://localhost:3001/health > /dev/null 2>&1; then
+    echo "✅ Federation Admin is healthy"
+else
+    echo "❌ Federation Admin is not responding"
+fi
 
-# Define network
-cat >> "$COMPOSE_FILE" <<EOF
+if curl -f http://localhost:4001/health > /dev/null 2>&1; then
+    echo "✅ MCP Server is healthy"
+else
+    echo "❌ MCP Server is not responding"
+fi
 
-networks:
-  federated_net:
-    driver: bridge
-EOF
-
-echo "✅ $COMPOSE_FILE generated with $MCP_COUNT MCPs, OP '$OP_NAME', and Fedmgr service."
-cp "$COMPOSE_FILE" "$WORKDIR/docker-compose.yaml"
-echo "🔧 To start the services, run: docker-compose -f $COMPOSE_FILE up --build"
+echo ""
+echo "🎉 Setup complete!"
+echo ""
+echo "📖 Next steps:"
+echo "   1. Open http://localhost:3001 in your browser"
+echo "   2. Click 'Login with GitHub'"
+echo "   3. Test the MCP API integration"
+echo ""
+echo "🔍 View logs:"
+echo "   docker-compose logs -f federation-admin"
+echo "   docker-compose logs -f mcp-server"
+echo ""
+echo "🛑 Stop services:"
+echo "   docker-compose down"
