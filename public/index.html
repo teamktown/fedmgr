@@ -3,11 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Federation Demo</title>
+    <title>Federation Demo v2.1</title>
     <style>
         body { 
             font-family: Arial, sans-serif; 
-            max-width: 800px; 
+            max-width: 1000px; 
             margin: 0 auto; 
             padding: 20px;
             background-color: #f8f9fa;
@@ -26,10 +26,20 @@
             word-break: break-all;
             font-family: monospace;
             font-size: 12px;
+            max-height: 150px;
+            overflow-y: auto;
+        }
+        .decoded-token {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 10px 0;
+            border-left: 4px solid #007cba;
         }
         .success { color: #28a745; }
         .error { color: #dc3545; }
         .warning { color: #ffc107; }
+        .info { color: #17a2b8; }
         button { 
             background: #007cba; 
             color: white; 
@@ -48,6 +58,8 @@
             margin: 10px 0;
             font-family: monospace;
             font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
         }
         .header {
             text-align: center;
@@ -57,11 +69,28 @@
             border-radius: 8px;
             margin-bottom: 20px;
         }
+        .token-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .jwt-part {
+            background: #f8f9fa;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 5px 0;
+        }
+        .jwt-header { background: #e3f2fd; }
+        .jwt-payload { background: #e8f5e8; }
+        .jwt-signature { background: #fff3e0; }
+        @media (max-width: 768px) {
+            .token-section { grid-template-columns: 1fr; }
+        }
     </style>
 </head>
 <body>
     <div class="header">
-        <h1>🛰️ Federation Demo</h1>
+        <h1>🛰️ Federation Demo v2.1</h1>
         <p>OpenID Federation with GitHub OAuth & MCP Integration</p>
     </div>
     
@@ -70,8 +99,16 @@
         <div id="auth-status">Checking authentication...</div>
         <div id="user-info" style="display: none;">
             <p><strong>User:</strong> <span id="username"></span></p>
-            <p><strong>Federation Token:</strong></p>
-            <div id="token-display" class="token"></div>
+            <div class="token-section">
+                <div>
+                    <p><strong>Federation JWT Token:</strong></p>
+                    <div id="token-display" class="token"></div>
+                </div>
+                <div>
+                    <p><strong>Decoded JWT:</strong></p>
+                    <div id="decoded-token" class="decoded-token"></div>
+                </div>
+            </div>
         </div>
         <button id="login-btn" onclick="login()">Login with GitHub</button>
         <button id="logout-btn" onclick="logout()" style="display: none;">Logout</button>
@@ -82,6 +119,7 @@
         <p>Test the federated MCP server with your authenticated token:</p>
         <button id="test-api-btn" onclick="testMcpApi()" disabled>Test MCP API</button>
         <button id="test-health-btn" onclick="testMcpHealth()">Test MCP Health (No Auth)</button>
+        <button id="test-whoami-btn" onclick="testMcpWhoami()" disabled>Test MCP Whoami</button>
         <div id="api-results"></div>
     </div>
 
@@ -89,12 +127,83 @@
         <h2>Federation Information</h2>
         <button onclick="showFederationInfo()">Show Federation Metadata</button>
         <button onclick="showAdminHealth()">Show Admin Health</button>
+        <button onclick="validateToken()" id="validate-token-btn" disabled>Validate Token with Federation</button>
         <div id="federation-info"></div>
     </div>
 
     <script>
         let currentToken = null;
         let currentUser = null;
+
+        // JWT decoding functions
+        function base64UrlDecode(str) {
+            // Add padding if needed
+            str += '='.repeat((4 - str.length % 4) % 4);
+            // Replace URL-safe characters
+            str = str.replace(/-/g, '+').replace(/_/g, '/');
+            try {
+                return JSON.parse(atob(str));
+            } catch (e) {
+                return str; // Return as string if not JSON
+            }
+        }
+
+        function decodeJWT(token) {
+            try {
+                const parts = token.split('.');
+                if (parts.length !== 3) {
+                    throw new Error('Invalid JWT format');
+                }
+
+                const header = base64UrlDecode(parts[0]);
+                const payload = base64UrlDecode(parts[1]);
+                const signature = parts[2]; // Keep signature as base64
+
+                return {
+                    header,
+                    payload,
+                    signature,
+                    valid: true
+                };
+            } catch (error) {
+                return {
+                    error: error.message,
+                    valid: false
+                };
+            }
+        }
+
+        function formatJWTDisplay(decoded) {
+            if (!decoded.valid) {
+                return `<div class="error">❌ Invalid JWT: ${decoded.error}</div>`;
+            }
+
+            const header = JSON.stringify(decoded.header, null, 2);
+            const payload = JSON.stringify(decoded.payload, null, 2);
+            
+            // Highlight important claims
+            const highlightedPayload = payload
+                .replace(/"iss":\s*"([^"]*)"/, '"iss": "<span class="info">$1</span>"')
+                .replace(/"sub":\s*"([^"]*)"/, '"sub": "<span class="success">$1</span>"')
+                .replace(/"aud":\s*"([^"]*)"/, '"aud": "<span class="warning">$1</span>"')
+                .replace(/"exp":\s*(\d+)/, '"exp": <span class="error">$1</span> (' + new Date(decoded.payload.exp * 1000).toLocaleString() + ')')
+                .replace(/"iat":\s*(\d+)/, '"iat": <span class="info">$1</span> (' + new Date(decoded.payload.iat * 1000).toLocaleString() + ')');
+
+            return `
+                <div class="jwt-part jwt-header">
+                    <strong>Header:</strong>
+                    <pre>${header}</pre>
+                </div>
+                <div class="jwt-part jwt-payload">
+                    <strong>Payload:</strong>
+                    <pre>${highlightedPayload}</pre>
+                </div>
+                <div class="jwt-part jwt-signature">
+                    <strong>Signature:</strong>
+                    <pre>${decoded.signature}</pre>
+                </div>
+            `;
+        }
 
         // Check for token in URL parameters or hash
         window.addEventListener('load', () => {
@@ -138,21 +247,32 @@
             const loginBtn = document.getElementById('login-btn');
             const logoutBtn = document.getElementById('logout-btn');
             const testApiBtn = document.getElementById('test-api-btn');
+            const testWhoamiBtn = document.getElementById('test-whoami-btn');
+            const validateTokenBtn = document.getElementById('validate-token-btn');
 
             if (isAuthenticated) {
                 authStatus.innerHTML = '<span class="success">✅ Authenticated with GitHub</span>';
                 userInfo.style.display = 'block';
                 document.getElementById('username').textContent = currentUser;
-                document.getElementById('token-display').textContent = currentToken.substring(0, 100) + '...';
+                document.getElementById('token-display').textContent = currentToken;
+                
+                // Decode and display JWT
+                const decoded = decodeJWT(currentToken);
+                document.getElementById('decoded-token').innerHTML = formatJWTDisplay(decoded);
+                
                 loginBtn.style.display = 'none';
                 logoutBtn.style.display = 'inline-block';
                 testApiBtn.disabled = false;
+                testWhoamiBtn.disabled = false;
+                validateTokenBtn.disabled = false;
             } else {
                 authStatus.innerHTML = '<span class="error">❌ Not authenticated</span>';
                 userInfo.style.display = 'none';
                 loginBtn.style.display = 'inline-block';
                 logoutBtn.style.display = 'none';
                 testApiBtn.disabled = true;
+                testWhoamiBtn.disabled = true;
+                validateTokenBtn.disabled = true;
                 document.getElementById('api-results').innerHTML = '';
             }
         }
@@ -204,6 +324,52 @@
             }
         }
 
+        async function testMcpWhoami() {
+            if (!currentToken) {
+                alert('Please login first');
+                return;
+            }
+
+            const resultsDiv = document.getElementById('api-results');
+            resultsDiv.innerHTML = '<p>🔄 Testing MCP Whoami...</p>';
+
+            try {
+                const response = await fetch('http://localhost:4001/whoami', {
+                    headers: {
+                        'Authorization': `Bearer ${currentToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    resultsDiv.innerHTML = `
+                        <div class="api-response">
+                            <h3 class="success">✅ MCP Whoami Success</h3>
+                            <strong>Status:</strong> ${response.status}<br>
+                            <strong>Response:</strong>
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                        </div>
+                    `;
+                } else {
+                    resultsDiv.innerHTML = `
+                        <div class="api-response">
+                            <h3 class="error">❌ MCP Whoami Error (${response.status})</h3>
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                resultsDiv.innerHTML = `
+                    <div class="api-response">
+                        <h3 class="error">❌ Network Error</h3>
+                        <p>${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+
         async function testMcpHealth() {
             const resultsDiv = document.getElementById('api-results');
             resultsDiv.innerHTML = '<p>🔄 Testing MCP Health...</p>';
@@ -222,6 +388,54 @@
                 resultsDiv.innerHTML = `
                     <div class="api-response">
                         <h3 class="error">❌ MCP Health Check Failed</h3>
+                        <p>${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        async function validateToken() {
+            if (!currentToken) {
+                alert('Please login first');
+                return;
+            }
+
+            const resultsDiv = document.getElementById('federation-info');
+            resultsDiv.innerHTML = '<p>🔄 Validating token with federation...</p>';
+
+            try {
+                const response = await fetch('/validate-token', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ token: currentToken })
+                });
+
+                const data = await response.json();
+                
+                if (response.ok && data.valid) {
+                    resultsDiv.innerHTML = `
+                        <div class="api-response">
+                            <h3 class="success">✅ Token Validation Success</h3>
+                            <strong>Trust Chain Valid:</strong> ${data.trust_chain_valid ? '✅ Yes' : '❌ No'}<br>
+                            <strong>Payload:</strong>
+                            <pre>${JSON.stringify(data.payload, null, 2)}</pre>
+                        </div>
+                    `;
+                } else {
+                    resultsDiv.innerHTML = `
+                        <div class="api-response">
+                            <h3 class="error">❌ Token Validation Failed</h3>
+                            <strong>Error:</strong> ${data.error || 'Unknown error'}<br>
+                            <pre>${JSON.stringify(data, null, 2)}</pre>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                resultsDiv.innerHTML = `
+                    <div class="api-response">
+                        <h3 class="error">❌ Validation Request Failed</h3>
                         <p>${error.message}</p>
                     </div>
                 `;

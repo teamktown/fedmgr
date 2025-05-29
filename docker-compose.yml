@@ -1,0 +1,70 @@
+version: '3.8'
+services:
+  federation-admin:
+    build:
+      context: .
+      dockerfile: Dockerfile.federation-admin
+      args:
+        FEDMGR_BUILD_REL_NPM_DIR: ./build/npm
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID}
+      - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET}
+      - OAUTH_REDIRECT_URI=http://localhost:3001/oauth/callback
+      - FEDERATION_NAME=alpha
+      - FEDMGR_PUBLIC_DIR=/usr/src/app/public
+    volumes:
+      - federation_data:/usr/src/app/data
+      # Optional: Mount for development (uncomment to see live changes)
+      # - ./public:/usr/src/app/public
+    networks:
+      - federation_net
+
+  mcp-server:
+    build:
+      context: .
+      dockerfile: Dockerfile.mcp-core
+      args:
+        FEDMGR_BUILD_REL_NPM_DIR: ./build/npm
+    ports:
+      - "4001:4001"
+    environment:
+      - MCP_PORT=4001
+      - MCP_ID=mcp-demo
+      - MCP_PUBLIC_KEY=mcp-demo-key
+      - MCP_BASE_URL=http://localhost:4001
+      - FEDERATION_ADMIN_URL=http://federation-admin:3001
+      - FEDERATION_NAME=alpha
+    volumes:
+      - mcp_data:/usr/src/app/data
+    networks:
+      - federation_net
+    depends_on:
+      - federation-admin
+
+  volume-init:
+    image: alpine:latest
+    command: >
+      sh -c "
+        chmod 755 /federation_data /mcp_data &&
+        chown 1000:1000 /federation_data /mcp_data &&
+        mkdir -p /federation_data/keys /federation_data/config &&
+        mkdir -p /mcp_data &&
+        chown -R 1000:1000 /federation_data /mcp_data
+      "
+    volumes:
+      - federation_data:/federation_data
+      - mcp_data:/mcp_data
+    networks:
+      - federation_net
+
+volumes:
+  federation_data:
+  mcp_data:
+  config_data:
+
+networks:
+  federation_net:
+    driver: bridge

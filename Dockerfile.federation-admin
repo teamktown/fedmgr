@@ -28,7 +28,7 @@ RUN mkdir -p /usr/src/app/data/keys /usr/src/app/data/config /usr/src/app/public
 # Copy from builder
 COPY --chown=node:node --from=builder /usr/src/app/node_modules ./node_modules
 
-# Copy the public directory for static files
+# Copy the public directory for static files to the expected location
 COPY --chown=node:node public/ ./public/
 
 # Create bootstrap script
@@ -36,6 +36,9 @@ COPY --chown=node:node scripts/docker-bootstrap.sh ./bootstrap.sh
 RUN chmod +x ./bootstrap.sh
 
 USER node
+
+# Set environment variable for public directory
+ENV FEDMGR_PUBLIC_DIR=/usr/src/app/public
 
 EXPOSE 3001
 
