@@ -18,26 +18,34 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const MCPProtocolServer = require('./mcp-protocol-server');
 const certificateUtils = require('./utils/certificate-utils');
+const config = require('../config');
+
 
 class MCPInterface extends EventEmitter {
   constructor(registryPath) {
     super();
-    this.registryPath = registryPath || path.resolve(__dirname, '../../data/registry.json');
+    this.registryPath = registryPath || config.federations.registryPath;
     this.portCounter = 3100;
     this.mcpProcesses = new Map(); // Track running MCP processes
     this.mcpProtocolServers = new Map(); // Track running MCP Protocol servers
     this.loadRegistry();
   }
-
   /**
    * Load registry data from file
    */
-  loadRegistry() {
+ loadRegistry() {
     if (!fs.existsSync(this.registryPath)) {
       this.registry = { federations: [], mcps: {}, mcpProtocolServers: {} };
       return;
     }
-    this.registry = JSON.parse(fs.readFileSync(this.registryPath, 'utf-8'));
+    try {
+      const data = fs.readFileSync(this.registryPath, 'utf-8');
+      this.registry = JSON.parse(data);
+    } catch (err) {
+      console.error(`❌ Failed to load registry from ${this.registryPath}: ${err.message}`);
+      this.registry = { federations: [], mcps: {}, mcpProtocolServers: {} };
+      return;
+    }
     
     // Ensure registry has all required sections
     if (!this.registry.federations) this.registry.federations = [];

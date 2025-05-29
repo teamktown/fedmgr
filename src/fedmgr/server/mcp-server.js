@@ -7,11 +7,51 @@ const certificateUtils = require('./utils/certificate-utils');
 
 // Validate JWT token
 async function validateToken(token) {
-  // This function verifies the token against the federation trust chain
-  
   if (!token || token === 'none') {
     return { valid: false, reason: 'Missing token' };
   }
+
+  try {
+    const segments = token.split('.')
+    if (segments.length !== 3) return { valid: false, reason: 'Invalid token format' }
+
+    const decoded = jwt.decode(token, { complete: true })
+    if (!decoded) return { valid: false, reason: 'Failed to decode token' }
+
+    const issuer = decoded.payload.iss
+    const fedName = config.federations.defaultName || 'alpha'
+    const federationsDir = config.federations.directory
+    const anchorPubPath = path.join(federationsDir, fedName, 'keys/anchor-public.pem')
+
+    // Case: issued by federation anchor
+    if (issuer === `http://localhost:${config.federations.port}`) {
+      if (!fs.existsSync(anchorPubPath)) return { valid: false, reason: 'Federation public key missing' }
+      const verification = certificateUtils.verifyJwt(token, anchorPubPath, { algorithms: ['RS256'] })
+      return verification.valid
+        ? { valid: true, reason: 'Verified by anchor', payload: verification.payload }
+        : { valid: false, reason: verification.reason }
+    }
+
+    // Case: issued by another federated OP
+    // Attempt to find entity statement for this issuer
+    const registry = JSON.parse(fs.readFileSync(config.federations.registryPath, 'utf-8'))
+    const stmtJwt = registry.entityStatements && registry.entityStatements[issuer]
+    if (stmtJwt) {
+      if (!fs.existsSync(anchorPubPath)) return { valid: false, reason: 'Anchor key missing for trust chain' }
+      const chainResult = certificateUtils.validateTrustChain([stmtJwt, token], anchorPubPath)
+      return chainResult.valid
+        ? { valid: true, reason: 'Verified via trust chain', payload: jwt.decode(token) }
+        : { valid: false, reason: 'Trust chain validation failed' }
+    }
+
+    // Unrecognized issuer
+    return { valid: false, reason: `Unknown issuer: ${issuer}` }
+
+  } catch (err) {
+    return { valid: false, reason: `Validation error: ${err.message}` }
+  }
+};
+  
   
   try {
     // Check if it looks like a JWT (three dot-separated segments)
@@ -89,4 +129,4 @@ async function validateToken(token) {
       reason: `Token validation failed: ${error.message}`
     };
   }
-}
+

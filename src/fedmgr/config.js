@@ -1,11 +1,18 @@
 // src/config.js
 require('dotenv').config();
 
-// Set up paths based on environment variables or defaults
 const path = require('path');
-const FEDMGR_HOME = process.env.FEDMGR_HOME || path.resolve(__dirname, '..');
+
+// Base directory for fedmgr
+const FEDMGR_HOME = process.env.FEDMGR_FEDMGR_HOME || path.resolve(__dirname, '..');
 const FEDMGR_FEDERATIONS_DIR = process.env.FEDMGR_FEDERATIONS_DIR || path.join(FEDMGR_HOME, 'federations');
-const FEDMGR_FED_REG = process.env.FEDMGR_FED_REG || path.join(FEDMGR_HOME, 'data', 'registry.json');
+
+// Registry directory and file
+// FEDMGR_FED_REG_DIR can point at a directory
+const FEDMGR_FED_REG_DIR = process.env.FEDMGR_FED_REG || path.join(FEDMGR_HOME, 'data', 'fed-reg');
+// FEDMGR_FED_REG_FILE explicitly points at the registry JSON file
+const FEDMGR_FED_REG_FILE = process.env.FEDMGR_FED_REG_FILE 
+//|| path.join(FEDMGR_FED_REG_DIR, 'registry.json');
 
 module.exports = {
   oidcProvider: {
@@ -16,7 +23,7 @@ module.exports = {
   },
   federations: {
     directory: FEDMGR_FEDERATIONS_DIR,
-    registryPath: FEDMGR_FED_REG
-  },
-  // Add other configuration sections as needed
+    registryDir: FEDMGR_FED_REG_DIR,
+    registryPath: FEDMGR_FED_REG_FILE
+  }
 };
