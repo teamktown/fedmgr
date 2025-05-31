@@ -37,8 +37,11 @@ services:
       - MCP_BASE_URL=http://localhost:4001
       - FEDERATION_ADMIN_URL=http://federation-admin:3001
       - FEDERATION_NAME=alpha
+      - MCP_PUBLIC_DIR=/usr/src/app/public
     volumes:
       - mcp_data:/usr/src/app/data
+      # Optional: Mount for development (uncomment to see live changes)
+      # - ./public:/usr/src/app/public
     networks:
       - federation_net
     depends_on:

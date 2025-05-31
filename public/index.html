@@ -3,231 +3,97 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Federation Demo v2.1</title>
+    <title>Federation Admin - Trust Anchor</title>
     <style>
-        body { 
-            font-family: Arial, sans-serif; 
-            max-width: 1000px; 
-            margin: 0 auto; 
-            padding: 20px;
-            background-color: #f8f9fa;
-        }
-        .container { 
-            background: white; 
-            padding: 20px; 
-            border-radius: 8px; 
-            margin: 20px 0;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .token { 
-            background: #e8f4f8; 
-            padding: 10px; 
-            border-radius: 4px; 
-            word-break: break-all;
-            font-family: monospace;
-            font-size: 12px;
-            max-height: 150px;
-            overflow-y: auto;
-        }
-        .decoded-token {
-            background: #f8f9fa;
-            padding: 15px;
-            border-radius: 4px;
-            margin: 10px 0;
-            border-left: 4px solid #007cba;
-        }
-        .success { color: #28a745; }
-        .error { color: #dc3545; }
-        .warning { color: #ffc107; }
-        .info { color: #17a2b8; }
-        button { 
-            background: #007cba; 
-            color: white; 
-            padding: 10px 20px; 
-            border: none; 
-            border-radius: 4px; 
-            cursor: pointer;
-            margin: 5px;
-        }
+        body { font-family: Arial, sans-serif; max-width: 1000px; margin: 0 auto; padding: 20px; background: #f8f9fa; }
+        .header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; border-radius: 8px; margin-bottom: 30px; text-align: center; }
+        .container { background: white; padding: 20px; border-radius: 8px; margin: 20px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .status { padding: 15px; border-radius: 4px; margin: 15px 0; }
+        .authenticated { background: #d4edda; border: 1px solid #c3e6cb; color: #155724; }
+        .not-authenticated { background: #f8d7da; border: 1px solid #f5c6cb; color: #721c24; }
+        button { background: #007cba; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; margin: 5px; }
         button:hover { background: #005a8b; }
-        button:disabled { background: #6c757d; cursor: not-allowed; }
-        .api-response { 
-            background: #f0f8ff; 
-            padding: 10px; 
-            border-radius: 4px; 
-            margin: 10px 0;
-            font-family: monospace;
-            font-size: 12px;
-            max-height: 300px;
-            overflow-y: auto;
-        }
-        .header {
-            text-align: center;
-            padding: 20px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border-radius: 8px;
-            margin-bottom: 20px;
-        }
-        .token-section {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-        }
-        .jwt-part {
-            background: #f8f9fa;
-            padding: 10px;
-            border-radius: 4px;
-            margin: 5px 0;
-        }
-        .jwt-header { background: #e3f2fd; }
-        .jwt-payload { background: #e8f5e8; }
-        .jwt-signature { background: #fff3e0; }
-        @media (max-width: 768px) {
-            .token-section { grid-template-columns: 1fr; }
-        }
+        .token-display { background: #e8f4f8; padding: 15px; border-radius: 4px; margin: 10px 0; word-break: break-all; font-family: monospace; font-size: 12px; max-height: 200px; overflow-y: auto; }
+        .copy-btn { background: #28a745; font-size: 11px; padding: 5px 10px; }
+        .test-results { background: #f8f9fa; padding: 15px; border-radius: 4px; margin: 10px 0; white-space: pre-wrap; font-family: monospace; font-size: 12px; max-height: 400px; overflow-y: auto; }
+        .mcp-link { background: #17a2b8; color: white; padding: 15px; border-radius: 4px; margin: 15px 0; text-align: center; }
+        .mcp-link a { color: white; text-decoration: none; font-weight: bold; }
+        .jwt-section { background: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; border-radius: 4px; margin: 15px 0; }
+        .fed-badge { background: #6f42c1; color: white; padding: 5px 10px; border-radius: 15px; font-size: 12px; font-weight: bold; }
     </style>
 </head>
 <body>
     <div class="header">
-        <h1>🛰️ Federation Demo v2.1</h1>
-        <p>OpenID Federation with GitHub OAuth & MCP Integration</p>
+        <h1>🛰️ Federation Admin</h1>
+        <p>OpenID Federation Trust Anchor - GitHub OAuth Integration</p>
+        <span class="fed-badge">TRUST ANCHOR</span>
     </div>
-    
+
     <div class="container">
-        <h2>Authentication Status</h2>
-        <div id="auth-status">Checking authentication...</div>
-        <div id="user-info" style="display: none;">
-            <p><strong>User:</strong> <span id="username"></span></p>
-            <div class="token-section">
-                <div>
-                    <p><strong>Federation JWT Token:</strong></p>
-                    <div id="token-display" class="token"></div>
-                </div>
-                <div>
-                    <p><strong>Decoded JWT:</strong></p>
-                    <div id="decoded-token" class="decoded-token"></div>
-                </div>
-            </div>
+        <h2>🔐 Authentication Status</h2>
+        <div id="auth-status" class="status not-authenticated">
+            ❌ Not authenticated
         </div>
-        <button id="login-btn" onclick="login()">Login with GitHub</button>
-        <button id="logout-btn" onclick="logout()" style="display: none;">Logout</button>
+        <button onclick="login()" id="login-btn">Login with GitHub</button>
+        <button onclick="logout()" id="logout-btn" style="display: none;">Logout</button>
+        
+        <div id="user-info" style="display: none;">
+            <h3>User Information</h3>
+            <div id="user-details"></div>
+        </div>
     </div>
 
     <div class="container">
-        <h2>MCP API Test</h2>
-        <p>Test the federated MCP server with your authenticated token:</p>
-        <button id="test-api-btn" onclick="testMcpApi()" disabled>Test MCP API</button>
-        <button id="test-health-btn" onclick="testMcpHealth()">Test MCP Health (No Auth)</button>
-        <button id="test-whoami-btn" onclick="testMcpWhoami()" disabled>Test MCP Whoami</button>
-        <div id="api-results"></div>
+        <h2>🔑 Federation JWT Token</h2>
+        <div class="jwt-section">
+            <p><strong>Your Federation Token:</strong> This token is signed by our trust anchor and contains your GitHub identity with federation trust marks.</p>
+            <div id="token-container" style="display: none;">
+                <div class="token-display" id="token-display"></div>
+                <button class="copy-btn" onclick="copyToken()">📋 Copy Token</button>
+                <button onclick="decodeToken()">🔍 Decode Token</button>
+                <button onclick="testMcpWithToken()">🤖 Test MCP Server</button>
+            </div>
+            <div id="no-token" class="error">No token available. Please login first.</div>
+        </div>
+        
+        <div id="decoded-token" style="display: none;">
+            <h3>📋 Decoded JWT Token</h3>
+            <div id="token-payload" class="test-results"></div>
+        </div>
+    </div>
+
+    <div class="mcp-link">
+        <h3>🤖 Test MCP Server</h3>
+        <p>Once you have a token, test the federated MCP server:</p>
+        <a href="http://localhost:4001" target="_blank">Open MCP Server (localhost:4001)</a>
     </div>
 
     <div class="container">
-        <h2>Federation Information</h2>
-        <button onclick="showFederationInfo()">Show Federation Metadata</button>
+        <h2>🏛️ Federation Authority Information</h2>
+        <button onclick="showFederationMetadata()">Show Federation Metadata</button>
         <button onclick="showAdminHealth()">Show Admin Health</button>
-        <button onclick="validateToken()" id="validate-token-btn" disabled>Validate Token with Federation</button>
-        <div id="federation-info"></div>
+        <button onclick="validateTokenWithFederation()">Validate Current Token</button>
+        <div id="federation-results" class="test-results"></div>
     </div>
 
     <script>
         let currentToken = null;
         let currentUser = null;
 
-        // JWT decoding functions
-        function base64UrlDecode(str) {
-            // Add padding if needed
-            str += '='.repeat((4 - str.length % 4) % 4);
-            // Replace URL-safe characters
-            str = str.replace(/-/g, '+').replace(/_/g, '/');
-            try {
-                return JSON.parse(atob(str));
-            } catch (e) {
-                return str; // Return as string if not JSON
-            }
-        }
-
-        function decodeJWT(token) {
-            try {
-                const parts = token.split('.');
-                if (parts.length !== 3) {
-                    throw new Error('Invalid JWT format');
-                }
-
-                const header = base64UrlDecode(parts[0]);
-                const payload = base64UrlDecode(parts[1]);
-                const signature = parts[2]; // Keep signature as base64
-
-                return {
-                    header,
-                    payload,
-                    signature,
-                    valid: true
-                };
-            } catch (error) {
-                return {
-                    error: error.message,
-                    valid: false
-                };
-            }
-        }
-
-        function formatJWTDisplay(decoded) {
-            if (!decoded.valid) {
-                return `<div class="error">❌ Invalid JWT: ${decoded.error}</div>`;
-            }
-
-            const header = JSON.stringify(decoded.header, null, 2);
-            const payload = JSON.stringify(decoded.payload, null, 2);
-            
-            // Highlight important claims
-            const highlightedPayload = payload
-                .replace(/"iss":\s*"([^"]*)"/, '"iss": "<span class="info">$1</span>"')
-                .replace(/"sub":\s*"([^"]*)"/, '"sub": "<span class="success">$1</span>"')
-                .replace(/"aud":\s*"([^"]*)"/, '"aud": "<span class="warning">$1</span>"')
-                .replace(/"exp":\s*(\d+)/, '"exp": <span class="error">$1</span> (' + new Date(decoded.payload.exp * 1000).toLocaleString() + ')')
-                .replace(/"iat":\s*(\d+)/, '"iat": <span class="info">$1</span> (' + new Date(decoded.payload.iat * 1000).toLocaleString() + ')');
-
-            return `
-                <div class="jwt-part jwt-header">
-                    <strong>Header:</strong>
-                    <pre>${header}</pre>
-                </div>
-                <div class="jwt-part jwt-payload">
-                    <strong>Payload:</strong>
-                    <pre>${highlightedPayload}</pre>
-                </div>
-                <div class="jwt-part jwt-signature">
-                    <strong>Signature:</strong>
-                    <pre>${decoded.signature}</pre>
-                </div>
-            `;
-        }
-
-        // Check for token in URL parameters or hash
-        window.addEventListener('load', () => {
-            // Check URL parameters first
+        // Check for token and user in URL on page load
+        window.addEventListener('load', function() {
             const urlParams = new URLSearchParams(window.location.search);
-            let token = urlParams.get('token');
-            let user = urlParams.get('user');
-            
-            // If not in parameters, check hash
-            if (!token) {
-                const hash = window.location.hash.substring(1);
-                const hashParams = new URLSearchParams(hash);
-                token = hashParams.get('token');
-                user = hashParams.get('user');
-            }
+            const token = urlParams.get('token');
+            const user = urlParams.get('user');
             
             if (token && user) {
                 currentToken = token;
                 currentUser = user;
-                updateAuthStatus(true);
-                // Clear the URL
+                updateAuthStatus(true, user);
+                displayToken(token);
+                
+                // Clear URL parameters
                 window.history.replaceState({}, document.title, window.location.pathname);
-            } else {
-                updateAuthStatus(false);
             }
         });
 
@@ -239,254 +105,122 @@
             currentToken = null;
             currentUser = null;
             updateAuthStatus(false);
+            document.getElementById('token-container').style.display = 'none';
+            document.getElementById('no-token').style.display = 'block';
+            document.getElementById('decoded-token').style.display = 'none';
         }
 
-        function updateAuthStatus(isAuthenticated) {
-            const authStatus = document.getElementById('auth-status');
-            const userInfo = document.getElementById('user-info');
+        function updateAuthStatus(authenticated, username = null) {
+            const statusEl = document.getElementById('auth-status');
             const loginBtn = document.getElementById('login-btn');
             const logoutBtn = document.getElementById('logout-btn');
-            const testApiBtn = document.getElementById('test-api-btn');
-            const testWhoamiBtn = document.getElementById('test-whoami-btn');
-            const validateTokenBtn = document.getElementById('validate-token-btn');
-
-            if (isAuthenticated) {
-                authStatus.innerHTML = '<span class="success">✅ Authenticated with GitHub</span>';
-                userInfo.style.display = 'block';
-                document.getElementById('username').textContent = currentUser;
-                document.getElementById('token-display').textContent = currentToken;
-                
-                // Decode and display JWT
-                const decoded = decodeJWT(currentToken);
-                document.getElementById('decoded-token').innerHTML = formatJWTDisplay(decoded);
-                
+            const userInfo = document.getElementById('user-info');
+            
+            if (authenticated && username) {
+                statusEl.className = 'status authenticated';
+                statusEl.innerHTML = `✅ Authenticated with GitHub<br><strong>User:</strong> ${username}<br><strong>Role:</strong> Federation Trust Anchor User`;
                 loginBtn.style.display = 'none';
                 logoutBtn.style.display = 'inline-block';
-                testApiBtn.disabled = false;
-                testWhoamiBtn.disabled = false;
-                validateTokenBtn.disabled = false;
+                userInfo.style.display = 'block';
+                document.getElementById('user-details').innerHTML = `
+                    <p><strong>GitHub Username:</strong> ${username}</p>
+                    <p><strong>Federation Role:</strong> Trust Anchor Authority</p>
+                    <p><strong>Token Authority:</strong> Can issue federation tokens</p>
+                    <p><strong>Trust Chain:</strong> Root level (self-issued)</p>
+                `;
             } else {
-                authStatus.innerHTML = '<span class="error">❌ Not authenticated</span>';
-                userInfo.style.display = 'none';
+                statusEl.className = 'status not-authenticated';
+                statusEl.innerHTML = '❌ Not authenticated';
                 loginBtn.style.display = 'inline-block';
                 logoutBtn.style.display = 'none';
-                testApiBtn.disabled = true;
-                testWhoamiBtn.disabled = true;
-                validateTokenBtn.disabled = true;
-                document.getElementById('api-results').innerHTML = '';
+                userInfo.style.display = 'none';
             }
         }
 
-        async function testMcpApi() {
-            if (!currentToken) {
-                alert('Please login first');
-                return;
-            }
+        function displayToken(token) {
+            currentToken = token;
+            document.getElementById('token-container').style.display = 'block';
+            document.getElementById('no-token').style.display = 'none';
+            document.getElementById('token-display').textContent = token;
+        }
 
-            const resultsDiv = document.getElementById('api-results');
-            resultsDiv.innerHTML = '<p>🔄 Testing MCP API...</p>';
-
-            try {
-                const response = await fetch('http://localhost:4001/api', {
-                    headers: {
-                        'Authorization': `Bearer ${currentToken}`,
-                        'Content-Type': 'application/json'
-                    }
+        function copyToken() {
+            if (currentToken) {
+                navigator.clipboard.writeText(currentToken).then(() => {
+                    alert('🎉 Federation token copied to clipboard!\\n\\n📋 You can now test the MCP server at localhost:4001\\n\\n🔗 The token contains your GitHub identity and federation trust marks.');
                 });
-
-                const data = await response.json();
-                
-                if (response.ok) {
-                    resultsDiv.innerHTML = `
-                        <div class="api-response">
-                            <h3 class="success">✅ MCP API Success</h3>
-                            <strong>Status:</strong> ${response.status}<br>
-                            <strong>Response:</strong>
-                            <pre>${JSON.stringify(data, null, 2)}</pre>
-                        </div>
-                    `;
-                } else {
-                    resultsDiv.innerHTML = `
-                        <div class="api-response">
-                            <h3 class="error">❌ MCP API Error (${response.status})</h3>
-                            <pre>${JSON.stringify(data, null, 2)}</pre>
-                        </div>
-                    `;
-                }
-            } catch (error) {
-                resultsDiv.innerHTML = `
-                    <div class="api-response">
-                        <h3 class="error">❌ Network Error</h3>
-                        <p>${error.message}</p>
-                        <p class="warning">⚠️ Make sure the MCP server is running on port 4001</p>
-                    </div>
-                `;
             }
         }
 
-        async function testMcpWhoami() {
-            if (!currentToken) {
-                alert('Please login first');
-                return;
-            }
-
-            const resultsDiv = document.getElementById('api-results');
-            resultsDiv.innerHTML = '<p>🔄 Testing MCP Whoami...</p>';
-
+        function decodeToken() {
+            if (!currentToken) return;
+            
             try {
-                const response = await fetch('http://localhost:4001/whoami', {
-                    headers: {
-                        'Authorization': `Bearer ${currentToken}`,
-                        'Content-Type': 'application/json'
-                    }
-                });
+                const parts = currentToken.split('.');
+                const header = JSON.parse(atob(parts[0].replace(/-/g, '+').replace(/_/g, '/')));
+                const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
 
-                const data = await response.json();
+                document.getElementById('token-payload').textContent = 
+                    'Header:\\n' + JSON.stringify(header, null, 2) + 
+                    '\\n\\nPayload:\\n' + JSON.stringify(payload, null, 2);
                 
-                if (response.ok) {
-                    resultsDiv.innerHTML = `
-                        <div class="api-response">
-                            <h3 class="success">✅ MCP Whoami Success</h3>
-                            <strong>Status:</strong> ${response.status}<br>
-                            <strong>Response:</strong>
-                            <pre>${JSON.stringify(data, null, 2)}</pre>
-                        </div>
-                    `;
-                } else {
-                    resultsDiv.innerHTML = `
-                        <div class="api-response">
-                            <h3 class="error">❌ MCP Whoami Error (${response.status})</h3>
-                            <pre>${JSON.stringify(data, null, 2)}</pre>
-                        </div>
-                    `;
-                }
+                document.getElementById('decoded-token').style.display = 'block';
             } catch (error) {
-                resultsDiv.innerHTML = `
-                    <div class="api-response">
-                        <h3 class="error">❌ Network Error</h3>
-                        <p>${error.message}</p>
-                    </div>
-                `;
+                alert('Error decoding token: ' + error.message);
             }
         }
 
-        async function testMcpHealth() {
-            const resultsDiv = document.getElementById('api-results');
-            resultsDiv.innerHTML = '<p>🔄 Testing MCP Health...</p>';
-
-            try {
-                const response = await fetch('http://localhost:4001/health');
-                const data = await response.json();
-                
-                resultsDiv.innerHTML = `
-                    <div class="api-response">
-                        <h3 class="success">✅ MCP Health Check</h3>
-                        <pre>${JSON.stringify(data, null, 2)}</pre>
-                    </div>
-                `;
-            } catch (error) {
-                resultsDiv.innerHTML = `
-                    <div class="api-response">
-                        <h3 class="error">❌ MCP Health Check Failed</h3>
-                        <p>${error.message}</p>
-                    </div>
-                `;
+        function testMcpWithToken() {
+            if (currentToken) {
+                const mcpUrl = `http://localhost:4001?token=${encodeURIComponent(currentToken)}`;
+                window.open(mcpUrl, '_blank');
+            } else {
+                alert('Please login first to get a token');
             }
         }
 
-        async function validateToken() {
-            if (!currentToken) {
-                alert('Please login first');
-                return;
-            }
-
-            const resultsDiv = document.getElementById('federation-info');
-            resultsDiv.innerHTML = '<p>🔄 Validating token with federation...</p>';
-
-            try {
-                const response = await fetch('/validate-token', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ token: currentToken })
-                });
-
-                const data = await response.json();
-                
-                if (response.ok && data.valid) {
-                    resultsDiv.innerHTML = `
-                        <div class="api-response">
-                            <h3 class="success">✅ Token Validation Success</h3>
-                            <strong>Trust Chain Valid:</strong> ${data.trust_chain_valid ? '✅ Yes' : '❌ No'}<br>
-                            <strong>Payload:</strong>
-                            <pre>${JSON.stringify(data.payload, null, 2)}</pre>
-                        </div>
-                    `;
-                } else {
-                    resultsDiv.innerHTML = `
-                        <div class="api-response">
-                            <h3 class="error">❌ Token Validation Failed</h3>
-                            <strong>Error:</strong> ${data.error || 'Unknown error'}<br>
-                            <pre>${JSON.stringify(data, null, 2)}</pre>
-                        </div>
-                    `;
-                }
-            } catch (error) {
-                resultsDiv.innerHTML = `
-                    <div class="api-response">
-                        <h3 class="error">❌ Validation Request Failed</h3>
-                        <p>${error.message}</p>
-                    </div>
-                `;
-            }
-        }
-
-        async function showFederationInfo() {
-            const resultsDiv = document.getElementById('federation-info');
-            resultsDiv.innerHTML = '<p>🔄 Loading federation metadata...</p>';
-
+        async function showFederationMetadata() {
             try {
                 const response = await fetch('/.well-known/openid-federation');
                 const data = await response.json();
-                
-                resultsDiv.innerHTML = `
-                    <div class="api-response">
-                        <h3 class="success">✅ Federation Metadata</h3>
-                        <pre>${JSON.stringify(data, null, 2)}</pre>
-                    </div>
-                `;
+                document.getElementById('federation-results').textContent = 
+                    '✅ Federation Metadata (Trust Anchor):\\n' + JSON.stringify(data, null, 2);
             } catch (error) {
-                resultsDiv.innerHTML = `
-                    <div class="api-response">
-                        <h3 class="error">❌ Failed to load federation metadata</h3>
-                        <p>${error.message}</p>
-                    </div>
-                `;
+                document.getElementById('federation-results').textContent = 
+                    '❌ Federation Metadata Failed:\\n' + error.message;
             }
         }
 
         async function showAdminHealth() {
-            const resultsDiv = document.getElementById('federation-info');
-            resultsDiv.innerHTML = '<p>🔄 Checking admin health...</p>';
-
             try {
                 const response = await fetch('/health');
                 const data = await response.json();
-                
-                resultsDiv.innerHTML = `
-                    <div class="api-response">
-                        <h3 class="success">✅ Federation Admin Health</h3>
-                        <pre>${JSON.stringify(data, null, 2)}</pre>
-                    </div>
-                `;
+                document.getElementById('federation-results').textContent = 
+                    '✅ Federation Admin Health:\\n' + JSON.stringify(data, null, 2);
             } catch (error) {
-                resultsDiv.innerHTML = `
-                    <div class="api-response">
-                        <h3 class="error">❌ Failed to check admin health</h3>
-                        <p>${error.message}</p>
-                    </div>
-                `;
+                document.getElementById('federation-results').textContent = 
+                    '❌ Federation Admin Health Failed:\\n' + error.message;
+            }
+        }
+
+        async function validateTokenWithFederation() {
+            if (!currentToken) {
+                alert('Please login first to get a token');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/validate-token', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ token: currentToken })
+                });
+                const data = await response.json();
+                document.getElementById('federation-results').textContent = 
+                    '✅ Token Validation Result:\\n' + JSON.stringify(data, null, 2);
+            } catch (error) {
+                document.getElementById('federation-results').textContent = 
+                    '❌ Token Validation Failed:\\n' + error.message;
             }
         }
     </script>

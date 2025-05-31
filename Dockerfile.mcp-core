@@ -22,17 +22,23 @@ RUN apk add --no-cache openssl
 WORKDIR /usr/src/app
 
 # Create necessary directories with proper ownership
-RUN mkdir -p /usr/src/app/data && \
+RUN mkdir -p /usr/src/app/data /usr/src/app/public && \
     chown -R node:node /usr/src/app
 
 # Copy from builder
 COPY --chown=node:node --from=builder /usr/src/app/node_modules ./node_modules
+
+# Copy the MCP-specific public directory (not the federation admin's public)
+COPY --chown=node:node public-mcp/ ./public/
 
 # Create bootstrap script for MCP
 COPY --chown=node:node scripts/mcp-bootstrap.sh ./bootstrap.sh
 RUN chmod +x ./bootstrap.sh
 
 USER node
+
+# Set environment variable for public directory
+ENV MCP_PUBLIC_DIR=/usr/src/app/public
 
 EXPOSE 4001
 

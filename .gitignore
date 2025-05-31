@@ -143,5 +143,8 @@ test-results/*
 # automatically build files
 docker-compose.yaml
 docker-compose.generated.yaml
-Dockerfile.fedmgr
-Dockerfile.mcp-core 
+
+build/*
+./prompts/*
+./apply-md 
+./context
