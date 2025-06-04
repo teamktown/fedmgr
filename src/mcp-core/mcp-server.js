@@ -191,25 +191,105 @@ class MCPProtocolHandler {
   }
 
   registerDefaultTools() {
-    // Federation info tool
-    this.tools.set('get_federation_info', {
-      name: 'get_federation_info',
-      description: 'Get federation and trust information',
+    console.log('🔧 Registering MCP tools...');
+    
+    // Whoami tool - matches your existing /whoami endpoint
+    this.tools.set('whoami', {
+      name: 'whoami',
+      description: 'Get MCP server identity and federation information',
       inputSchema: {
         type: 'object',
-        properties: {}
+        properties: {},
+        additionalProperties: false
       },
       execute: async (args, context) => {
-        return {
-          content: [{
-            type: 'text',
-            text: JSON.stringify({
-              mcp_id: config.mcpId,
-              federation_trust: context.federationInfo,
-              user: context.user
-            }, null, 2)
-          }]
-        };
+        console.log('🔧 Executing whoami tool');
+        try {
+          const whoamiData = {
+            mcp_identity: {
+              id: config.mcpId,
+              publicKey: config.mcpPublicKey,
+              base_url: config.mcpBaseUrl,
+              protocol_support: ['HTTP REST', 'MCP JSON-RPC']
+            },
+            federation_info: {
+              trust_anchor: context.federationInfo.trust_anchor,
+              trust_chain_valid: context.federationInfo.trust_chain_valid,
+              oidcfed_compliant: true,
+              issuer: context.federationInfo.issuer
+            },
+            authenticated_user: {
+              subject: context.user.sub,
+              username: context.user.preferred_username,
+              name: context.user.name,
+              federation_issuer: context.federationInfo.issuer
+            }
+          };
+          
+          return {
+            content: [{
+              type: 'text',
+              text: JSON.stringify(whoamiData, null, 2)
+            }]
+          };
+        } catch (error) {
+          console.error('Error in whoami tool:', error);
+          throw new Error(`Failed to get identity information: ${error.message}`);
+        }
+      }
+    });
+
+    // Showtrust tool - matches your existing /showtrust endpoint  
+    this.tools.set('showtrust', {
+      name: 'showtrust',
+      description: 'Show trusted entities and federation trust information',
+      inputSchema: {
+        type: 'object',
+        properties: {},
+        additionalProperties: false
+      },
+      execute: async (args, context) => {
+        console.log('🔧 Executing showtrust tool');
+        try {
+          // Get trusted entities (similar to your existing logic)
+          const trustStorePath = config.trustStorePath || path.join(__dirname, '../../data/trust-store.json');
+          let trustedEntities = [];
+          
+          try {
+            if (fs.existsSync(trustStorePath)) {
+              const trustData = fs.readFileSync(trustStorePath, 'utf8');
+              trustedEntities = JSON.parse(trustData);
+            }
+          } catch (error) {
+            console.warn('Could not read trust store:', error.message);
+          }
+
+          const trustInfo = {
+            federation_trust: {
+              trust_anchor: context.federationInfo.trust_anchor,
+              trust_chain_valid: context.federationInfo.trust_chain_valid,
+              issuer: context.federationInfo.issuer,
+              validation_details: context.federationInfo.validation_details
+            },
+            trusted_entities: trustedEntities,
+            current_user_trust: {
+              subject: context.user.sub,
+              username: context.user.preferred_username,
+              github_verified: !!context.user.github,
+              trust_marks: context.user.trust_marks || []
+            }
+          };
+          
+          return {
+            content: [{
+              type: 'text',
+              text: JSON.stringify(trustInfo, null, 2)
+            }]
+          };
+        } catch (error) {
+          console.error('Error in showtrust tool:', error);
+          throw new Error(`Failed to get trust information: ${error.message}`);
+        }
       }
     });
 
@@ -219,9 +299,11 @@ class MCPProtocolHandler {
       description: 'Get system status and health information',
       inputSchema: {
         type: 'object',
-        properties: {}
+        properties: {},
+        additionalProperties: false
       },
       execute: async (args, context) => {
+        console.log('🔧 Executing get_system_status tool');
         return {
           content: [{
             type: 'text',
@@ -230,15 +312,20 @@ class MCPProtocolHandler {
               mcp_id: config.mcpId,
               uptime: process.uptime(),
               memory: process.memoryUsage(),
+              federation_connected: true,
               timestamp: new Date().toISOString()
             }, null, 2)
           }]
         };
       }
     });
+
+    console.log(`✅ Registered ${this.tools.size} MCP tools: ${Array.from(this.tools.keys()).join(', ')}`);
   }
 
   registerDefaultResources() {
+    console.log('📚 Registering MCP resources...');
+    
     this.resources.set('federation://config', {
       uri: 'federation://config',
       name: 'Federation Configuration',
@@ -252,16 +339,42 @@ class MCPProtocolHandler {
             text: JSON.stringify({
               mcp_id: config.mcpId,
               trust_anchor: context?.federationInfo?.trust_anchor,
-              federation_aware: true
+              federation_aware: true,
+              oidcfed_compliant: true
             }, null, 2)
           }]
         };
       }
     });
+
+    this.resources.set('user://profile', {
+      uri: 'user://profile',
+      name: 'User Profile',
+      description: 'Current authenticated user profile information',
+      mimeType: 'application/json',
+      getData: (context) => {
+        return {
+          contents: [{
+            uri: 'user://profile',
+            mimeType: 'application/json',
+            text: JSON.stringify({
+              subject: context?.user?.sub,
+              username: context?.user?.preferred_username,
+              name: context?.user?.name,
+              email: context?.user?.email,
+              github: context?.user?.github
+            }, null, 2)
+          }]
+        };
+      }
+    });
+
+    console.log(`✅ Registered ${this.resources.size} MCP resources: ${Array.from(this.resources.keys()).join(', ')}`);
   }
 
   async handleInitialize(params) {
-    return {
+    console.log('🚀 MCP Initialize called with params:', JSON.stringify(params, null, 2));
+    const result = {
       protocolVersion: '2024-11-05',
       capabilities: {
         tools: {},
@@ -272,49 +385,71 @@ class MCPProtocolHandler {
         version: '1.0.0'
       }
     };
+    console.log('✅ MCP Initialize response:', JSON.stringify(result, null, 2));
+    return result;
   }
 
   async handleListTools(params, context) {
-    return {
-      tools: Array.from(this.tools.values()).map(tool => ({
-        name: tool.name,
-        description: tool.description,
-        inputSchema: tool.inputSchema
-      }))
-    };
+    console.log('🔧 MCP List Tools called');
+    const tools = Array.from(this.tools.values()).map(tool => ({
+      name: tool.name,
+      description: tool.description,
+      inputSchema: tool.inputSchema
+    }));
+    console.log(`✅ Returning ${tools.length} tools:`, tools.map(t => t.name));
+    return { tools };
   }
 
   async handleCallTool(params, context) {
     const { name, arguments: args } = params;
-    const tool = this.tools.get(name);
+    console.log(`🔧 MCP Call Tool: ${name} with args:`, JSON.stringify(args, null, 2));
     
+    const tool = this.tools.get(name);
     if (!tool) {
+      console.error(`❌ Tool not found: ${name}`);
       throw new Error(`Tool not found: ${name}`);
     }
 
-    return await tool.execute(args, context);
+    try {
+      const result = await tool.execute(args, context);
+      console.log(`✅ Tool ${name} executed successfully`);
+      return result;
+    } catch (error) {
+      console.error(`❌ Tool ${name} execution failed:`, error);
+      throw error;
+    }
   }
 
   async handleListResources(params, context) {
-    return {
-      resources: Array.from(this.resources.values()).map(resource => ({
-        uri: resource.uri,
-        name: resource.name,
-        description: resource.description,
-        mimeType: resource.mimeType
-      }))
-    };
+    console.log('📚 MCP List Resources called');
+    const resources = Array.from(this.resources.values()).map(resource => ({
+      uri: resource.uri,
+      name: resource.name,
+      description: resource.description,
+      mimeType: resource.mimeType
+    }));
+    console.log(`✅ Returning ${resources.length} resources:`, resources.map(r => r.uri));
+    return { resources };
   }
 
   async handleReadResource(params, context) {
     const { uri } = params;
-    const resource = this.resources.get(uri);
+    console.log(`📚 MCP Read Resource: ${uri}`);
     
+    const resource = this.resources.get(uri);
     if (!resource) {
+      console.error(`❌ Resource not found: ${uri}`);
       throw new Error(`Resource not found: ${uri}`);
     }
 
-    return resource.getData(context);
+    try {
+      const result = resource.getData(context);
+      console.log(`✅ Resource ${uri} read successfully`);
+      return result;
+    } catch (error) {
+      console.error(`❌ Resource ${uri} read failed:`, error);
+      throw error;
+    }
   }
 }
 
@@ -382,7 +517,7 @@ app.get('/', (req, res) => {
             <pre>{
   "mcp.servers": {
     "${config.mcpId}": {
-      "url": "http://localhost:${config.mcpPort}",
+      "url": "http://localhost:${config.mcpPort}/mcp",
       "headers": {
         "Authorization": "Bearer YOUR_JWT_TOKEN_HERE",
         "Content-Type": "application/json"
@@ -390,8 +525,8 @@ app.get('/', (req, res) => {
     }
   }
 }</pre>
-            <p><strong>Or use environment variable:</strong></p>
-            <pre>export MCP_AUTH_TOKEN="your-jwt-token"</pre>
+            <p><strong>Available MCP Tools:</strong> whoami, showtrust, get_system_status</p>
+            <p><strong>Available MCP Resources:</strong> federation://config, user://profile</p>
           </div>
         </div>
         
@@ -421,6 +556,7 @@ app.get('/', (req, res) => {
           <input type="text" id="token-input" placeholder="Paste your JWT token here" style="width: 100%; padding: 8px; margin: 5px 0;">
           <button onclick="testMcpInitialize()">Test MCP Initialize</button>
           <button onclick="testMcpTools()">Test MCP Tools</button>
+          <button onclick="testMcpWhoami()">Test MCP Whoami Tool</button>
           <button onclick="testApi()">Test REST API</button>
           <div id="test-results" class="test-results"></div>
         </div>
@@ -430,7 +566,7 @@ app.get('/', (req, res) => {
           <h3>REST API Endpoints:</h3>
           <div class="endpoint">🏥 GET /health - Health check (public)</div>
           <div class="endpoint">🤖 GET /api - Main API with user details</div>
-          <div class="endpoint">👤 GET /whoami - MCP identity and federation info</div>
+          <div class="endpoint">�� GET /whoami - MCP identity and federation info</div>
           
           <h3>MCP Protocol Endpoints:</h3>
           <div class="endpoint">🔧 POST /mcp - MCP JSON-RPC endpoint</div>
@@ -515,6 +651,19 @@ app.get('/', (req, res) => {
             };
             await makeAuthenticatedRequest('/mcp', 'MCP Tools List', mcpRequest, 'POST');
           }
+          
+          async function testMcpWhoami() {
+            const mcpRequest = {
+              jsonrpc: '2.0',
+              id: 3,
+              method: 'tools/call',
+              params: {
+                name: 'whoami',
+                arguments: {}
+              }
+            };
+            await makeAuthenticatedRequest('/mcp', 'MCP Whoami Tool', mcpRequest, 'POST');
+          }
         </script>
       </body>
       </html>
@@ -525,13 +674,16 @@ app.get('/', (req, res) => {
 // MCP JSON-RPC endpoint
 app.post('/mcp', validateFederationJwt, async (req, res) => {
   try {
+    console.log('📨 MCP Request received:', JSON.stringify(req.body, null, 2));
+    
     const { jsonrpc, id, method, params } = req.body;
     
     if (jsonrpc !== '2.0') {
+      console.error('❌ Invalid JSON-RPC version:', jsonrpc);
       return res.json({
         jsonrpc: '2.0',
         id,
-        error: { code: -32600, message: 'Invalid Request' }
+        error: { code: -32600, message: 'Invalid Request - must be JSON-RPC 2.0' }
       });
     }
 
@@ -555,20 +707,24 @@ app.post('/mcp', validateFederationJwt, async (req, res) => {
         result = await mcpHandler.handleReadResource(params, context);
         break;
       default:
+        console.error('❌ Unknown MCP method:', method);
         return res.json({
           jsonrpc: '2.0',
           id,
-          error: { code: -32601, message: 'Method not found' }
+          error: { code: -32601, message: `Method not found: ${method}` }
         });
     }
 
-    res.json({
+    const response = {
       jsonrpc: '2.0',
       id,
       result
-    });
+    };
+    
+    console.log('📤 MCP Response:', JSON.stringify(response, null, 2));
+    res.json(response);
   } catch (error) {
-    console.error('MCP request error:', error);
+    console.error('❌ MCP request error:', error);
     res.json({
       jsonrpc: '2.0',
       id: req.body.id,
@@ -592,6 +748,8 @@ app.get('/health', (req, res) => {
     federation_integration: 'enabled',
     oidcfed_support: 'active',
     mcp_protocol_support: 'active',
+    mcp_tools: Array.from(mcpHandler.tools.keys()),
+    mcp_resources: Array.from(mcpHandler.resources.keys()),
     static_files_dir: publicDir,
     static_files_available: fs.existsSync(publicDir),
     trust_anchor: 'http://localhost:3001',
@@ -609,7 +767,9 @@ app.get('/api', (req, res) => {
       id: config.mcpId,
       federation_aware: true,
       trust_validation: 'active',
-      protocol_support: ['HTTP REST', 'MCP JSON-RPC']
+      protocol_support: ['HTTP REST', 'MCP JSON-RPC'],
+      mcp_tools: Array.from(mcpHandler.tools.keys()),
+      mcp_resources: Array.from(mcpHandler.resources.keys())
     },
     authenticated_user: {
       subject: req.user.sub,
@@ -676,6 +836,8 @@ const startServer = () => {
     console.log(`🔒 Federation JWT validation enabled`);
     console.log(`🛰️ OIDCFed trust validation active`);
     console.log(`🔌 MCP JSON-RPC protocol support enabled`);
+    console.log(`🔧 MCP Tools: ${Array.from(mcpHandler.tools.keys()).join(', ')}`);
+    console.log(`📚 MCP Resources: ${Array.from(mcpHandler.resources.keys()).join(', ')}`);
     console.log(`📁 Static files served from: ${publicDir}`);
     console.log(`🔗 Trust anchor: http://localhost:3001`);
     console.log(`📋 Test the server at: http://localhost:${config.mcpPort}`);
