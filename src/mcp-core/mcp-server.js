@@ -181,6 +181,145 @@ const validateFederationJwt = async (req, res, next) => {
   }
 };
 
+// MCP Protocol Implementation
+class MCPProtocolHandler {
+  constructor() {
+    this.tools = new Map();
+    this.resources = new Map();
+    this.registerDefaultTools();
+    this.registerDefaultResources();
+  }
+
+  registerDefaultTools() {
+    // Federation info tool
+    this.tools.set('get_federation_info', {
+      name: 'get_federation_info',
+      description: 'Get federation and trust information',
+      inputSchema: {
+        type: 'object',
+        properties: {}
+      },
+      execute: async (args, context) => {
+        return {
+          content: [{
+            type: 'text',
+            text: JSON.stringify({
+              mcp_id: config.mcpId,
+              federation_trust: context.federationInfo,
+              user: context.user
+            }, null, 2)
+          }]
+        };
+      }
+    });
+
+    // System status tool
+    this.tools.set('get_system_status', {
+      name: 'get_system_status',
+      description: 'Get system status and health information',
+      inputSchema: {
+        type: 'object',
+        properties: {}
+      },
+      execute: async (args, context) => {
+        return {
+          content: [{
+            type: 'text',
+            text: JSON.stringify({
+              status: 'healthy',
+              mcp_id: config.mcpId,
+              uptime: process.uptime(),
+              memory: process.memoryUsage(),
+              timestamp: new Date().toISOString()
+            }, null, 2)
+          }]
+        };
+      }
+    });
+  }
+
+  registerDefaultResources() {
+    this.resources.set('federation://config', {
+      uri: 'federation://config',
+      name: 'Federation Configuration',
+      description: 'Current federation configuration and trust settings',
+      mimeType: 'application/json',
+      getData: (context) => {
+        return {
+          contents: [{
+            uri: 'federation://config',
+            mimeType: 'application/json',
+            text: JSON.stringify({
+              mcp_id: config.mcpId,
+              trust_anchor: context?.federationInfo?.trust_anchor,
+              federation_aware: true
+            }, null, 2)
+          }]
+        };
+      }
+    });
+  }
+
+  async handleInitialize(params) {
+    return {
+      protocolVersion: '2024-11-05',
+      capabilities: {
+        tools: {},
+        resources: {}
+      },
+      serverInfo: {
+        name: config.mcpId || 'mcp-federated-server',
+        version: '1.0.0'
+      }
+    };
+  }
+
+  async handleListTools(params, context) {
+    return {
+      tools: Array.from(this.tools.values()).map(tool => ({
+        name: tool.name,
+        description: tool.description,
+        inputSchema: tool.inputSchema
+      }))
+    };
+  }
+
+  async handleCallTool(params, context) {
+    const { name, arguments: args } = params;
+    const tool = this.tools.get(name);
+    
+    if (!tool) {
+      throw new Error(`Tool not found: ${name}`);
+    }
+
+    return await tool.execute(args, context);
+  }
+
+  async handleListResources(params, context) {
+    return {
+      resources: Array.from(this.resources.values()).map(resource => ({
+        uri: resource.uri,
+        name: resource.name,
+        description: resource.description,
+        mimeType: resource.mimeType
+      }))
+    };
+  }
+
+  async handleReadResource(params, context) {
+    const { uri } = params;
+    const resource = this.resources.get(uri);
+    
+    if (!resource) {
+      throw new Error(`Resource not found: ${uri}`);
+    }
+
+    return resource.getData(context);
+  }
+}
+
+const mcpHandler = new MCPProtocolHandler();
+
 // Middleware for logging
 app.use((req, res, next) => {
   const userInfo = req.user?.preferred_username || req.user?.sub || 'anonymous';
@@ -188,7 +327,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// Root route with MCP-focused interface
+// Root route with enhanced MCP interface
 app.get('/', (req, res) => {
   const indexPath = path.join(publicDir, 'index.html');
   
@@ -199,7 +338,7 @@ app.get('/', (req, res) => {
     res.sendFile(indexPath);
   } else {
     console.log(`❌ index.html not found, serving MCP fallback HTML`);
-    // MCP-focused fallback HTML
+    // Enhanced MCP-focused fallback HTML
     res.send(`
       <!DOCTYPE html>
       <html lang="en">
@@ -219,6 +358,7 @@ app.get('/', (req, res) => {
           .test-results { background: #f8f9fa; padding: 15px; border-radius: 4px; margin: 10px 0; white-space: pre-wrap; font-family: monospace; font-size: 12px; max-height: 400px; overflow-y: auto; }
           .federation-link { background: #007cba; color: white; padding: 15px; border-radius: 4px; margin: 15px 0; text-align: center; }
           .federation-link a { color: white; text-decoration: none; font-weight: bold; }
+          .mcp-config { background: #e8f5e8; padding: 15px; border-radius: 4px; margin: 15px 0; }
           .success { color: #28a745; }
           .error { color: #dc3545; }
         </style>
@@ -234,12 +374,33 @@ app.get('/', (req, res) => {
           <p>Get your JWT token from the Federation Admin:</p>
           <a href="http://localhost:3001" target="_blank">Go to Federation Admin (localhost:3001)</a>
         </div>
+
+        <div class="container">
+          <h2>🔌 MCP Configuration for VS Code</h2>
+          <div class="mcp-config">
+            <p><strong>Add this to your VS Code settings.json:</strong></p>
+            <pre>{
+  "mcp.servers": {
+    "${config.mcpId}": {
+      "url": "http://localhost:${config.mcpPort}",
+      "headers": {
+        "Authorization": "Bearer YOUR_JWT_TOKEN_HERE",
+        "Content-Type": "application/json"
+      }
+    }
+  }
+}</pre>
+            <p><strong>Or use environment variable:</strong></p>
+            <pre>export MCP_AUTH_TOKEN="your-jwt-token"</pre>
+          </div>
+        </div>
         
         <div class="container">
           <h2>📊 Server Information</h2>
           <div class="status-box">
             <p><strong>MCP ID:</strong> ${config.mcpId}</p>
             <p><strong>Port:</strong> ${config.mcpPort}</p>
+            <p><strong>Protocol Support:</strong> HTTP REST + MCP JSON-RPC</p>
             <p><strong>Authentication Required:</strong> Yes (JWT from Federation)</p>
           </div>
         </div>
@@ -258,16 +419,22 @@ app.get('/', (req, res) => {
           
           <h3>JWT Token Input</h3>
           <input type="text" id="token-input" placeholder="Paste your JWT token here" style="width: 100%; padding: 8px; margin: 5px 0;">
-          <button onclick="testApi()">Test Main API</button>
-          <button onclick="testWhoami()">Test Whoami</button>
+          <button onclick="testMcpInitialize()">Test MCP Initialize</button>
+          <button onclick="testMcpTools()">Test MCP Tools</button>
+          <button onclick="testApi()">Test REST API</button>
           <div id="test-results" class="test-results"></div>
         </div>
 
         <div class="container">
-          <h2>🔌 MCP API Endpoints</h2>
+          <h2>🔌 Available Endpoints</h2>
+          <h3>REST API Endpoints:</h3>
           <div class="endpoint">🏥 GET /health - Health check (public)</div>
-          <div class="endpoint">🤖 GET /api - Main MCP API with user details</div>
+          <div class="endpoint">🤖 GET /api - Main API with user details</div>
           <div class="endpoint">👤 GET /whoami - MCP identity and federation info</div>
+          
+          <h3>MCP Protocol Endpoints:</h3>
+          <div class="endpoint">🔧 POST /mcp - MCP JSON-RPC endpoint</div>
+          <div class="endpoint">📋 Methods: initialize, tools/list, tools/call, resources/list, resources/read</div>
           
           <button onclick="testHealth()">Test Health (Public)</button>
           <div id="health-results" class="test-results"></div>
@@ -286,7 +453,7 @@ app.get('/', (req, res) => {
             }
           }
           
-          async function makeAuthenticatedRequest(endpoint, displayName) {
+          async function makeAuthenticatedRequest(endpoint, displayName, body = null, method = 'GET') {
             const token = document.getElementById('token-input').value.trim();
             
             if (!token) {
@@ -295,12 +462,19 @@ app.get('/', (req, res) => {
             }
             
             try {
-              const response = await fetch(endpoint, {
+              const options = {
+                method: method,
                 headers: { 
                   'Authorization': 'Bearer ' + token,
                   'Content-Type': 'application/json'
                 }
-              });
+              };
+              
+              if (body) {
+                options.body = JSON.stringify(body);
+              }
+              
+              const response = await fetch(endpoint, options);
               const data = await response.json();
               
               const resultText = response.ok 
@@ -315,16 +489,91 @@ app.get('/', (req, res) => {
           }
           
           async function testApi() {
-            await makeAuthenticatedRequest('/api', 'Main API');
+            await makeAuthenticatedRequest('/api', 'REST API');
           }
           
-          async function testWhoami() {
-            await makeAuthenticatedRequest('/whoami', 'Whoami');
+          async function testMcpInitialize() {
+            const mcpRequest = {
+              jsonrpc: '2.0',
+              id: 1,
+              method: 'initialize',
+              params: {
+                protocolVersion: '2024-11-05',
+                capabilities: {},
+                clientInfo: { name: 'test-client', version: '1.0.0' }
+              }
+            };
+            await makeAuthenticatedRequest('/mcp', 'MCP Initialize', mcpRequest, 'POST');
+          }
+          
+          async function testMcpTools() {
+            const mcpRequest = {
+              jsonrpc: '2.0',
+              id: 2,
+              method: 'tools/list',
+              params: {}
+            };
+            await makeAuthenticatedRequest('/mcp', 'MCP Tools List', mcpRequest, 'POST');
           }
         </script>
       </body>
       </html>
     `);
+  }
+});
+
+// MCP JSON-RPC endpoint
+app.post('/mcp', validateFederationJwt, async (req, res) => {
+  try {
+    const { jsonrpc, id, method, params } = req.body;
+    
+    if (jsonrpc !== '2.0') {
+      return res.json({
+        jsonrpc: '2.0',
+        id,
+        error: { code: -32600, message: 'Invalid Request' }
+      });
+    }
+
+    let result;
+    const context = { user: req.user, federationInfo: req.federationInfo };
+
+    switch (method) {
+      case 'initialize':
+        result = await mcpHandler.handleInitialize(params);
+        break;
+      case 'tools/list':
+        result = await mcpHandler.handleListTools(params, context);
+        break;
+      case 'tools/call':
+        result = await mcpHandler.handleCallTool(params, context);
+        break;
+      case 'resources/list':
+        result = await mcpHandler.handleListResources(params, context);
+        break;
+      case 'resources/read':
+        result = await mcpHandler.handleReadResource(params, context);
+        break;
+      default:
+        return res.json({
+          jsonrpc: '2.0',
+          id,
+          error: { code: -32601, message: 'Method not found' }
+        });
+    }
+
+    res.json({
+      jsonrpc: '2.0',
+      id,
+      result
+    });
+  } catch (error) {
+    console.error('MCP request error:', error);
+    res.json({
+      jsonrpc: '2.0',
+      id: req.body.id,
+      error: { code: -32603, message: error.message }
+    });
   }
 });
 
@@ -342,6 +591,7 @@ app.get('/health', (req, res) => {
     mcp_id: config.mcpId,
     federation_integration: 'enabled',
     oidcfed_support: 'active',
+    mcp_protocol_support: 'active',
     static_files_dir: publicDir,
     static_files_available: fs.existsSync(publicDir),
     trust_anchor: 'http://localhost:3001',
@@ -358,7 +608,8 @@ app.get('/api', (req, res) => {
     mcp_server: {
       id: config.mcpId,
       federation_aware: true,
-      trust_validation: 'active'
+      trust_validation: 'active',
+      protocol_support: ['HTTP REST', 'MCP JSON-RPC']
     },
     authenticated_user: {
       subject: req.user.sub,
@@ -386,7 +637,8 @@ const enhancedHandleWhoami = (req, res) => {
       mcp_identity: {
         id: config.mcpId,
         publicKey: config.mcpPublicKey,
-        base_url: config.mcpBaseUrl
+        base_url: config.mcpBaseUrl,
+        protocol_support: ['HTTP REST', 'MCP JSON-RPC']
       },
       federation_info: {
         trust_anchor: req.federationInfo.trust_anchor,
@@ -423,9 +675,11 @@ const startServer = () => {
     console.log(`🤖 MCP server listening on http://${config.mcpHost}:${config.mcpPort}`);
     console.log(`🔒 Federation JWT validation enabled`);
     console.log(`🛰️ OIDCFed trust validation active`);
+    console.log(`🔌 MCP JSON-RPC protocol support enabled`);
     console.log(`📁 Static files served from: ${publicDir}`);
     console.log(`🔗 Trust anchor: http://localhost:3001`);
     console.log(`📋 Test the server at: http://localhost:${config.mcpPort}`);
+    console.log(`🔧 MCP endpoint: POST http://localhost:${config.mcpPort}/mcp`);
   });
 
   process.on('SIGTERM', () => {
