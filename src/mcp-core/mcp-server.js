@@ -198,6 +198,7 @@ class MCPProtocolHandler {
       name: 'whoami',
       description: 'Get MCP server identity and federation information',
       inputSchema: {
+        $schema: 'http://json-schema.org/draft-07/schema#',
         type: 'object',
         properties: {},
         additionalProperties: false
@@ -244,6 +245,7 @@ class MCPProtocolHandler {
       name: 'showtrust',
       description: 'Show trusted entities and federation trust information',
       inputSchema: {
+        $schema: 'http://json-schema.org/draft-07/schema#',
         type: 'object',
         properties: {},
         additionalProperties: false
@@ -298,6 +300,7 @@ class MCPProtocolHandler {
       name: 'get_system_status',
       description: 'Get system status and health information',
       inputSchema: {
+        $schema: 'http://json-schema.org/draft-07/schema#',
         type: 'object',
         properties: {},
         additionalProperties: false
@@ -315,6 +318,64 @@ class MCPProtocolHandler {
               federation_connected: true,
               timestamp: new Date().toISOString()
             }, null, 2)
+          }]
+        };
+      }
+    });
+
+    // Add a tool with parameters to test schema validation
+    this.tools.set('get_federation_info', {
+      name: 'get_federation_info',
+      description: 'Get detailed federation information with optional filters',
+      inputSchema: {
+        $schema: 'http://json-schema.org/draft-07/schema#',
+        type: 'object',
+        properties: {
+          include_trust_chain: {
+            type: 'boolean',
+            description: 'Include detailed trust chain information',
+            default: false
+          },
+          include_user_details: {
+            type: 'boolean',
+            description: 'Include authenticated user details',
+            default: true
+          }
+        },
+        additionalProperties: false
+      },
+      execute: async (args, context) => {
+        console.log('🔧 Executing get_federation_info tool with args:', args);
+        
+        const result = {
+          federation_basic: {
+            mcp_id: config.mcpId,
+            trust_anchor: context.federationInfo.trust_anchor,
+            issuer: context.federationInfo.issuer
+          }
+        };
+
+        if (args.include_trust_chain !== false) {
+          result.trust_chain_details = {
+            trust_chain_valid: context.federationInfo.trust_chain_valid,
+            validation_details: context.federationInfo.validation_details,
+            oidcfed_validation: context.federationInfo.oidcfed_validation
+          };
+        }
+
+        if (args.include_user_details !== false) {
+          result.user_details = {
+            subject: context.user.sub,
+            username: context.user.preferred_username,
+            name: context.user.name,
+            github: context.user.github
+          };
+        }
+
+        return {
+          content: [{
+            type: 'text',
+            text: JSON.stringify(result, null, 2)
           }]
         };
       }
@@ -525,7 +586,7 @@ app.get('/', (req, res) => {
     }
   }
 }</pre>
-            <p><strong>Available MCP Tools:</strong> whoami, showtrust, get_system_status</p>
+            <p><strong>Available MCP Tools:</strong> whoami, showtrust, get_system_status, get_federation_info</p>
             <p><strong>Available MCP Resources:</strong> federation://config, user://profile</p>
           </div>
         </div>
@@ -566,7 +627,7 @@ app.get('/', (req, res) => {
           <h3>REST API Endpoints:</h3>
           <div class="endpoint">🏥 GET /health - Health check (public)</div>
           <div class="endpoint">🤖 GET /api - Main API with user details</div>
-          <div class="endpoint">�� GET /whoami - MCP identity and federation info</div>
+          <div class="endpoint">👤 GET /whoami - MCP identity and federation info</div>
           
           <h3>MCP Protocol Endpoints:</h3>
           <div class="endpoint">🔧 POST /mcp - MCP JSON-RPC endpoint</div>
