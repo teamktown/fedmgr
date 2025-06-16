@@ -4,6 +4,7 @@ const { Command } = require('commander')
 const { execSync, spawn } = require('child_process') // Added spawn
 const path = require('path')
 const fs = require('fs')
+require('dotenv').config()
 const MCPInterface = require('./server/mcp-interface')
 const { registerAuthCommands, getToken } = require('./auth-commands')
 
