@@ -84,3 +84,12 @@ cd ../..
 
 echo "✅ Build complete! Packages available in build/npm/"
 ls -la build/npm/
+
+echo "To install the packages, run:"
+echo "npm install ./build/npm/letsfederate-fedmgr-0.1.0.tgz"
+echo "npm install ./build/npm/letsfederate-mcp-core-0.1.0.tgz"
+echo "You can also publish them to npm with:"
+echo "npm publish ./build/npm/letsfederate-fedmgr-0.1.0.tgz"
+echo "npm publish ./build/npm/letsfederate-mcp-core-0.1.0.tgz"
+echo "Done!"
+# End of script

@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "mcp-fedtest": {
+      "url": "http://localhost:4001/mcp",
+      "headers": {
+        "Authorization": "Bearer YOUR_JWT_TOKEN_HERE",
+        "Content-Type": "application/json"
+      }
+    }
+  }
+}
