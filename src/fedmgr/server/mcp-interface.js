@@ -33,10 +33,14 @@ class MCPInterface extends EventEmitter {
   /**
    * Load registry data from file
    */
- loadRegistry() {
+  loadRegistry() {
     if (!fs.existsSync(this.registryPath)) {
       this.registry = { federations: [], mcps: {}, mcpProtocolServers: {} };
-      return;
+      fs.writeFileSync(
+        this.registryPath,
+        JSON.stringify(this.registry, null, 2)
+      );
+      return this.registry;
     }
     try {
       const data = fs.readFileSync(this.registryPath, 'utf-8');
@@ -44,7 +48,7 @@ class MCPInterface extends EventEmitter {
     } catch (err) {
       console.error(`❌ Failed to load registry from ${this.registryPath}: ${err.message}`);
       this.registry = { federations: [], mcps: {}, mcpProtocolServers: {} };
-      return;
+      return this.registry;
     }
     
     // Ensure registry has all required sections
@@ -60,6 +64,8 @@ class MCPInterface extends EventEmitter {
     if (allPorts.length > 0) {
       this.portCounter = Math.max(...allPorts) + 1;
     }
+
+    return this.registry;
   }
 
   /**
