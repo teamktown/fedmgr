@@ -1,37 +1,28 @@
 #!/bin/sh
 
-# Bootstrap script for MCP Server in Docker
+# MCP Bootstrap Script
+# This script initializes and starts the MCP server with both web UI and MCP protocol support
 
-# Set defaults
-MCP_ID=${MCP_ID:-mcp-demo}
-DATA_DIR="/usr/src/app/data"
+echo "🚀 Starting MCP Bootstrap..."
 
-# Create directories (should already exist with proper permissions)
-mkdir -p "$DATA_DIR"
+# Set default environment variables if not provided
+export MCP_ID=${MCP_ID:-"mcp-demo"}
+export MCP_PORT=${MCP_PORT:-4001}
+export MCP_HOST=${MCP_HOST:-"0.0.0.0"}
+export MCP_PUBLIC_DIR=${MCP_PUBLIC_DIR:-"/usr/src/app/public"}
+export FEDERATION_ADMIN_URL=${FEDERATION_ADMIN_URL:-"http://federation-admin:3001"}
 
-# Create default trust store if it doesn't exist
-if [ ! -f "$DATA_DIR/trust-store.json" ]; then
-    echo "🔒 Creating trust store..."
-    echo '[]' > "$DATA_DIR/trust-store.json"
-fi
+# Create data directories
+mkdir -p /usr/src/app/data
 
-# Create default stats file if it doesn't exist
-if [ ! -f "$DATA_DIR/stats.json" ]; then
-    echo "📊 Creating stats file..."
-    cat > "$DATA_DIR/stats.json" << EOF
-{
-  "messageCount": {"received": 0, "sent": 0, "processed": 0, "errors": 0},
-  "federationCount": 1,
-  "trustedMcpCount": 0,
-  "uptimeSeconds": 0
-}
-EOF
-fi
+# Log environment
+echo "📋 MCP Configuration:"
+echo "  - MCP_ID: $MCP_ID"
+echo "  - MCP_PORT: $MCP_PORT"
+echo "  - MCP_HOST: $MCP_HOST"
+echo "  - MCP_PUBLIC_DIR: $MCP_PUBLIC_DIR"
+echo "  - FEDERATION_ADMIN_URL: $FEDERATION_ADMIN_URL"
 
-# Set environment variables
-export TRUST_STORE_PATH="$DATA_DIR/trust-store.json"
-export STATS_STORAGE_PATH="$DATA_DIR/stats.json"
-
-echo "🤖 Starting MCP Server..."
-# Fix the module path - it should be mcp-server.js, not dist/server.js
+# Start the MCP server
+echo "🤖 Starting MCP server with dual protocol support..."
 exec node node_modules/@letsfederate/mcp-core/mcp-server.js

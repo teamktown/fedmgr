@@ -10,17 +10,27 @@ const { registerAuthCommands, getToken } = require('./auth-commands')
 
 const program = new Command()
 
-// Environment and paths
+// Environment and paths - Fixed to use proper resolution
 const FEDMGR_HOME = process.env.FEDMGR_HOME || path.resolve(__dirname, '../..')
-const FEDMGR_FED_DIR =
-  process.env.FEDMGR_FEDERATIONS_DIR || path.join(FEDMGR_HOME, 'federations')
-const REGISTRY_PATH =
-  process.env.FEDMGR_FED_REG ||
-  path.join(FEDMGR_HOME, 'data', 'fed-reg', 'registry.json')
+const FEDMGR_FED_DIR = process.env.FEDMGR_FEDERATIONS_DIR || path.join(FEDMGR_HOME, 'federations')
+const REGISTRY_PATH = process.env.FEDMGR_FED_REG || path.join(FEDMGR_HOME, 'data', 'fed-reg', 'registry.json')
 
-// Ensure directories
-if (!fs.existsSync(FEDMGR_FED_DIR))
-  fs.mkdirSync(FEDMGR_FED_DIR, { recursive: true })
+console.log(`🔧 FEDMGR_HOME: ${FEDMGR_HOME}`)
+console.log(`🔧 FEDMGR_FED_DIR: ${FEDMGR_FED_DIR}`)
+console.log(`🔧 REGISTRY_PATH: ${REGISTRY_PATH}`)
+
+// Ensure directories exist
+function ensureDirectoryExists(dirPath) {
+  if (!fs.existsSync(dirPath)) {
+    console.log(`📁 Creating directory: ${dirPath}`)
+    fs.mkdirSync(dirPath, { recursive: true })
+  }
+}
+
+// Ensure required directories
+ensureDirectoryExists(FEDMGR_FED_DIR)
+ensureDirectoryExists(path.dirname(REGISTRY_PATH))
+
 const mcpInterface = new MCPInterface(REGISTRY_PATH)
 
 // Helpers
@@ -57,54 +67,65 @@ program
     switch (type) {
       case 'fed': {
         const fedPath = path.join(FEDMGR_FED_DIR, name)
-        if (
-          fs.existsSync(
-            path.join(fedPath, 'config', 'entity-configuration.json'),
-          )
-        ) {
+        const keysPath = path.join(fedPath, 'keys')
+        const configPath = path.join(fedPath, 'config')
+        const entityConfigFile = path.join(configPath, 'entity-configuration.json')
+        const privateKeyFile = path.join(keysPath, 'anchor-private.pem')
+        const publicKeyFile = path.join(keysPath, 'anchor-public.pem')
+        
+        if (fs.existsSync(entityConfigFile)) {
           console.log(`⚠️ Federation '${name}' exists`)
           return
         }
+        
         try {
-          fs.mkdirSync(path.join(fedPath, 'keys'), { recursive: true })
-          fs.mkdirSync(path.join(fedPath, 'config'), { recursive: true })
-          execSync(
-            `openssl genrsa -out ${path.join(
-              fedPath,
-              'keys',
-              'anchor-private.pem',
-            )} 2048`,
-          )
-          execSync(
-            `openssl rsa -in ${path.join(
-              fedPath,
-              'keys',
-              'anchor-private.pem',
-            )} -pubout -out ${path.join(
-              fedPath,
-              'keys',
-              'anchor-public.pem',
-            )}`,
-          )
+          // Ensure directories exist first
+          console.log(`📁 Creating federation directories for '${name}'...`)
+          ensureDirectoryExists(keysPath)
+          ensureDirectoryExists(configPath)
+          
+          // Generate keys with absolute paths
+          console.log(`🔑 Generating private key: ${privateKeyFile}`)
+          execSync(`openssl genrsa -out "${privateKeyFile}" 2048`, { stdio: 'inherit' })
+          
+          console.log(`🔑 Generating public key: ${publicKeyFile}`)
+          execSync(`openssl rsa -in "${privateKeyFile}" -pubout -out "${publicKeyFile}"`, { stdio: 'inherit' })
+          
+          console.log(`✅ Keys generated successfully`)
         } catch (e) {
           console.error('❌ Key generation failed:', e.message)
+          console.error('Command output:', e.stdout?.toString())
+          console.error('Command error:', e.stderr?.toString())
           process.exit(1)
         }
-        // minimal entity-config
+        
+        // Create minimal entity-config
         const now = Math.floor(Date.now() / 1000)
         const entityId = `http://localhost:3001`
-        const cfg = { sub: entityId, metadata: {}, jwks: { keys: [] }, iat: now }
-        fs.writeFileSync(
-          path.join(fedPath, 'config', 'entity-configuration.json'),
-          JSON.stringify(cfg, null, 2),
-        )
+        const cfg = { 
+          sub: entityId, 
+          metadata: {
+            federation_entity: {
+              organization_name: `Federation ${name}`,
+              federation_fetch_endpoint: `${entityId}/.well-known/openid-federation`,
+              federation_resolve_endpoint: `${entityId}/resolve`,
+              federation_trust_mark_status_endpoint: `${entityId}/trust-mark-status`
+            }
+          }, 
+          jwks: { keys: [] }, 
+          iat: now 
+        }
+        
+        console.log(`📝 Writing entity configuration: ${entityConfigFile}`)
+        fs.writeFileSync(entityConfigFile, JSON.stringify(cfg, null, 2))
+        
         const reg = loadRegistry()
         reg.federations = reg.federations || []
         if (!reg.federations.includes(name)) {
           reg.federations.push(name)
           saveRegistry(reg)
         }
-        console.log(`✅ Federation '${name}' initialized`)
+        console.log(`✅ Federation '${name}' initialized at ${fedPath}`)
         break
       }
       case 'mcp-protocol': {
@@ -244,7 +265,6 @@ program
     const registry = loadRegistry()
     const mcpPort = registry.mcps?.[mcpName] || registry.mcpProtocolServers?.[mcpName]
 
-
     if (!mcpPort) {
       console.error(
         `❌ MCP instance '${mcpName}' not found or its port is not defined in registry.`,
@@ -291,7 +311,7 @@ program
     }
 
     console.log(
-      `🚀 Launching MCP Inspector for MCP '${mcpName}' at ${mcpUrl}`,
+      `�� Launching MCP Inspector for MCP '${mcpName}' at ${mcpUrl}`,
     )
     console.log(
       `   Inspector command: ${inspectorCommand} ${finalInspectorArgs.join(' ')}`,

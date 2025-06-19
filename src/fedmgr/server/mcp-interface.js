@@ -20,7 +20,6 @@ const MCPProtocolServer = require('./mcp-protocol-server');
 const certificateUtils = require('./utils/certificate-utils');
 const config = require('../config');
 
-
 class MCPInterface extends EventEmitter {
   constructor(registryPath) {
     super();
@@ -28,23 +27,41 @@ class MCPInterface extends EventEmitter {
     this.portCounter = 3100;
     this.mcpProcesses = new Map(); // Track running MCP processes
     this.mcpProtocolServers = new Map(); // Track running MCP Protocol servers
+    
+    // Ensure registry directory exists
+    const registryDir = path.dirname(this.registryPath);
+    if (!fs.existsSync(registryDir)) {
+      console.log(`📁 Creating registry directory: ${registryDir}`);
+      fs.mkdirSync(registryDir, { recursive: true });
+    }
+    
     this.loadRegistry();
   }
+
+  /**
+   * Ensure a directory exists
+   */
+  ensureDirectoryExists(dirPath) {
+    if (!fs.existsSync(dirPath)) {
+      console.log(`📁 Creating directory: ${dirPath}`);
+      fs.mkdirSync(dirPath, { recursive: true });
+    }
+  }
+
   /**
    * Load registry data from file
    */
   loadRegistry() {
     if (!fs.existsSync(this.registryPath)) {
+      console.log(`📝 Creating new registry at: ${this.registryPath}`);
       this.registry = { federations: [], mcps: {}, mcpProtocolServers: {} };
-      fs.writeFileSync(
-        this.registryPath,
-        JSON.stringify(this.registry, null, 2)
-      );
+      this.saveRegistry();
       return this.registry;
     }
     try {
       const data = fs.readFileSync(this.registryPath, 'utf-8');
       this.registry = JSON.parse(data);
+      console.log(`📖 Loaded registry from: ${this.registryPath}`);
     } catch (err) {
       console.error(`❌ Failed to load registry from ${this.registryPath}: ${err.message}`);
       this.registry = { federations: [], mcps: {}, mcpProtocolServers: {} };
@@ -72,7 +89,13 @@ class MCPInterface extends EventEmitter {
    * Save registry data to file
    */
   saveRegistry() {
-    fs.writeFileSync(this.registryPath, JSON.stringify(this.registry, null, 2));
+    try {
+      fs.writeFileSync(this.registryPath, JSON.stringify(this.registry, null, 2));
+      console.log(`💾 Registry saved to: ${this.registryPath}`);
+    } catch (err) {
+      console.error(`❌ Failed to save registry: ${err.message}`);
+      throw err;
+    }
   }
 
   /**
@@ -92,56 +115,65 @@ class MCPInterface extends EventEmitter {
     const keysPath = path.join(baseDir, 'keys');
     const configPath = path.join(baseDir, 'config');
     const entityConfigFile = path.join(configPath, 'entity-configuration.json');
+    const privateKeyFile = path.join(keysPath, 'mcp-private.pem');
+    const publicKeyFile = path.join(keysPath, 'mcp-public.pem');
     const port = this.portCounter++;
 
-    // Create directories
-    fs.mkdirSync(keysPath, { recursive: true });
-    fs.mkdirSync(configPath, { recursive: true });
+    try {
+      // Create directories
+      console.log(`📁 Creating MCP directories for '${name}'...`);
+      this.ensureDirectoryExists(keysPath);
+      this.ensureDirectoryExists(configPath);
 
-    // Generate keys
-    execSync(`openssl genrsa -out ${keysPath}/mcp-private.pem 2048`);
-    execSync(`openssl rsa -in ${keysPath}/mcp-private.pem -pubout -out ${keysPath}/mcp-public.pem`);
+      // Generate keys with proper path handling
+      console.log(`🔑 Generating MCP keys for '${name}'...`);
+      execSync(`openssl genrsa -out "${privateKeyFile}" 2048`, { stdio: 'inherit' });
+      execSync(`openssl rsa -in "${privateKeyFile}" -pubout -out "${publicKeyFile}"`, { stdio: 'inherit' });
 
-    // Load the public key and convert to JWK format
-    const jwk = certificateUtils.loadPublicKeyAsJwk(
-      `${keysPath}/mcp-public.pem`,
-      { kid: `${name}-key-${Date.now()}`, use: 'sig' }
-    );
+      // Load the public key and convert to JWK format
+      const jwk = certificateUtils.loadPublicKeyAsJwk(
+        publicKeyFile,
+        { kid: `${name}-key-${Date.now()}`, use: 'sig' }
+      );
 
-    // Create entity configuration
-    const entityId = `http://localhost:${port}`;
-    const now = Math.floor(Date.now() / 1000);
+      // Create entity configuration
+      const entityId = `http://localhost:${port}`;
+      const now = Math.floor(Date.now() / 1000);
 
-    const config = {
-      sub: entityId,
-      metadata: {
-        federation_entity: {
-          organization_name: `MCP Instance ${name}`,
-          contacts: [`ops@${name}.local`],
-          federation_fetch_endpoint: `${entityId}/.well-known/openid-federation`,
-          trust_marks: []
-        }
-      },
-      authority_hints: ["http://localhost:3001"],
-      jwks: { keys: [jwk] },
-      iat: now
-    };
+      const entityConfig = {
+        sub: entityId,
+        metadata: {
+          federation_entity: {
+            organization_name: `MCP Instance ${name}`,
+            contacts: [`ops@${name}.local`],
+            federation_fetch_endpoint: `${entityId}/.well-known/openid-federation`,
+            trust_marks: []
+          }
+        },
+        authority_hints: ["http://localhost:3001"],
+        jwks: { keys: [jwk] },
+        iat: now
+      };
 
-    fs.writeFileSync(entityConfigFile, JSON.stringify(config, null, 2));
-    
-    // Update registry
-    this.registry.mcps[name] = port;
-    this.saveRegistry();
+      fs.writeFileSync(entityConfigFile, JSON.stringify(entityConfig, null, 2));
+      
+      // Update registry
+      this.registry.mcps[name] = port;
+      this.saveRegistry();
 
-    console.log(`✅ MCP '${name}' initialized at ${baseDir}`);
-    
-    return { 
-      success: true, 
-      name, 
-      port, 
-      baseDir,
-      entityId
-    };
+      console.log(`✅ MCP '${name}' initialized at ${baseDir}`);
+      
+      return { 
+        success: true, 
+        name, 
+        port, 
+        baseDir,
+        entityId
+      };
+    } catch (error) {
+      console.error(`❌ Failed to create MCP '${name}':`, error.message);
+      return { success: false, message: `Failed to create MCP: ${error.message}` };
+    }
   }
 
   /**
@@ -414,64 +446,73 @@ class MCPInterface extends EventEmitter {
     const keysPath = path.join(baseDir, 'keys');
     const configPath = path.join(baseDir, 'config');
     const entityConfigFile = path.join(configPath, 'entity-configuration.json');
+    const privateKeyFile = path.join(keysPath, 'mcp-private.pem');
+    const publicKeyFile = path.join(keysPath, 'mcp-public.pem');
     const port = this.portCounter++;
 
-    // Create directories
-    fs.mkdirSync(keysPath, { recursive: true });
-    fs.mkdirSync(configPath, { recursive: true });
+    try {
+      // Create directories
+      console.log(`📁 Creating MCP Protocol Server directories for '${name}'...`);
+      this.ensureDirectoryExists(keysPath);
+      this.ensureDirectoryExists(configPath);
 
-    // Generate keys
-    execSync(`openssl genrsa -out ${keysPath}/mcp-private.pem 2048`);
-    execSync(`openssl rsa -in ${keysPath}/mcp-private.pem -pubout -out ${keysPath}/mcp-public.pem`);
+      // Generate keys
+      console.log(`🔑 Generating MCP Protocol Server keys for '${name}'...`);
+      execSync(`openssl genrsa -out "${privateKeyFile}" 2048`, { stdio: 'inherit' });
+      execSync(`openssl rsa -in "${privateKeyFile}" -pubout -out "${publicKeyFile}"`, { stdio: 'inherit' });
 
-    // Load the public key and convert to JWK format
-    const jwk = certificateUtils.loadPublicKeyAsJwk(
-      `${keysPath}/mcp-public.pem`,
-      { kid: `${name}-key-${Date.now()}`, use: 'sig' }
-    );
+      // Load the public key and convert to JWK format
+      const jwk = certificateUtils.loadPublicKeyAsJwk(
+        publicKeyFile,
+        { kid: `${name}-key-${Date.now()}`, use: 'sig' }
+      );
 
-    // Create entity configuration
-    const entityId = `http://localhost:${port}`;
-    const now = Math.floor(Date.now() / 1000);
+      // Create entity configuration
+      const entityId = `http://localhost:${port}`;
+      const now = Math.floor(Date.now() / 1000);
 
-    const config = {
-      sub: entityId,
-      metadata: {
-        federation_entity: {
-          organization_name: `MCP Protocol Server ${name}`,
-          contacts: [`ops@${name}.local`],
-          federation_fetch_endpoint: `${entityId}/.well-known/openid-federation`,
-          trust_marks: []
+      const entityConfig = {
+        sub: entityId,
+        metadata: {
+          federation_entity: {
+            organization_name: `MCP Protocol Server ${name}`,
+            contacts: [`ops@${name}.local`],
+            federation_fetch_endpoint: `${entityId}/.well-known/openid-federation`,
+            trust_marks: []
+          },
+          mcp_protocol: {
+            protocol_version: "1.0",
+            server_name: name,
+            description: `MCP Protocol Server: ${name}`,
+            tools_endpoint: `${entityId}/tools`,
+            resources_endpoint: `${entityId}/resources`,
+            websocket_endpoint: `${entityId}/mcp`
+          }
         },
-        mcp_protocol: {
-          protocol_version: "1.0",
-          server_name: name,
-          description: `MCP Protocol Server: ${name}`,
-          tools_endpoint: `${entityId}/tools`,
-          resources_endpoint: `${entityId}/resources`,
-          websocket_endpoint: `${entityId}/mcp`
-        }
-      },
-      authority_hints: ["http://localhost:3001"],
-      jwks: { keys: [jwk] },
-      iat: now
-    };
+        authority_hints: ["http://localhost:3001"],
+        jwks: { keys: [jwk] },
+        iat: now
+      };
 
-    fs.writeFileSync(entityConfigFile, JSON.stringify(config, null, 2));
-    
-    // Update registry
-    this.registry.mcpProtocolServers[name] = port;
-    this.saveRegistry();
+      fs.writeFileSync(entityConfigFile, JSON.stringify(entityConfig, null, 2));
+      
+      // Update registry
+      this.registry.mcpProtocolServers[name] = port;
+      this.saveRegistry();
 
-    console.log(`✅ MCP Protocol Server '${name}' initialized at ${baseDir}`);
-    
-    return {
-      success: true,
-      name,
-      port,
-      baseDir,
-      entityId
-    };
+      console.log(`✅ MCP Protocol Server '${name}' initialized at ${baseDir}`);
+      
+      return {
+        success: true,
+        name,
+        port,
+        baseDir,
+        entityId
+      };
+    } catch (error) {
+      console.error(`❌ Failed to create MCP Protocol Server '${name}':`, error.message);
+      return { success: false, message: `Failed to create MCP Protocol Server: ${error.message}` };
+    }
   }
   
   /**
