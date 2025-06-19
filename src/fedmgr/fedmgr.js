@@ -1,23 +1,42 @@
 #!/usr/bin/env node
 
 const { Command } = require('commander')
-const { execSync, spawn } = require('child_process') // Added spawn
+const { execSync, spawn } = require('child_process')
 const path = require('path')
 const fs = require('fs')
 require('dotenv').config()
 const MCPInterface = require('./server/mcp-interface')
 const { registerAuthCommands, getToken } = require('./auth-commands')
+const { initializeWorkspace, repairWorkspace } = require('./init-workspace')
 
 const program = new Command()
 
-// Environment and paths - Fixed to use proper resolution
-const FEDMGR_HOME = process.env.FEDMGR_HOME || path.resolve(__dirname, '../..')
-const FEDMGR_FED_DIR = process.env.FEDMGR_FEDERATIONS_DIR || path.join(FEDMGR_HOME, 'federations')
-const REGISTRY_PATH = process.env.FEDMGR_FED_REG || path.join(FEDMGR_HOME, 'data', 'fed-reg', 'registry.json')
+// Environment and paths - with better error handling
+let FEDMGR_HOME, FEDMGR_FED_DIR, REGISTRY_PATH, mcpInterface
 
-console.log(`🔧 FEDMGR_HOME: ${FEDMGR_HOME}`)
-console.log(`🔧 FEDMGR_FED_DIR: ${FEDMGR_FED_DIR}`)
-console.log(`🔧 REGISTRY_PATH: ${REGISTRY_PATH}`)
+try {
+  FEDMGR_HOME = process.env.FEDMGR_HOME || path.resolve(__dirname, '../..')
+  FEDMGR_FED_DIR = process.env.FEDMGR_FEDERATIONS_DIR || path.join(FEDMGR_HOME, 'federations')
+  REGISTRY_PATH = process.env.FEDMGR_FED_REG_FILE || path.join(FEDMGR_HOME, 'data', 'fed-reg', 'registry.json')
+
+  console.log(`🔧 FEDMGR_HOME: ${FEDMGR_HOME}`)
+  console.log(`🔧 FEDMGR_FED_DIR: ${FEDMGR_FED_DIR}`)
+  console.log(`🔧 REGISTRY_PATH: ${REGISTRY_PATH}`)
+
+  // Check if registry path points to a directory (common misconfiguration)
+  if (fs.existsSync(REGISTRY_PATH) && fs.statSync(REGISTRY_PATH).isDirectory()) {
+    console.warn(`⚠️  Registry path points to directory, not file: ${REGISTRY_PATH}`)
+    console.warn(`   Run 'fedmgr init --fix' to repair this configuration`)
+    REGISTRY_PATH = path.join(REGISTRY_PATH, 'registry.json')
+    console.log(`🔧 Using corrected registry path: ${REGISTRY_PATH}`)
+  }
+
+  mcpInterface = new MCPInterface(REGISTRY_PATH)
+} catch (error) {
+  console.error(`❌ Configuration error: ${error.message}`)
+  console.error(`   Run 'fedmgr init' to set up your workspace`)
+  process.exit(1)
+}
 
 // Ensure directories exist
 function ensureDirectoryExists(dirPath) {
@@ -27,18 +46,13 @@ function ensureDirectoryExists(dirPath) {
   }
 }
 
-// Ensure required directories
-ensureDirectoryExists(FEDMGR_FED_DIR)
-ensureDirectoryExists(path.dirname(REGISTRY_PATH))
-
-const mcpInterface = new MCPInterface(REGISTRY_PATH)
-
 // Helpers
 function loadRegistry() {
   try {
     return mcpInterface.loadRegistry()
   } catch (e) {
     console.error('❌ Failed to load registry:', e.message)
+    console.error(`   Run 'fedmgr init --fix' to repair your configuration`)
     process.exit(1)
   }
 }
@@ -58,6 +72,51 @@ program
   .name('fedmgr')
   .description('Manage federated MCPs & trust environments')
   .version('0.3.0')
+
+// Init command - NEW
+program
+  .command('init')
+  .option('--fix', 'Repair existing configuration issues')
+  .option('--force', 'Overwrite existing configuration')
+  .option('--workspace <path>', 'Specify workspace directory (default: current directory)')
+  .description('Initialize fedmgr workspace with proper directory structure and configuration')
+  .action(async (opts) => {
+    try {
+      const workspacePath = opts.workspace ? path.resolve(opts.workspace) : process.cwd()
+      
+      if (opts.fix) {
+        console.log('🔧 Repairing existing fedmgr workspace...')
+        const result = await repairWorkspace(workspacePath, opts)
+        if (result.success) {
+          console.log('✅ Workspace repair completed successfully')
+          console.log('📋 Summary of changes:')
+          result.changes.forEach(change => console.log(`   - ${change}`))
+          console.log('\n�� You can now run fedmgr commands')
+        } else {
+          console.error('❌ Workspace repair failed:', result.error)
+          process.exit(1)
+        }
+      } else {
+        console.log('🚀 Initializing new fedmgr workspace...')
+        const result = await initializeWorkspace(workspacePath, opts)
+        if (result.success) {
+          console.log('✅ Workspace initialization completed successfully')
+          console.log('📋 Created:')
+          result.created.forEach(item => console.log(`   - ${item}`))
+          console.log('\n🚀 Next steps:')
+          console.log('   1. Review the generated .env file')
+          console.log('   2. Run: fedmgr create fed my-federation')
+          console.log('   3. Run: fedmgr list')
+        } else {
+          console.error('❌ Workspace initialization failed:', result.error)
+          process.exit(1)
+        }
+      }
+    } catch (error) {
+      console.error('❌ Init command failed:', error.message)
+      process.exit(1)
+    }
+  })
 
 program
   .command('create <type> <name>')
@@ -311,7 +370,7 @@ program
     }
 
     console.log(
-      `�� Launching MCP Inspector for MCP '${mcpName}' at ${mcpUrl}`,
+      `🚀 Launching MCP Inspector for MCP '${mcpName}' at ${mcpUrl}`,
     )
     console.log(
       `   Inspector command: ${inspectorCommand} ${finalInspectorArgs.join(' ')}`,
