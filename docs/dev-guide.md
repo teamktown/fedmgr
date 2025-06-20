@@ -103,3 +103,144 @@ This guide provides best practices and considerations for handling user permissi
 **References:**  
 - [Kubernetes securityContext docs](https://kubernetes.io/docs/tasks/configure-pod-container/security-context/)
 - [Dockerfile best practices](https://docs.docker.com/develop/develop-images/dockerfile_best-practices/)
+
+
+# Client validation flow
+
+```mermaid
+flowchart LR
+    U["User"]
+    MCP["MCP Endpoint"]
+    FM["FedMgr"]
+
+    U   -->| 1_GET_wellknown | MCP
+    MCP -->| 2_entity_statement_with_marks | U
+    U   -->| 3_verify_marks | U
+    U   -->| 4_OAuth_flow | FM
+    FM  -->| 5_federation_JWT | U
+    U   -->| 6_Bearer_JWT | MCP
+```
+
+# Client flow as sequence diagram - not quite right
+```mermaid
+sequenceDiagram
+    autonumber
+    participant C as Client
+    participant MCP
+    participant FM as FedMgr
+    participant GH as GitHub
+
+    C->>MCP: GET .well-known
+    MCP-->>C: entity statement
+    note right of C: Eval A – verify signature and required trust-marks
+
+    C->>GH: Authorize request
+    GH-->>C: Auth code
+
+    C->>FM: POST /callback (code)
+    FM-->>C: Federation JWT
+    note right of C: Eval B – cache JWT for subsequent calls
+
+    C->>MCP: Bearer JWT
+    MCP->>FM: Validate JWT
+    FM-->>MCP: OK
+    MCP-->>C: Protected response
+```
+
+# client sequence diagram - improved flow, Client gets the trust marks first.
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Client
+    participant MCP
+    participant FedMgr
+    participant GitHub
+
+    Client ->> MCP: GET .well-known
+    MCP -->> Client: entity statement JWS
+    Note right of Client: Verify signature and trust marks\nSpec 5.4 and 7
+
+    Client ->> GitHub: OAuth authorize
+    GitHub -->> Client: auth code
+
+    Client ->> FedMgr: POST token exchange
+    FedMgr -->> Client: federated JWT
+
+    Client ->> MCP: Bearer JWT
+    Note right of MCP: Validate JWT with cached anchor keys\nSpec 5.2.1
+    MCP -->> Client: protected response
+
+```
+
+# client sequent diagram - user is limited to trust marks at JWT minting time
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Client
+    participant GitHub
+    participant FedMgr
+    participant CA_Sandbox
+    participant CA_Prod_EU
+    participant MCP
+
+    Client ->> GitHub: OAuth authorize
+    GitHub -->> Client: auth code
+
+    Client ->> FedMgr: token exchange request
+    FedMgr ->> FedMgr: evaluate user policy
+    alt user gets sandbox mark
+        FedMgr ->> CA_Sandbox: request sign MyOrgFed_sandbox
+        CA_Sandbox -->> FedMgr: signed trust mark
+    else user gets prod eu mark
+        FedMgr ->> CA_Prod_EU: request sign MyOrgFed_production_eu
+        CA_Prod_EU -->> FedMgr: signed trust mark
+    end
+    FedMgr -->> Client: JWT with allowed trust marks
+
+    Client ->> MCP: GET wellknown
+    MCP -->> Client: entity statement
+    Client ->> Client: verify signature and required marks
+
+    Client ->> MCP: Bearer JWT
+    MCP -->> Client: protected response
+```
+
+# Time bound trust mark assignment
+```mermaid
+sequenceDiagram
+    autonumber
+    participant User
+    participant GitHub
+    participant FedMgr
+    participant MCP
+
+    User->>GitHub: OAuth login
+    GitHub-->>User: auth code
+
+    User->>FedMgr: token exchange request
+    FedMgr->>FedMgr: evaluate policy (Mon-Fri 09-17)
+    alt within window
+        FedMgr-->>User: JWT + trust_mark + exp=next_boundary
+    else outside window
+        FedMgr-->>User: JWT without mark
+    end
+
+    User->>MCP: call with JWT
+    MCP->>MCP: check mark and exp
+```
+
+# High performance arch
+```mermaid
+flowchart LR
+    LB[NGINX ingress] --> AS1 & AS2 & AS3
+    subgraph FedMgr_AS stateless
+        AS1[Auth Server] --> Redis[(token store)]
+        AS2 --> Redis
+        AS3 --> Redis
+    end
+    Dev-->VSCode -- federated JWT --> MCP_Pods
+    MCP_Pods -- JWKS cache --> signed_jwks_uri_S3
+    MCP_Pods -- policy --> OPA_Sidecar
+    MCP_Pods -- Vault login --> VaultCluster
+```

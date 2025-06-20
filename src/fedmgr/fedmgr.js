@@ -1,5 +1,8 @@
 #!/usr/bin/env node
 
+process.removeAllListeners('warning');
+process.env.NODE_NO_WARNINGS = '1';
+
 const { Command } = require('commander')
 const { execSync, spawn } = require('child_process')
 const path = require('path')

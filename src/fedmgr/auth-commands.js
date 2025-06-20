@@ -12,6 +12,9 @@ const fetch = require('node-fetch');
 const open = require('open');
 require('dotenv').config();
 
+// Use built-in fetch (Node.js 18+) or fallback to node-fetch
+//const fetch = globalThis.fetch || require('node-fetch');
+
 // OIDC and Federation defaults
 const OIDC_PROVIDER_URL = process.env.OIDC_PROVIDER_URL || 'http://localhost:8080';
 const OIDC_CLIENT_ID = process.env.OIDC_CLIENT_ID || 'fedmgr-cli';
