@@ -6,6 +6,14 @@ const jwt = require('jsonwebtoken')
 const { execSync } = require('child_process')
 const fetch = require('node-fetch')
 const certificateUtils = require('./utils/certificate-utils')
+const {
+  loadRegistry,
+  saveRegistry,
+  loadEntityConfig,
+  saveEntityConfig,
+} = require('../config-manager')
+const registerOAuthRoutes = require('./oauth-routes')
+const registerFederationRoutes = require('./federation-routes')
 require('dotenv').config()
 
 const app = express()
@@ -48,10 +56,8 @@ if (!fs.existsSync(privateKeyPath)) {
 }
 
 // Load or create entity configuration
-let entityConfig
-if (fs.existsSync(entityConfigPath)) {
-  entityConfig = JSON.parse(fs.readFileSync(entityConfigPath, 'utf-8'))
-} else {
+let entityConfig = loadEntityConfig(entityConfigPath)
+if (Object.keys(entityConfig).length === 0) {
   entityConfig = {
     sub: `http://localhost:${port}`,
     metadata: {
@@ -70,7 +76,7 @@ if (fs.existsSync(entityConfigPath)) {
     iat: Math.floor(Date.now() / 1000),
     authority_hints: [] // This is the trust anchor
   }
-  fs.writeFileSync(entityConfigPath, JSON.stringify(entityConfig, null, 2))
+  saveEntityConfig(entityConfigPath, entityConfig)
 }
 
 // Add JWK to entity configuration if not present
@@ -81,7 +87,7 @@ if (!entityConfig.jwks || !entityConfig.jwks.keys || entityConfig.jwks.keys.leng
     alg: 'RS256'
   })
   entityConfig.jwks = { keys: [jwk] }
-  fs.writeFileSync(entityConfigPath, JSON.stringify(entityConfig, null, 2))
+  saveEntityConfig(entityConfigPath, entityConfig)
 }
 
 const privateKey = fs.readFileSync(privateKeyPath, 'utf-8')
@@ -191,255 +197,38 @@ app.get('/', (req, res) => {
   }
 })
 
-// GitHub OAuth endpoints
-app.get('/login', (req, res) => {
-  if (!GITHUB_CLIENT_ID || !GITHUB_CLIENT_SECRET) {
-    return res.status(500).send('GitHub OAuth not configured. Set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET.')
-  }
-  
-  const state = crypto.randomBytes(16).toString('hex')
-  const stateToken = jwt.sign({ state, fed: fedName }, OAUTH_STATE_SECRET, { expiresIn: '10m' })
-  
-  const authUrl = `https://github.com/login/oauth/authorize?` +
-    `client_id=${encodeURIComponent(GITHUB_CLIENT_ID)}` +
-    `&redirect_uri=${encodeURIComponent(OAUTH_REDIRECT_URI)}` +
-    `&state=${encodeURIComponent(stateToken)}` +
-    `&scope=read:user`
-  
-  res.redirect(authUrl)
+// GitHub OAuth and federation API routes
+registerOAuthRoutes(app, {
+  clientId: GITHUB_CLIENT_ID,
+  clientSecret: GITHUB_CLIENT_SECRET,
+  redirectUri: OAUTH_REDIRECT_URI,
+  stateSecret: OAUTH_STATE_SECRET,
+  fedName,
+  entityConfig,
+  privateKey,
+  updateRegistry,
 })
 
-app.get('/oauth/callback', async (req, res) => {
-  try {
-    const { code, state: stateToken } = req.query
-    
-    // Verify state
-    const verified = jwt.verify(stateToken, OAUTH_STATE_SECRET)
-    if (!verified || verified.fed !== fedName) {
-      throw new Error('Invalid state')
-    }
-
-    // Exchange code for GitHub token
-    const tokenRes = await fetch('https://github.com/login/oauth/access_token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-      body: JSON.stringify({
-        client_id: GITHUB_CLIENT_ID,
-        client_secret: GITHUB_CLIENT_SECRET,
-        code,
-        redirect_uri: OAUTH_REDIRECT_URI
-      })
-    })
-    
-    const tokenJson = await tokenRes.json()
-    if (!tokenJson.access_token) {
-      throw new Error(tokenJson.error_description || 'Token exchange failed')
-    }
-
-    // Get user profile
-    const userRes = await fetch('https://api.github.com/user', {
-      headers: { 
-        'Authorization': `Bearer ${tokenJson.access_token}`,
-        'User-Agent': 'fedmgr'
-      }
-    })
-    const user = await userRes.json()
-
-    // Create OIDCFed-compliant federation JWT
-    const now = Math.floor(Date.now() / 1000)
-    const federationToken = jwt.sign({
-      // Standard JWT claims
-      iss: entityConfig.sub, // Federation trust anchor
-      sub: `github:${user.id}`, // Unique subject identifier
-      aud: ['mcp-demo', 'mcp-server'], // Intended audiences
-      iat: now,
-      exp: now + 3600,
-      
-      // OpenID Connect claims
-      auth_time: now,
-      nonce: crypto.randomBytes(16).toString('hex'),
-      
-      // GitHub user information
-      preferred_username: user.login,
-      name: user.name,
-      email: user.email,
-      picture: user.avatar_url,
-      
-      // OIDCFed specific claims
-      trust_chain: [entityConfig.sub], // Trust chain starting from this anchor
-      trust_marks: [{
-        id: `${entityConfig.sub}/trust-marks/github-verified`,
-        trust_mark: jwt.sign({
-          iss: entityConfig.sub,
-          sub: `github:${user.id}`,
-          trust_mark_id: `${entityConfig.sub}/trust-marks/github-verified`,
-          iat: now,
-          exp: now + 86400
-        }, privateKey, { algorithm: 'RS256' })
-      }],
-      
-      // Federation entity metadata reference
-      federation_entity: {
-        authority_hints: [entityConfig.sub],
-        trust_anchor_id: entityConfig.sub
-      },
-      
-      // GitHub-specific claims
-      github: {
-        id: user.id,
-        login: user.login,
-        type: user.type,
-        verified: true
-      }
-    }, privateKey, { 
-      algorithm: 'RS256',
-      keyid: entityConfig.jwks.keys[0].kid // Reference the key used for signing
-    })
-
-    // Store token in registry for MCP validation
-    updateRegistry({
-      users: {
-        [user.id]: {
-          github_id: user.id,
-          login: user.login,
-          federation_token: federationToken,
-          trust_chain: [entityConfig.sub],
-          created_at: new Date().toISOString()
-        }
-      }
-    })
-
-    console.log(`✅ Issued OIDCFed token for GitHub user: ${user.login}`)
-
-    // Redirect with token - use the current domain
-    const redirectUrl = `/?token=${encodeURIComponent(federationToken)}&user=${encodeURIComponent(user.login)}`
-    res.redirect(redirectUrl)
-  } catch (err) {
-    console.error('OAuth callback error:', err)
-    res.status(500).send(`Authentication failed: ${err.message}`)
-  }
-})
-
-// OIDCFed Federation endpoints
-app.get('/.well-known/openid-federation', (req, res) => {
-  console.log(`📤 Serving entity configuration for ${fedName}`)
-  res.json(entityConfig)
-})
-
-// Federation resolution endpoint
-app.get('/resolve', (req, res) => {
-  const { sub, trust_anchor } = req.query
-  
-  if (!sub) {
-    return res.status(400).json({ error: 'Missing sub parameter' })
-  }
-  
-  // For this demo, we'll return a simple resolution
-  const resolved = {
-    sub: sub,
-    trust_anchor: trust_anchor || entityConfig.sub,
-    metadata: {
-      federation_entity: {
-        trust_marks: [],
-        organization_name: `Resolved Entity: ${sub}`
-      }
-    },
-    trust_chain: [entityConfig.sub],
-    expires_at: Math.floor(Date.now() / 1000) + 86400
-  }
-  
-  res.json(resolved)
-})
-
-// Trust mark status endpoint
-app.get('/trust-mark-status', (req, res) => {
-  const { trust_mark_id, sub } = req.query
-  
-  if (!trust_mark_id) {
-    return res.status(400).json({ error: 'Missing trust_mark_id parameter' })
-  }
-  
-  res.json({
-    trust_mark_id,
-    sub: sub || 'unknown',
-    status: 'active',
-    issued_at: new Date().toISOString(),
-    expires_at: new Date(Date.now() + 86400000).toISOString()
-  })
-})
-
-app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'healthy', 
-    federation: fedName, 
-    entity_id: entityConfig.sub,
-    github_oauth: !!(GITHUB_CLIENT_ID && GITHUB_CLIENT_SECRET),
-    oidcfed_compliant: true,
-    trust_anchor: true,
-    static_files_dir: publicDir,
-    static_files_available: fs.existsSync(publicDir),
-    timestamp: new Date().toISOString()
-  })
-})
-
-// Enhanced token validation endpoint for MCPs
-app.post('/validate-token', (req, res) => {
-  try {
-    const { token } = req.body
-    if (!token) {
-      return res.status(400).json({ valid: false, error: 'Missing token' })
-    }
-
-    // Verify the token was issued by this federation
-    const verified = jwt.verify(token, fs.readFileSync(publicKeyPath), {
-      algorithms: ['RS256'],
-      issuer: entityConfig.sub
-    })
-
-    // Additional OIDCFed validation
-    const validation = {
-      valid: true,
-      payload: verified,
-      trust_chain_valid: true,
-      trust_anchor: entityConfig.sub,
-      validation_details: {
-        signature_valid: true,
-        issuer_trusted: verified.iss === entityConfig.sub,
-        audience_valid: Array.isArray(verified.aud) ? verified.aud.includes('mcp-demo') : verified.aud === 'mcp-demo',
-        not_expired: verified.exp > Math.floor(Date.now() / 1000),
-        trust_marks_present: !!(verified.trust_marks && verified.trust_marks.length > 0),
-        federation_entity_present: !!verified.federation_entity
-      }
-    }
-
-    console.log(`✅ Token validation successful for subject: ${verified.sub}`)
-    res.json(validation)
-  } catch (error) {
-    console.log(`❌ Token validation failed: ${error.message}`)
-    res.json({
-      valid: false,
-      error: error.message,
-      trust_chain_valid: false
-    })
-  }
+registerFederationRoutes(app, {
+  fedName,
+  entityConfig,
+  publicKeyPath,
+  publicDir,
+  clientId: GITHUB_CLIENT_ID,
+  clientSecret: GITHUB_CLIENT_SECRET,
 })
 
 // Registry management
-function loadRegistry() {
-  if (!fs.existsSync(registryPath)) {
-    return { federations: [fedName], mcps: {}, users: {} }
-  }
-  try {
-    return JSON.parse(fs.readFileSync(registryPath, 'utf-8'))
-  } catch (e) {
-    return { federations: [fedName], mcps: {}, users: {} }
-  }
+function loadReg() {
+  const reg = loadRegistry(registryPath)
+  if (!reg.federations || reg.federations.length === 0) reg.federations = [fedName]
+  return reg
 }
 
 function updateRegistry(updates) {
-  const registry = loadRegistry()
+  const registry = loadReg()
   Object.assign(registry, updates)
-  fs.writeFileSync(registryPath, JSON.stringify(registry, null, 2))
+  saveRegistry(registryPath, registry)
 }
 
 app.listen(port, () => {
