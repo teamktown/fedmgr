@@ -19,6 +19,7 @@ const registerRestart = require('./commands/restart')
 const registerDistribute = require('./commands/distribute')
 const registerDelete = require('./commands/delete')
 const registerInspect = require('./commands/inspect')
+const registerKeys = require('./commands/keys')
 
 const program = new Command()
 
@@ -99,6 +100,7 @@ registerRestart(program, context)
 registerDistribute(program, context)
 registerDelete(program, context)
 registerInspect(program, context)
+registerKeys(program, context)
 
 // Init command - NEW
 program

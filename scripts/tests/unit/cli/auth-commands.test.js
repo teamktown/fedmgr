@@ -8,7 +8,7 @@ const {
   deleteToken,
   localOidcLogin,
   githubOAuthLogin
-} = require('../../../../src/cli/auth-commands');
+} = require('../../../../src/fedmgr/auth-commands');
 
 // Mock fetch for testing
 jest.mock('node-fetch', () => jest.fn());

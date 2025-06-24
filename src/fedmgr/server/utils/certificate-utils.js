@@ -65,6 +65,98 @@ function base64UrlEncode(buffer) {
 }
 
 /**
+ * Base64Url decode a string
+ * @param {string} str - Base64Url encoded string
+ * @returns {Buffer} - Decoded buffer
+ */
+function base64UrlDecode(str) {
+  // Add padding if necessary
+  const padding = 4 - (str.length % 4);
+  if (padding !== 4) {
+    str += '='.repeat(padding);
+  }
+  
+  return Buffer.from(str.replace(/-/g, '+').replace(/_/g, '/'), 'base64');
+}
+
+/**
+ * Convert a JWK to PEM format (simplified implementation for RSA keys)
+ * @param {Object} jwk - JWK to convert
+ * @returns {string} - PEM formatted public key
+ */
+function jwkToPem(jwk) {
+  if (jwk.kty !== 'RSA') {
+    throw new Error('Only RSA keys are supported');
+  }
+  
+  // Decode the modulus and exponent
+  const modulus = base64UrlDecode(jwk.n);
+  const exponent = base64UrlDecode(jwk.e);
+  
+  // Build the ASN.1 DER structure for RSA public key
+  // This is a simplified implementation - in production, use a proper ASN.1 library
+  const modulusLength = modulus.length;
+  const exponentLength = exponent.length;
+  
+  // Calculate total length
+  const totalLength = 15 + modulusLength + exponentLength;
+  const der = Buffer.alloc(totalLength);
+  
+  let offset = 0;
+  
+  // SEQUENCE
+  der[offset++] = 0x30;
+  der[offset++] = totalLength - 2;
+  
+  // SEQUENCE (algorithm identifier)
+  der[offset++] = 0x30;
+  der[offset++] = 0x0d;
+  
+  // OBJECT IDENTIFIER (RSA encryption)
+  der[offset++] = 0x06;
+  der[offset++] = 0x09;
+  der[offset++] = 0x2a;
+  der[offset++] = 0x86;
+  der[offset++] = 0x48;
+  der[offset++] = 0x86;
+  der[offset++] = 0xf7;
+  der[offset++] = 0x0d;
+  der[offset++] = 0x01;
+  der[offset++] = 0x01;
+  der[offset++] = 0x01;
+  
+  // NULL
+  der[offset++] = 0x05;
+  der[offset++] = 0x00;
+  
+  // BIT STRING
+  der[offset++] = 0x03;
+  der[offset++] = modulusLength + exponentLength + 5;
+  der[offset++] = 0x00;
+  
+  // SEQUENCE
+  der[offset++] = 0x30;
+  der[offset++] = modulusLength + exponentLength + 2;
+  
+  // Copy modulus
+  der[offset++] = 0x02;
+  der[offset++] = modulusLength;
+  modulus.copy(der, offset);
+  offset += modulusLength;
+  
+  // Copy exponent
+  der[offset++] = 0x02;
+  der[offset++] = exponentLength;
+  exponent.copy(der, offset);
+  
+  // Convert to PEM
+  const base64 = der.toString('base64');
+  const pem = `-----BEGIN PUBLIC KEY-----\n${base64.match(/.{1,64}/g).join('\n')}\n-----END PUBLIC KEY-----`;
+  
+  return pem;
+}
+
+/**
  * Sign a payload with a private key to create a JWT
  * @param {Object} payload - Payload to sign
  * @param {string} privateKeyPath - Path to the private key file
@@ -157,30 +249,87 @@ function updateEntityConfigWithJwk(entityConfig, jwk) {
 }
 
 /**
- * Validate a trust chain
+ * Validate a trust chain - verifies ALL tokens in chain per OpenID Federation draft-43
  * @param {Array} trustChain - Array of JWTs forming a trust chain
  * @param {string} trustAnchorPublicKeyPath - Path to the trust anchor's public key
  * @returns {Object} - Validation result
  */
 function validateTrustChain(trustChain, trustAnchorPublicKeyPath) {
   try {
-    // Verify the first token in the chain with the trust anchor's public key
-    const firstTokenResult = verifyJwt(trustChain[0], trustAnchorPublicKeyPath);
-    
-    if (!firstTokenResult.valid) {
+    if (!trustChain || trustChain.length === 0) {
       return {
         valid: false,
-        reason: `Trust anchor verification failed: ${firstTokenResult.reason}`
+        reason: 'Trust chain is empty'
       };
     }
     
-    // For a more complex trust chain, we would verify each token in the chain
-    // using the public key from the previous token
+    // For single token (direct trust relationship)
+    if (trustChain.length === 1) {
+      const result = verifyJwt(trustChain[0], trustAnchorPublicKeyPath);
+      return {
+        valid: result.valid,
+        reason: result.valid ? 'Single token chain validated' : `Trust anchor verification failed: ${result.reason}`,
+        payload: result.payload
+      };
+    }
+    
+    // For multi-hop trust chain validation
+    const validatedTokens = [];
+    let currentPublicKeyPath = trustAnchorPublicKeyPath;
+    
+    for (let i = 0; i < trustChain.length; i++) {
+      const token = trustChain[i];
+      const result = verifyJwt(token, currentPublicKeyPath);
+      
+      if (!result.valid) {
+        return {
+          valid: false,
+          reason: `Token ${i} verification failed: ${result.reason}`,
+          validatedTokens: validatedTokens
+        };
+      }
+      
+      validatedTokens.push(result.payload);
+      
+      // For multi-hop chains, extract the public key from current token's JWKS
+      // to verify the next token in the chain
+      if (i < trustChain.length - 1) {
+        const jwks = result.payload.jwks;
+        if (!jwks || !jwks.keys || jwks.keys.length === 0) {
+          return {
+            valid: false,
+            reason: `Token ${i} missing JWKS for chain validation`,
+            validatedTokens: validatedTokens
+          };
+        }
+        
+        // Convert the first JWK to PEM format for verifying the next token
+        try {
+          const jwk = jwks.keys[0]; // Use the first key
+          const pemForNextToken = jwkToPem(jwk);
+          
+          // Write temporary PEM file for next token verification
+          const tempPemPath = `/tmp/temp_key_${i}.pem`;
+          fs.writeFileSync(tempPemPath, pemForNextToken);
+          currentPublicKeyPath = tempPemPath;
+          
+        } catch (error) {
+          return {
+            valid: false,
+            reason: `Failed to convert JWK to PEM for token ${i}: ${error.message}`,
+            validatedTokens: validatedTokens
+          };
+        }
+      }
+    }
     
     return {
       valid: true,
-      payload: firstTokenResult.payload
+      reason: `Full trust chain validated (${trustChain.length} tokens)`,
+      payload: validatedTokens[validatedTokens.length - 1], // Return the last token's payload
+      validatedTokens: validatedTokens
     };
+    
   } catch (error) {
     return {
       valid: false,
@@ -192,6 +341,8 @@ function validateTrustChain(trustChain, trustAnchorPublicKeyPath) {
 module.exports = {
   pemToJwk,
   base64UrlEncode,
+  base64UrlDecode,
+  jwkToPem,
   signJwt,
   verifyJwt,
   loadPublicKeyAsJwk,

@@ -4,6 +4,18 @@ const fetch = require('node-fetch');
 
 function registerOAuthRoutes(app, opts) {
   const { clientId, clientSecret, redirectUri, stateSecret, fedName, entityConfig, privateKey, updateRegistry } = opts;
+  
+  // Load admin users from environment
+  function getAdminUsers() {
+    const adminUsers = process.env.FEDMGR_ADMIN_USERS || process.env.FEDMGR_ADMIN_USER || '';
+    return adminUsers.split(',').map(user => user.trim()).filter(Boolean);
+  }
+  
+  // Check if user is admin
+  function isAdminUser(githubLogin) {
+    const adminUsers = getAdminUsers();
+    return adminUsers.includes(githubLogin);
+  }
 
   app.get('/login', (req, res) => {
     if (!clientId || !clientSecret) {
@@ -50,6 +62,8 @@ function registerOAuthRoutes(app, opts) {
       const user = await userRes.json();
 
       const now = Math.floor(Date.now() / 1000);
+      const userIsAdmin = isAdminUser(user.login);
+      
       const federationToken = jwt.sign({
         iss: entityConfig.sub,
         sub: `github:${user.id}`,
@@ -62,6 +76,10 @@ function registerOAuthRoutes(app, opts) {
         name: user.name,
         email: user.email,
         picture: user.avatar_url,
+        // Admin role claims
+        role: userIsAdmin ? 'admin' : 'user',
+        roles: userIsAdmin ? ['user', 'admin'] : ['user'],
+        admin: userIsAdmin,
         trust_chain: [entityConfig.sub],
         trust_marks: [{
           id: `${entityConfig.sub}/trust-marks/github-verified`,
@@ -97,7 +115,8 @@ function registerOAuthRoutes(app, opts) {
         },
       });
 
-      console.log(`✅ Issued OIDCFed token for GitHub user: ${user.login}`);
+      const adminStatus = userIsAdmin ? ' (ADMIN)' : '';
+      console.log(`✅ Issued OIDCFed token for GitHub user: ${user.login}${adminStatus}`);
       const redirectUrl = `/?token=${encodeURIComponent(federationToken)}&user=${encodeURIComponent(user.login)}`;
       res.redirect(redirectUrl);
     } catch (err) {

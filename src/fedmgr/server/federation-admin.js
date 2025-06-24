@@ -6,18 +6,25 @@ const jwt = require('jsonwebtoken')
 const { execSync } = require('child_process')
 const fetch = require('node-fetch')
 const certificateUtils = require('./utils/certificate-utils')
+const { createAdminMiddleware, createAuthMiddleware } = require('./utils/admin-middleware')
+const { createOAuthHandler } = require('./oauth-handler')
 const {
   loadRegistry,
   saveRegistry,
   loadEntityConfig,
   saveEntityConfig,
 } = require('../config-manager')
-const registerOAuthRoutes = require('./oauth-routes')
-const registerFederationRoutes = require('./federation-routes')
+const { createFederationAPI } = require('./federation-api')
+const { createUIServer } = require('./ui-server')
+const WebSocket = require('ws')
+const http = require('http')
 require('dotenv').config()
 
 const app = express()
 const port = process.env.PORT || 3001
+
+// Create HTTP server for WebSocket support
+const server = http.createServer(app)
 
 // Parse command line arguments
 const args = process.argv.slice(2)
@@ -58,12 +65,14 @@ if (!fs.existsSync(privateKeyPath)) {
 // Load or create entity configuration
 let entityConfig = loadEntityConfig(entityConfigPath)
 if (Object.keys(entityConfig).length === 0) {
+  const now = Math.floor(Date.now() / 1000)
   entityConfig = {
     sub: `http://localhost:${port}`,
     metadata: {
       federation_entity: {
         organization_name: `Federation ${fedName}`,
-        federation_fetch_endpoint: `http://localhost:${port}/.well-known/openid-federation`,
+        federation_fetch_endpoint: `http://localhost:${port}/federation_fetch`,
+        federation_list_endpoint: `http://localhost:${port}/federation_list`,
         federation_resolve_endpoint: `http://localhost:${port}/resolve`,
         federation_trust_mark_status_endpoint: `http://localhost:${port}/trust-mark-status`
       },
@@ -73,10 +82,29 @@ if (Object.keys(entityConfig).length === 0) {
       }
     },
     jwks: { keys: [] },
-    iat: Math.floor(Date.now() / 1000),
+    iat: now,
+    exp: now + (365 * 24 * 60 * 60), // 1 year expiration for trust anchor
     authority_hints: [] // This is the trust anchor
   }
   saveEntityConfig(entityConfigPath, entityConfig)
+} else {
+  // Ensure existing configurations have exp claim for OpenID Federation compliance
+  if (!entityConfig.exp) {
+    const now = Math.floor(Date.now() / 1000)
+    entityConfig.iat = entityConfig.iat || now
+    entityConfig.exp = now + (365 * 24 * 60 * 60) // 1 year expiration for trust anchor
+    
+    // Update federation endpoints to include new required endpoints
+    if (entityConfig.metadata && entityConfig.metadata.federation_entity) {
+      entityConfig.metadata.federation_entity.federation_fetch_endpoint = 
+        entityConfig.metadata.federation_entity.federation_fetch_endpoint || `http://localhost:${port}/federation_fetch`
+      entityConfig.metadata.federation_entity.federation_list_endpoint = 
+        entityConfig.metadata.federation_entity.federation_list_endpoint || `http://localhost:${port}/federation_list`
+    }
+    
+    saveEntityConfig(entityConfigPath, entityConfig)
+    console.log('🔄 Updated entity configuration with exp claim and new endpoints')
+  }
 }
 
 // Add JWK to entity configuration if not present
@@ -92,113 +120,25 @@ if (!entityConfig.jwks || !entityConfig.jwks.keys || entityConfig.jwks.keys.leng
 
 const privateKey = fs.readFileSync(privateKeyPath, 'utf-8')
 
+// Initialize admin and auth middleware
+const adminMiddleware = createAdminMiddleware(publicKeyPath)
+const authMiddleware = createAuthMiddleware(publicKeyPath)
+
 app.use(express.json())
 app.use(express.urlencoded({ extended: true }))
 
-// Serve static files from the configured public directory
-console.log(`📁 Serving static files from: ${publicDir}`)
-if (fs.existsSync(publicDir)) {
-  app.use(express.static(publicDir))
-  console.log(`✅ Static files directory found and configured`)
-} else {
-  console.log(`⚠️ Static files directory not found: ${publicDir}`)
-}
+// UI Server configuration
+const uiServer = createUIServer({
+  publicDir,
+  fedName,
+  clientId: GITHUB_CLIENT_ID,
+  port
+});
+uiServer.registerRoutes(app);
 
-// Root route with better path handling
-app.get('/', (req, res) => {
-  const indexPath = path.join(publicDir, 'index.html')
-  
-  console.log(`🔍 Looking for index.html at: ${indexPath}`)
-  
-  if (fs.existsSync(indexPath)) {
-    console.log(`✅ Found index.html, serving file`)
-    res.sendFile(indexPath)
-  } else {
-    console.log(`❌ index.html not found, serving fallback HTML`)
-    // Enhanced fallback HTML with JWT decoder
-    res.send(`
-      <!DOCTYPE html>
-      <html lang="en">
-      <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Federation Demo - Fallback</title>
-        <style>
-          body { font-family: Arial, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; background: #f8f9fa; }
-          .container { background: white; padding: 20px; border-radius: 8px; margin: 20px 0; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-          .warning { background: #fff3cd; border: 1px solid #ffeaa7; padding: 15px; border-radius: 4px; margin: 20px 0; }
-          button { background: #007cba; color: white; padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; margin: 5px; }
-          button:hover { background: #005a8b; }
-          .token { background: #e8f4f8; padding: 10px; border-radius: 4px; word-break: break-all; font-family: monospace; font-size: 12px; }
-          .success { color: #28a745; }
-          .error { color: #dc3545; }
-        </style>
-      </head>
-      <body>
-        <div class="warning">
-          <strong>⚠️ Notice:</strong> Using fallback HTML. The main index.html file was not found at: <code>${indexPath}</code>
-        </div>
-        
-        <h1>🛰️ Federation Demo (Fallback)</h1>
-        
-        <div class="container">
-          <h2>Authentication</h2>
-          <p><strong>Status:</strong> Federation "${fedName}" is active</p>
-          <p><strong>OAuth:</strong> ${GITHUB_CLIENT_ID ? 'Enabled' : 'Disabled'}</p>
-          <button onclick="window.location.href='/login'">Login with GitHub</button>
-          <div id="auth-info" style="margin-top: 15px;"></div>
-        </div>
-        
-        <div class="container">
-          <h2>API Endpoints</h2>
-          <ul>
-            <li><a href="/health">Health Check</a></li>
-            <li><a href="/.well-known/openid-federation">Federation Metadata</a></li>
-          </ul>
-          <button onclick="testMcp()">Test MCP Server</button>
-          <div id="test-results"></div>
-        </div>
 
-        <script>
-          // Check for token in URL
-          const urlParams = new URLSearchParams(window.location.search);
-          const token = urlParams.get('token');
-          const user = urlParams.get('user');
-          
-          if (token && user) {
-            document.getElementById('auth-info').innerHTML = 
-              '<div class="success">✅ Authenticated as: ' + user + '</div>' +
-              '<div class="token">Token: ' + token.substring(0, 50) + '...</div>';
-            window.history.replaceState({}, document.title, window.location.pathname);
-          }
-          
-          async function testMcp() {
-            if (!token) {
-              alert('Please login first');
-              return;
-            }
-            
-            try {
-              const response = await fetch('http://localhost:4001/api', {
-                headers: { 'Authorization': 'Bearer ' + token }
-              });
-              const data = await response.json();
-              document.getElementById('test-results').innerHTML = 
-                '<h3 class="success">✅ MCP Test Result:</h3><pre>' + JSON.stringify(data, null, 2) + '</pre>';
-            } catch (error) {
-              document.getElementById('test-results').innerHTML = 
-                '<h3 class="error">❌ MCP Test Failed:</h3><p>' + error.message + '</p>';
-            }
-          }
-        </script>
-      </body>
-      </html>
-    `)
-  }
-})
-
-// GitHub OAuth and federation API routes
-registerOAuthRoutes(app, {
+// GitHub OAuth handler
+const oauthHandler = createOAuthHandler({
   clientId: GITHUB_CLIENT_ID,
   clientSecret: GITHUB_CLIENT_SECRET,
   redirectUri: OAUTH_REDIRECT_URI,
@@ -207,15 +147,69 @@ registerOAuthRoutes(app, {
   entityConfig,
   privateKey,
   updateRegistry,
-})
+});
+oauthHandler.registerRoutes(app);
 
-registerFederationRoutes(app, {
+// Federation API handler
+const federationAPI = createFederationAPI({
   fedName,
   entityConfig,
   publicKeyPath,
   publicDir,
   clientId: GITHUB_CLIENT_ID,
   clientSecret: GITHUB_CLIENT_SECRET,
+  adminMiddleware,
+  authMiddleware,
+});
+federationAPI.registerRoutes(app);
+
+// Register Admin API routes and initialize JSON-RPC server
+const jsonrpcServer = registerAdminAPIRoutes(app, {
+  fedName,
+  entityConfig,
+  publicKeyPath,
+  mcpInstancesDir: process.env.FEDMGR_MCP_INSTANCES_DIR || path.resolve(__dirname, '../../../mcp_instances'),
+  federationsDir: process.env.FEDMGR_FEDERATIONS_DIR || dataDir
+})
+
+// Set up WebSocket server for real-time updates
+const wss = new WebSocket.Server({ server, path: '/ws' })
+
+wss.on('connection', (ws) => {
+  console.log('📡 WebSocket client connected')
+  
+  // Send welcome message
+  ws.send(JSON.stringify({
+    type: 'welcome',
+    data: {
+      server: 'FedMgr Admin Dashboard',
+      federation: fedName,
+      timestamp: new Date().toISOString()
+    }
+  }))
+  
+  // Handle messages
+  ws.on('message', (message) => {
+    try {
+      const data = JSON.parse(message)
+      console.log('📡 WebSocket message received:', data)
+      
+      // Echo back for now
+      ws.send(JSON.stringify({
+        type: 'echo',
+        data
+      }))
+    } catch (error) {
+      ws.send(JSON.stringify({
+        type: 'error',
+        error: error.message
+      }))
+    }
+  })
+  
+  ws.on('close', () => {
+    console.log('📡 WebSocket client disconnected')
+  })
 })
 
 // Registry management
@@ -231,13 +225,16 @@ function updateRegistry(updates) {
   saveRegistry(registryPath, registry)
 }
 
-app.listen(port, () => {
+server.listen(port, () => {
   console.log(`🛰️ Federation Admin running on http://localhost:${port}`)
   console.log(`🔑 Federation: ${fedName}`)
   console.log(`🔗 GitHub OAuth: ${GITHUB_CLIENT_ID ? 'Enabled' : 'Disabled'}`)
   console.log(`📡 Entity config: /.well-known/openid-federation`)
   console.log(`🔐 OIDCFed Trust Anchor: ${entityConfig.sub}`)
   console.log(`📁 Public directory: ${publicDir}`)
+  console.log(`🌐 WebSocket server: ws://localhost:${port}/ws`)
+  console.log(`🔗 Admin API: http://localhost:${port}/api/v1`)
+  console.log(`📡 JSON-RPC: http://localhost:${port}/api/v1/jsonrpc`)
 })
 
 module.exports = app

@@ -9,7 +9,6 @@ const path = require('path');
 const crypto = require('crypto');
 
 // Set up environment variables directly
-const path = require('path');
 const FEDMGR_HOME = process.env.FEDMGR_HOME || path.resolve(__dirname, '../../..');
 const FEDMGR_FEDERATIONS_DIR = process.env.FEDMGR_FEDERATIONS_DIR || path.join(FEDMGR_HOME, 'test-federations');
 const ALPHA_FED_DIR = path.join(FEDMGR_FEDERATIONS_DIR, 'alpha');
