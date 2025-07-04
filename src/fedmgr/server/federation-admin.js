@@ -16,6 +16,7 @@ const {
 } = require('../config-manager')
 const { createFederationAPI } = require('./federation-api')
 const { createUIServer } = require('./ui-server')
+const registerAdminAPIRoutes = require('./admin-api-routes')
 const WebSocket = require('ws')
 const http = require('http')
 require('dotenv').config()
@@ -41,19 +42,22 @@ const OAUTH_STATE_SECRET = process.env.OAUTH_STATE_SECRET || crypto.randomBytes(
 
 // Use environment-based paths for Docker compatibility
 const dataDir = process.env.FEDMGR_FEDERATIONS_DIR || '/usr/src/app/data'
-const keysDir = path.join(dataDir, 'keys')
-const configDir = path.join(dataDir, 'config')
-const entityConfigPath = path.join(configDir, 'entity-configuration.json')
+const keysDir = process.env.FEDMGR_KEYS_PATH || path.join(dataDir, 'keys')
+// Use federation-specific config directory for entity configuration
+const federationConfigDir = path.join(dataDir, fedName, 'config')
+const entityConfigPath = path.join(federationConfigDir, 'entity-configuration.json')
+// Use writable data directory for runtime config
+const runtimeDataDir = process.env.FEDMGR_FED_REG_FILE ? path.dirname(process.env.FEDMGR_FED_REG_FILE) : '/usr/src/app/data'
 const privateKeyPath = path.join(keysDir, 'anchor-private.pem')
 const publicKeyPath = path.join(keysDir, 'anchor-public.pem')
-const registryPath = process.env.FEDMGR_FED_REG || path.join(dataDir, 'registry.json')
+const registryPath = process.env.FEDMGR_FED_REG_FILE || path.join(runtimeDataDir, 'registry.json')
 
 // Static files directory - use environment variable with fallback
 const publicDir = process.env.FEDMGR_PUBLIC_DIR || '/usr/src/app/public'
 
-// Ensure directories exist
-if (!fs.existsSync(keysDir)) fs.mkdirSync(keysDir, { recursive: true })
-if (!fs.existsSync(configDir)) fs.mkdirSync(configDir, { recursive: true })
+// Ensure directories exist (only for writable directories)
+// Note: keysDir and federationConfigDir should be pre-created and mounted, but check for runtime data directory
+if (!fs.existsSync(runtimeDataDir)) fs.mkdirSync(runtimeDataDir, { recursive: true })
 
 // Initialize keys and configuration
 if (!fs.existsSync(privateKeyPath)) {
@@ -102,8 +106,14 @@ if (Object.keys(entityConfig).length === 0) {
         entityConfig.metadata.federation_entity.federation_list_endpoint || `http://localhost:${port}/federation_list`
     }
     
-    saveEntityConfig(entityConfigPath, entityConfig)
-    console.log('🔄 Updated entity configuration with exp claim and new endpoints')
+    // Only update config if the directory is writable (not in Docker read-only mount)
+    try {
+      fs.accessSync(path.dirname(entityConfigPath), fs.constants.W_OK)
+      saveEntityConfig(entityConfigPath, entityConfig)
+      console.log('🔄 Updated entity configuration with exp claim and new endpoints')
+    } catch (err) {
+      console.log('ℹ️  Entity configuration is read-only, using existing configuration')
+    }
   }
 }
 
@@ -115,7 +125,15 @@ if (!entityConfig.jwks || !entityConfig.jwks.keys || entityConfig.jwks.keys.leng
     alg: 'RS256'
   })
   entityConfig.jwks = { keys: [jwk] }
-  saveEntityConfig(entityConfigPath, entityConfig)
+  
+  // Only update config if the directory is writable (not in Docker read-only mount)
+  try {
+    fs.accessSync(path.dirname(entityConfigPath), fs.constants.W_OK)
+    saveEntityConfig(entityConfigPath, entityConfig)
+    console.log('🔄 Updated entity configuration with JWK')
+  } catch (err) {
+    console.log('ℹ️  Entity configuration is read-only, JWK loaded in memory only')
+  }
 }
 
 const privateKey = fs.readFileSync(privateKeyPath, 'utf-8')

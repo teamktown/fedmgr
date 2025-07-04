@@ -1,5 +1,11 @@
 # 🏛️ fedmgr Project Architecture (April 2025)
 
+TODO: This document needs refinement per ./plans/arch-codereview-20250620.md and ./plans/arch-prd-chatgpt-candidate-20250620.md as this document is moderately accurate but not current to the code base in ./src and the docker-compose.yml file and supporting ./scripts/**.sh
+
+
+
+
+
 This document provides a high-level overview of the `fedmgr` project architecture as of April 2025. It aims to be a comprehensive, succinct, and informative guide for understanding the system's purpose, key components, interactions, and deployment structure.
 
 ## 1. Project Overview

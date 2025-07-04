@@ -27,7 +27,7 @@ const executeCommand = (command, args = [], options = {}) => {
   return new Promise((resolve, reject) => {
     logger.info(`Executing: fedmgr ${command} ${args.join(' ')}`);
     
-    const process = spawn('node', ['src/fedmgr.js', command, ...args], {
+    const childProcess = spawn('node', ['src/fedmgr.js', command, ...args], {
       stdio: 'pipe',
       env: { ...process.env, NODE_ENV: 'test', ...options.env },
       cwd: options.cwd || process.cwd()
@@ -36,15 +36,15 @@ const executeCommand = (command, args = [], options = {}) => {
     let stdout = '';
     let stderr = '';
     
-    process.stdout.on('data', (data) => {
+    childProcess.stdout.on('data', (data) => {
       stdout += data.toString();
     });
     
-    process.stderr.on('data', (data) => {
+    childProcess.stderr.on('data', (data) => {
       stderr += data.toString();
     });
     
-    process.on('close', (code) => {
+    childProcess.on('close', (code) => {
       const result = {
         success: code === 0,
         code,
@@ -62,7 +62,7 @@ const executeCommand = (command, args = [], options = {}) => {
       }
     });
     
-    process.on('error', (error) => {
+    childProcess.on('error', (error) => {
       logger.error(`Process error: ${error.message}`);
       reject(error);
     });

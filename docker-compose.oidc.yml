@@ -9,41 +9,78 @@ services:
       - CLIENTS_CONFIGURATION_PATH=/tmp/config/clients-config.json
       - USERS_CONFIGURATION_PATH=/tmp/config/users-config.json
     volumes:
-      - ${OIDC_MOCK_CONFIG_DIR_REL}:/tmp/oidc-config
-      - ./build/install/oidc-mock/oidc-config:/tmp/config
-
+      # OIDC configuration (read-only)
+      - ./build/install/oidc-mock/oidc-config:/tmp/config:ro
     networks:
       - federation-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/.well-known/openid_configuration"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   token-exchange-service:
     build: 
       context: .
       dockerfile: Dockerfile.token-exchange
       args:
-        FEDMGR_BUILD_REL_NPM_DIR: ${FEDMGR_BUILD_REL_NPM_DIR}
+        FEDMGR_BUILD_REL_NPM_DIR: ${FEDMGR_BUILD_REL_NPM_DIR:-./build/npm}
     ports:
       - "3457:3457"
     environment:
+      - PORT=3457
       - FEDERATION_ADMIN_URL=http://federation-admin:3001
       - OIDC_PROVIDER_URL=http://oidc-server-mock:80
+      - FEDMGR_KEYS_PATH=/usr/src/app/keys
+    volumes:
+      # Keys (read-only for security)
+      - ./build/install/keys:/usr/src/app/keys:ro
     networks:
       - federation-net
     depends_on:
-      - oidc-server-mock
+      oidc-server-mock:
+        condition: service_healthy
+      federation-admin:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3457/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   federation-admin:
     build:
       context: .
       dockerfile: Dockerfile.federation-admin
       args:
-        FEDMGR_BUILD_REL_NPM_DIR: ${FEDMGR_BUILD_REL_NPM_DIR}
+        FEDMGR_BUILD_REL_NPM_DIR: ${FEDMGR_BUILD_REL_NPM_DIR:-./build/npm}
     ports:
       - "3001:3001"
+    environment:
+      - PORT=3001
+      - FEDERATION_NAME=${FEDERATION_NAME:-alpha}
+      - FEDMGR_PUBLIC_DIR=/usr/src/app/public
+      - FEDMGR_KEYS_PATH=/usr/src/app/keys
+      - FEDMGR_FEDERATIONS_DIR=/usr/src/app/federations
+      - FEDMGR_FED_REG_FILE=/usr/src/app/data/registry.json
+      - OIDC_PROVIDER_URL=http://oidc-server-mock:80
     volumes:
-      - ./build/install/federations:/usr/src/app/federations
+      # Keys (read-only for security)
+      - ./build/install/keys:/usr/src/app/keys:ro
+      # Federation configurations (read-only)
+      - ./build/install/federations:/usr/src/app/federations:ro
+      # Registry data (read-write for federation admin)
       - ./build/install/fed-reg:/usr/src/app/data
+      # Static files (read-only)
+      - ./public:/usr/src/app/public:ro
     networks:
       - federation-net
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
 networks:
   federation-net:
     driver: bridge

@@ -33,8 +33,8 @@ echo "🧹 Cleaning up existing containers..."
 docker-compose down -v
 
 # Initialize volumes with proper permissions
-echo "🔧 Initializing volumes..."
-docker-compose run --rm volume-init
+#echo "🔧 Initializing volumes..."
+#docker-compose run --rm volume-init
 
 # Start the services
 echo "🚀 Starting services..."

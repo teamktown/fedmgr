@@ -189,7 +189,9 @@ describe('MCP Server Initialization', () => {
     // Set up mock path module
     mockPath = {
       resolve: jest.fn((...args) => '/mock/path'),
-      join: jest.fn((...args) => '/mock/path/file')
+      join: jest.fn((...args) => '/mock/path/file'),
+      isAbsolute: jest.fn((path) => path.startsWith('/')),
+      dirname: jest.fn((path) => '/mock/dir')
     };
     
     // Set up mocks for modules

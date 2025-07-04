@@ -13,14 +13,27 @@ services:
       - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID}
       - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET}
       - OAUTH_REDIRECT_URI=http://localhost:3001/oauth/callback
-      - FEDERATION_NAME=alpha
+      - FEDERATION_NAME=${FEDERATION_NAME:-alpha}
       - FEDMGR_PUBLIC_DIR=/usr/src/app/public
+      - FEDMGR_KEYS_PATH=/usr/src/app/keys
+      - FEDMGR_FEDERATIONS_DIR=/usr/src/app/federations
+      - FEDMGR_FED_REG_FILE=/usr/src/app/data/registry.json
     volumes:
-      - federation_data:/usr/src/app/data
-      # Optional: Mount for development (uncomment to see live changes)
-      # - ./public:/usr/src/app/public
+      # Keys (read-only for security)
+      - ./build/install/keys:/usr/src/app/keys:ro
+      # Federation configurations (read-only)
+      - ./build/install/federations:/usr/src/app/federations:ro
+      # Registry data (read-write for federation admin)
+      - ./build/install/fed-reg:/usr/src/app/data
+      # Static files (read-only)
+      - ./public:/usr/src/app/public:ro
     networks:
       - federation_net
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   mcp-server:
     build:
@@ -32,41 +45,30 @@ services:
       - "4001:4001"
     environment:
       - MCP_PORT=4001
-      - MCP_ID=mcp-demo
-      - MCP_PUBLIC_KEY=mcp-demo-key
+      - MCP_ID=${MCP_ID:-mcp-demo}
+      - MCP_PUBLIC_KEY=${MCP_PUBLIC_KEY:-mcp-demo-key}
       - MCP_BASE_URL=http://localhost:4001
       - FEDERATION_ADMIN_URL=http://federation-admin:3001
-      - FEDERATION_NAME=alpha
+      - FEDERATION_NAME=${FEDERATION_NAME:-alpha}
       - MCP_PUBLIC_DIR=/usr/src/app/public
+      - FEDMGR_KEYS_PATH=/usr/src/app/keys
     volumes:
-      - mcp_data:/usr/src/app/data
-      # Optional: Mount for development (uncomment to see live changes)
-      # - ./public:/usr/src/app/public
+      # Keys (read-only for security)
+      - ./build/install/keys:/usr/src/app/keys:ro
+      # MCP data directory (read-write)
+      - ./build/install/mcp-instances:/usr/src/app/data
+      # Static files (read-only)
+      - ./public-mcp:/usr/src/app/public:ro
     networks:
       - federation_net
     depends_on:
-      - federation-admin
-
-  volume-init:
-    image: alpine:latest
-    command: >
-      sh -c "
-        chmod 755 /federation_data /mcp_data &&
-        chown 1000:1000 /federation_data /mcp_data &&
-        mkdir -p /federation_data/keys /federation_data/config &&
-        mkdir -p /mcp_data &&
-        chown -R 1000:1000 /federation_data /mcp_data
-      "
-    volumes:
-      - federation_data:/federation_data
-      - mcp_data:/mcp_data
-    networks:
-      - federation_net
-
-volumes:
-  federation_data:
-  mcp_data:
-  config_data:
+      federation-admin:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:4001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
 networks:
   federation_net:

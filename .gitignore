@@ -146,5 +146,7 @@ docker-compose.generated.yaml
 
 build/*
 ./prompts/*
-./apply-md 
+./apply-md
 ./context
+.claude/*
+./.claude/*

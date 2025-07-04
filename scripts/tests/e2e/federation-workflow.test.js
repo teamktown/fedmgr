@@ -5,8 +5,6 @@
  */
 
 const { spawn } = require('child_process');
-// Mock node-fetch to avoid ESM issues
-jest.mock('node-fetch', () => jest.fn());
 const fetch = require('node-fetch');
 const fs = require('fs');
 const path = require('path');
