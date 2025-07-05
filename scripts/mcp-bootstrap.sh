@@ -13,6 +13,20 @@ if [ -d "/usr/src/app/build_data/keys" ]; then
     cp -r /usr/src/app/build_data/keys/* "/usr/src/app/keys/" 2>/dev/null || true
 fi
 
+# Copy MCP instances from build data if they exist
+if [ -d "/usr/src/app/build_data/mcp_instances" ]; then
+    echo "📋 Copying MCP instances from build data..."
+    mkdir -p "/usr/src/app/mcp_instances"
+    cp -r /usr/src/app/build_data/mcp_instances/* "/usr/src/app/mcp_instances/" 2>/dev/null || true
+fi
+
+# Copy MCP protocol servers from build data if they exist
+if [ -d "/usr/src/app/build_data/mcp_protocol_servers" ]; then
+    echo "📋 Copying MCP protocol servers from build data..."
+    mkdir -p "/usr/src/app/mcp_protocol_servers"
+    cp -r /usr/src/app/build_data/mcp_protocol_servers/* "/usr/src/app/mcp_protocol_servers/" 2>/dev/null || true
+fi
+
 echo "🚀 Starting MCP Bootstrap..."
 
 # Set default environment variables if not provided
@@ -35,24 +49,34 @@ echo "   Data directory: $DATA_DIR"
 
 # Function to check if required MCP keys exist
 check_mcp_keys() {
+    # Check for MCP instance keys first (new structure)
+    local mcp_instance_dir="/usr/src/app/mcp_instances/$MCP_ID"
+    local instance_private_key="$mcp_instance_dir/keys/mcp-private.pem"
+    local instance_public_key="$mcp_instance_dir/keys/mcp-public.pem"
+    
+    if [ -f "$instance_private_key" ] && [ -f "$instance_public_key" ]; then
+        echo "✅ MCP instance keys found at $mcp_instance_dir/keys/"
+        # Update KEYS_DIR to point to the instance keys directory for consistency
+        KEYS_DIR="$mcp_instance_dir/keys"
+        return 0
+    fi
+    
+    # Fall back to federation-specific keys (old structure)
     local mcp_key_name="${FEDERATION_NAME}-mcp"
     local private_key="$KEYS_DIR/${mcp_key_name}-private.pem"
     local public_key="$KEYS_DIR/${mcp_key_name}-public.pem"
     
-    if [ ! -f "$private_key" ]; then
-        echo "❌ FATAL: Missing MCP private key: $private_key"
-        echo "   Run './scripts/setup-keys.sh $FEDERATION_NAME' before starting containers"
-        return 1
+    if [ -f "$private_key" ] && [ -f "$public_key" ]; then
+        echo "✅ Federation MCP keys found and accessible"
+        return 0
     fi
     
-    if [ ! -f "$public_key" ]; then
-        echo "❌ FATAL: Missing MCP public key: $public_key"
-        echo "   Run './scripts/setup-keys.sh $FEDERATION_NAME' before starting containers"
-        return 1
-    fi
-    
-    echo "✅ MCP keys found and accessible"
-    return 0
+    # Neither key structure found
+    echo "❌ FATAL: Missing MCP keys"
+    echo "   Looked for instance keys: $instance_private_key"
+    echo "   Looked for federation keys: $private_key"
+    echo "   Run 'fedmgr create mcp $MCP_ID --federation $FEDERATION_NAME' before starting containers"
+    return 1
 }
 
 # Function to check federation admin connectivity
@@ -99,16 +123,23 @@ fi
 
 # Check key permissions and validity
 echo "🔧 Running key validation..."
-if [ -r "$KEYS_DIR/${FEDERATION_NAME}-mcp-private.pem" ]; then
-    echo "✅ MCP private key is readable"
+MCP_PRIVATE_KEY="$KEYS_DIR/mcp-private.pem"
+
+# Handle both new and old key naming
+if [ ! -f "$MCP_PRIVATE_KEY" ]; then
+    MCP_PRIVATE_KEY="$KEYS_DIR/${FEDERATION_NAME}-mcp-private.pem"
+fi
+
+if [ -r "$MCP_PRIVATE_KEY" ]; then
+    echo "✅ MCP private key is readable: $MCP_PRIVATE_KEY"
 else
-    echo "❌ FATAL: MCP private key is not readable - check file permissions"
+    echo "❌ FATAL: MCP private key is not readable - check file permissions: $MCP_PRIVATE_KEY"
     exit 1
 fi
 
 # Test key validity (basic check)
 if command -v openssl >/dev/null 2>&1; then
-    if openssl rsa -in "$KEYS_DIR/${FEDERATION_NAME}-mcp-private.pem" -noout 2>/dev/null; then
+    if openssl rsa -in "$MCP_PRIVATE_KEY" -noout 2>/dev/null; then
         echo "✅ MCP private key appears to be valid"
     else
         echo "❌ FATAL: MCP private key appears to be corrupted or invalid"

@@ -43,7 +43,14 @@ try {
     console.log(`🔧 Using corrected registry path: ${REGISTRY_PATH}`)
   }
 
-  mcpInterface = new MCPInterface(REGISTRY_PATH)
+  const mcpInstancesDir = path.join(FEDMGR_HOME, 'build', 'install', 'mcp_instances');
+  const mcpProtocolServersDir = path.join(FEDMGR_HOME, 'build', 'install', 'mcp_protocol_servers');
+  
+  mcpInterface = new MCPInterface({
+    registryPath: REGISTRY_PATH,
+    mcpInstancesDir: mcpInstancesDir,
+    mcpProtocolServersDir: mcpProtocolServersDir
+  })
 } catch (error) {
   console.error(`❌ Configuration error: ${error.message}`)
   console.error(`   Run 'fedmgr init' to set up your workspace`)

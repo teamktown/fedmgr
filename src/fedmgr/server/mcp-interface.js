@@ -21,9 +21,20 @@ const certificateUtils = require('./utils/certificate-utils');
 const config = require('../config');
 
 class MCPInterface extends EventEmitter {
-  constructor(registryPath) {
+  constructor(options = {}) {
     super();
-    this.registryPath = registryPath || config.federations.registryPath;
+    
+    // Handle backward compatibility - if first arg is string, treat as registryPath
+    if (typeof options === 'string') {
+      this.registryPath = options;
+      this.mcpInstancesDir = path.resolve(__dirname, '../../mcp_instances');
+      this.mcpProtocolServersDir = path.resolve(__dirname, '../../mcp_protocol_servers');
+    } else {
+      this.registryPath = options.registryPath || config.federations.registryPath;
+      this.mcpInstancesDir = options.mcpInstancesDir || path.resolve(__dirname, '../../mcp_instances');
+      this.mcpProtocolServersDir = options.mcpProtocolServersDir || path.resolve(__dirname, '../../mcp_protocol_servers');
+    }
+    
     this.portCounter = 3100;
     this.mcpProcesses = new Map(); // Track running MCP processes
     this.mcpProtocolServers = new Map(); // Track running MCP Protocol servers
@@ -111,7 +122,7 @@ class MCPInterface extends EventEmitter {
       return { success: false, message: `MCP '${name}' already exists` };
     }
 
-    const baseDir = path.resolve(__dirname, '../../mcp_instances', name);
+    const baseDir = path.join(this.mcpInstancesDir, name);
     const keysPath = path.join(baseDir, 'keys');
     const configPath = path.join(baseDir, 'config');
     const entityConfigFile = path.join(configPath, 'entity-configuration.json');
@@ -442,7 +453,7 @@ class MCPInterface extends EventEmitter {
       return { success: false, message: `MCP Protocol Server '${name}' already exists` };
     }
 
-    const baseDir = path.resolve(__dirname, '../../mcp_protocol_servers', name);
+    const baseDir = path.join(this.mcpProtocolServersDir, name);
     const keysPath = path.join(baseDir, 'keys');
     const configPath = path.join(baseDir, 'config');
     const entityConfigFile = path.join(configPath, 'entity-configuration.json');
@@ -532,7 +543,7 @@ class MCPInterface extends EventEmitter {
       return { success: false, message: `MCP Protocol Server '${name}' is already running` };
     }
 
-    const baseDir = path.resolve(__dirname, '../../mcp_protocol_servers', name);
+    const baseDir = path.join(this.mcpProtocolServersDir, name);
     console.log(`🚀 Starting MCP Protocol Server '${name}' on port ${port}...`);
     
     try {
