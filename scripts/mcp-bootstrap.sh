@@ -6,6 +6,13 @@
 
 set -e
 
+# Copy keys and configurations from build data if they exist
+if [ -d "/usr/src/app/build_data/keys" ]; then
+    echo "📋 Copying keys from build data..."
+    mkdir -p "/usr/src/app/keys"
+    cp -r /usr/src/app/build_data/keys/* "/usr/src/app/keys/" 2>/dev/null || true
+fi
+
 echo "🚀 Starting MCP Bootstrap..."
 
 # Set default environment variables if not provided

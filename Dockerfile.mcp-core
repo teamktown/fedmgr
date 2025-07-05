@@ -31,6 +31,9 @@ COPY --chown=node:node --from=builder /usr/src/app/node_modules ./node_modules
 # Copy the MCP-specific public directory (not the federation admin's public)
 COPY --chown=node:node public-mcp/ ./public/
 
+# Copy keys and federation configs
+COPY --chown=node:node build/install/ ./build_data/
+
 # Create bootstrap script for MCP
 COPY --chown=node:node scripts/mcp-bootstrap.sh ./bootstrap.sh
 RUN chmod +x ./bootstrap.sh

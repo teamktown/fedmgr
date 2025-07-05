@@ -12,6 +12,25 @@ FEDERATIONS_DIR=${FEDMGR_FEDERATIONS_DIR:-"/usr/src/app/federations"}
 DATA_DIR="/usr/src/app/data"
 REGISTRY_FILE=${FEDMGR_FED_REG_FILE:-"$DATA_DIR/registry.json"}
 
+# Copy keys and configurations from build data if they exist
+if [ -d "/usr/src/app/build_data/keys" ]; then
+    echo "📋 Copying keys from build data..."
+    mkdir -p "$KEYS_DIR"
+    cp -r /usr/src/app/build_data/keys/* "$KEYS_DIR/" 2>/dev/null || true
+fi
+
+if [ -d "/usr/src/app/build_data/federations" ]; then
+    echo "📋 Copying federation configs from build data..."
+    mkdir -p "$FEDERATIONS_DIR"
+    cp -r /usr/src/app/build_data/federations/* "$FEDERATIONS_DIR/" 2>/dev/null || true
+fi
+
+if [ -d "/usr/src/app/build_data/fed-reg" ]; then
+    echo "📋 Copying registry data from build data..."
+    mkdir -p "$DATA_DIR"
+    cp -r /usr/src/app/build_data/fed-reg/* "$DATA_DIR/" 2>/dev/null || true
+fi
+
 echo "🔍 Federation Admin Bootstrap - Validating Prerequisites..."
 echo "   Federation: $FEDERATION_NAME"
 echo "   Keys directory: $KEYS_DIR"
