@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 services:
   federation-admin:
     build:
@@ -7,9 +7,9 @@ services:
       args:
         FEDMGR_BUILD_REL_NPM_DIR: ./build/npm
     ports:
-      - "3001:3001"
+      - "3001:3007"
     environment:
-      - PORT=3001
+      - PORT=3007
       - GITHUB_CLIENT_ID=${GITHUB_CLIENT_ID}
       - GITHUB_CLIENT_SECRET=${GITHUB_CLIENT_SECRET}
       - OAUTH_REDIRECT_URI=http://localhost:3001/oauth/callback
@@ -19,18 +19,20 @@ services:
       - FEDMGR_FEDERATIONS_DIR=/usr/src/app/federations
       - FEDMGR_FED_REG_FILE=/usr/src/app/data/registry.json
     volumes:
-      # Keys (read-only for security)
-      - ./build/install/keys:/usr/src/app/keys:ro
-      # Federation configurations (read-only)
-      - ./build/install/federations:/usr/src/app/federations:ro
-      # Registry data (read-write for federation admin)
-      - ./build/install/fed-reg:/usr/src/app/data
       # Static files (read-only)
       - ./public:/usr/src/app/public:ro
     networks:
       - federation_net
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3001/health"]
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://localhost:3007/health",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -42,21 +44,17 @@ services:
       args:
         FEDMGR_BUILD_REL_NPM_DIR: ./build/npm
     ports:
-      - "4001:4001"
+      - "4001:4007"
     environment:
-      - MCP_PORT=4001
+      - MCP_PORT=4007
       - MCP_ID=${MCP_ID:-mcp-demo}
       - MCP_PUBLIC_KEY=${MCP_PUBLIC_KEY:-mcp-demo-key}
       - MCP_BASE_URL=http://localhost:4001
-      - FEDERATION_ADMIN_URL=http://federation-admin:3001
+      - FEDERATION_ADMIN_URL=http://federation-admin:3007
       - FEDERATION_NAME=${FEDERATION_NAME:-alpha}
       - MCP_PUBLIC_DIR=/usr/src/app/public
       - FEDMGR_KEYS_PATH=/usr/src/app/keys
     volumes:
-      # Keys (read-only for security)
-      - ./build/install/keys:/usr/src/app/keys:ro
-      # MCP data directory (read-write)
-      - ./build/install/mcp-instances:/usr/src/app/data
       # Static files (read-only)
       - ./public-mcp:/usr/src/app/public:ro
     networks:
@@ -65,7 +63,15 @@ services:
       federation-admin:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:4001/health"]
+      test:
+        [
+          "CMD",
+          "wget",
+          "--quiet",
+          "--tries=1",
+          "--spider",
+          "http://localhost:4007/health",
+        ]
       interval: 30s
       timeout: 10s
       retries: 3
