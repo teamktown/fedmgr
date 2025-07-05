@@ -124,7 +124,10 @@ class OAuthHandler {
       trust_mark_id: `${this.entityConfig.sub}/trust-marks/github-verified`,
       iat: now,
       exp: now + 86400, // 24 hours
-    }, this.privateKey, { algorithm: 'RS256' });
+    }, this.privateKey, { 
+      algorithm: 'RS256'
+      // Note: Not setting expiresIn since payload contains manual exp
+    });
 
     // Create main federation token
     const tokenPayload = {
@@ -168,6 +171,7 @@ class OAuthHandler {
     return jwt.sign(tokenPayload, this.privateKey, {
       algorithm: 'RS256',
       keyid: this.entityConfig.jwks.keys[0].kid
+      // Note: Not setting expiresIn since payload contains manual exp
     });
   }
 

@@ -34,10 +34,14 @@ for (let i = 0; i < args.length; i += 2) {
   if (args[i] === '--federation') fedName = args[i + 1]
 }
 
+// Determine the external port for entity configuration
+// In Docker, the internal port might be different from external port
+const externalPort = process.env.EXTERNAL_PORT || process.env.FEDMGR_EXTERNAL_PORT || '3001'
+
 // GitHub OAuth configuration
 const GITHUB_CLIENT_ID = process.env.GITHUB_CLIENT_ID
 const GITHUB_CLIENT_SECRET = process.env.GITHUB_CLIENT_SECRET
-const OAUTH_REDIRECT_URI = process.env.OAUTH_REDIRECT_URI || `http://localhost:${port}/oauth/callback`
+const OAUTH_REDIRECT_URI = process.env.OAUTH_REDIRECT_URI || `http://localhost:${externalPort}/oauth/callback`
 const OAUTH_STATE_SECRET = process.env.OAUTH_STATE_SECRET || crypto.randomBytes(16).toString('hex')
 
 // Use environment-based paths for Docker compatibility
@@ -71,14 +75,16 @@ let entityConfig = loadEntityConfig(entityConfigPath)
 if (Object.keys(entityConfig).length === 0) {
   const now = Math.floor(Date.now() / 1000)
   entityConfig = {
-    sub: `http://localhost:${port}`,
+    sub: `http://localhost:${externalPort}`,
     metadata: {
       federation_entity: {
         organization_name: `Federation ${fedName}`,
-        federation_fetch_endpoint: `http://localhost:${port}/federation_fetch`,
-        federation_list_endpoint: `http://localhost:${port}/federation_list`,
-        federation_resolve_endpoint: `http://localhost:${port}/resolve`,
-        federation_trust_mark_status_endpoint: `http://localhost:${port}/trust-mark-status`
+        contacts: [`admin@${fedName}.local`],
+        federation_fetch_endpoint: `http://localhost:${externalPort}/federation_fetch`,
+        federation_list_endpoint: `http://localhost:${externalPort}/federation_list`,
+        federation_resolve_endpoint: `http://localhost:${externalPort}/resolve`,
+        federation_trust_mark_status_endpoint: `http://localhost:${externalPort}/trust-mark-status`,
+        trust_marks: []
       },
       openid_relying_party: {
         client_registration_types: ["automatic"],
@@ -100,10 +106,11 @@ if (Object.keys(entityConfig).length === 0) {
     
     // Update federation endpoints to include new required endpoints
     if (entityConfig.metadata && entityConfig.metadata.federation_entity) {
-      entityConfig.metadata.federation_entity.federation_fetch_endpoint = 
-        entityConfig.metadata.federation_entity.federation_fetch_endpoint || `http://localhost:${port}/federation_fetch`
-      entityConfig.metadata.federation_entity.federation_list_endpoint = 
-        entityConfig.metadata.federation_entity.federation_list_endpoint || `http://localhost:${port}/federation_list`
+      // Fix common endpoint URL issues
+      entityConfig.metadata.federation_entity.federation_fetch_endpoint = `http://localhost:${externalPort}/federation_fetch`
+      entityConfig.metadata.federation_entity.federation_list_endpoint = `http://localhost:${externalPort}/federation_list`
+      entityConfig.metadata.federation_entity.federation_resolve_endpoint = `http://localhost:${externalPort}/resolve`
+      entityConfig.metadata.federation_entity.federation_trust_mark_status_endpoint = `http://localhost:${externalPort}/trust-mark-status`
     }
     
     // Only update config if the directory is writable (not in Docker read-only mount)
@@ -150,7 +157,7 @@ const uiServer = createUIServer({
   publicDir,
   fedName,
   clientId: GITHUB_CLIENT_ID,
-  port
+  port: externalPort
 });
 uiServer.registerRoutes(app);
 
@@ -244,15 +251,16 @@ function updateRegistry(updates) {
 }
 
 server.listen(port, () => {
-  console.log(`🛰️ Federation Admin running on http://localhost:${port}`)
+  console.log(`🛰️ Federation Admin running on http://localhost:${externalPort} (internal: ${port})`)
   console.log(`🔑 Federation: ${fedName}`)
   console.log(`🔗 GitHub OAuth: ${GITHUB_CLIENT_ID ? 'Enabled' : 'Disabled'}`)
-  console.log(`📡 Entity config: /.well-known/openid-federation`)
+  console.log(`📡 Entity config: http://localhost:${externalPort}/.well-known/openid-federation`)
+  console.log(`🔍 Debug endpoint: http://localhost:${externalPort}/.well-known/openid-federation-debug`)
   console.log(`🔐 OIDCFed Trust Anchor: ${entityConfig.sub}`)
   console.log(`📁 Public directory: ${publicDir}`)
-  console.log(`🌐 WebSocket server: ws://localhost:${port}/ws`)
-  console.log(`🔗 Admin API: http://localhost:${port}/api/v1`)
-  console.log(`📡 JSON-RPC: http://localhost:${port}/api/v1/jsonrpc`)
+  console.log(`🌐 WebSocket server: ws://localhost:${externalPort}/ws`)
+  console.log(`🔗 Admin API: http://localhost:${externalPort}/api/v1`)
+  console.log(`📡 JSON-RPC: http://localhost:${externalPort}/api/v1/jsonrpc`)
 })
 
 module.exports = app

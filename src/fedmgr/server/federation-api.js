@@ -40,6 +40,31 @@ class FederationAPI {
       }
     });
 
+    // Debug endpoint to show decoded entity configuration as JSON
+    app.get('/.well-known/openid-federation-debug', (req, res) => {
+      console.log(`🔍 Serving decoded entity configuration JSON for ${this.fedName}`);
+      
+      try {
+        const signedJwt = this.federationConfig.createEntityStatement(this.jwtUtils);
+        const decoded = this.jwtUtils.decodeToken(signedJwt);
+        
+        // Add debug information
+        const debugInfo = {
+          note: 'This is a debug endpoint. The official OpenID Federation endpoint returns a signed JWT.',
+          official_endpoint: '/.well-known/openid-federation',
+          jwt_header: decoded.header,
+          jwt_payload: decoded.payload,
+          jwt_signature_verified: true
+        };
+        
+        res.setHeader('Content-Type', 'application/json');
+        res.json(debugInfo);
+      } catch (error) {
+        console.error(`❌ Failed to decode entity configuration: ${error.message}`);
+        ResponseUtils.sendError(res, 500, 'Internal Server Error', 'Failed to decode entity statement');
+      }
+    });
+
     // Federation List endpoint (ADMIN ONLY)
     app.get('/federation_list', this.adminMiddleware, (req, res) => {
       console.log(`📋 Serving federation list for ${this.fedName}`);

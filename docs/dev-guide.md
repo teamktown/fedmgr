@@ -158,7 +158,7 @@ sequenceDiagram
 
     Client ->> MCP: GET .well-known
     MCP -->> Client: entity statement JWS
-    Note right of Client: Verify signature and trust marks\nSpec 5.4 and 7
+    Note right of Client: Verify signature and trust marks - Spec 5.4 and 7
 
     Client ->> GitHub: OAuth authorize
     GitHub -->> Client: auth code
@@ -167,7 +167,7 @@ sequenceDiagram
     FedMgr -->> Client: federated JWT
 
     Client ->> MCP: Bearer JWT
-    Note right of MCP: Validate JWT with cached anchor keys\nSpec 5.2.1
+    Note right of MCP: Validate JWT with cached anchor keys - Spec 5.2.1
     MCP -->> Client: protected response
 
 ```
@@ -230,6 +230,52 @@ sequenceDiagram
     MCP->>MCP: check mark and exp
 ```
 
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Client
+    participant GitHub
+    participant FedMgr
+    participant CA_Sandbox
+    participant MCP
+
+    %% user authenticates
+    Client ->> GitHub: OAuth_authorize
+    GitHub -->> Client: auth_code
+
+    %% branch: obtain upstream credential
+    alt Direct_code_path
+        Client ->> FedMgr: auth_code   %% FedMgr swaps for ID-Token internally
+    else JAG_token_exchange_path
+        Client ->> GitHub: token_endpoint   %% code to ID-Token
+        Client ->> GitHub: rfc_8693_exchange %% ID-Token to JAG_JWT
+        Client ->> FedMgr: JAG_JWT           %% jwt-bearer grant
+    end
+
+    %% FedMgr policy & trust-mark selection
+    FedMgr ->> FedMgr: evaluate_user_policy
+    alt sandbox_mark
+        FedMgr ->> CA_Sandbox: sign_MyOrgFed_sandbox
+        CA_Sandbox -->> FedMgr: sandbox_mark
+    else prod_mark
+        %% prod delegate CA not shown for brevity
+    end
+
+    FedMgr -->> Client: federation_JWT_with_marks
+
+    %% client preflight
+    Client ->> MCP: GET_wellknown
+    MCP -->> Client: entity_statement
+    Client ->> Client: verify_signature_and_required_marks
+
+    %% API call
+    Client ->> MCP: Bearer_JWT
+    MCP -->> Client: protected_response
+```
+
+
+
 # High performance arch
 ```mermaid
 flowchart LR
@@ -244,3 +290,4 @@ flowchart LR
     MCP_Pods -- policy --> OPA_Sidecar
     MCP_Pods -- Vault login --> VaultCluster
 ```
+

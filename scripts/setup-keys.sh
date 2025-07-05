@@ -6,6 +6,10 @@
 
 set -e
 
+echo "### This is deprecated, use fedmgr create fed or other elements to create keys ###"
+exit(1)
+
+
 # Color codes for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'

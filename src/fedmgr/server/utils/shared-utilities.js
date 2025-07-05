@@ -35,13 +35,23 @@ class JWTUtils {
 
   /**
    * Create a signed JWT token
+   * Defensive implementation to handle payload with existing exp claim
    */
   signToken(payload, options = {}) {
     const defaultOptions = {
       algorithm: 'RS256',
-      expiresIn: '1h'
+      // Only set expiresIn if payload doesn't already have exp
+      ...(payload.exp ? {} : { expiresIn: '1h' })
     };
-    return jwt.sign(payload, this.privateKey, { ...defaultOptions, ...options });
+    
+    // Defensive check: if payload has exp and options has expiresIn, remove expiresIn
+    const finalOptions = { ...defaultOptions, ...options };
+    if (payload.exp && finalOptions.expiresIn) {
+      console.warn('⚠️  JWT payload already contains exp claim, removing expiresIn option to prevent conflict');
+      delete finalOptions.expiresIn;
+    }
+    
+    return jwt.sign(payload, this.privateKey, finalOptions);
   }
 
   /**
@@ -75,60 +85,78 @@ class FederationConfig {
    * Create OpenID Federation Entity Statement
    */
   createEntityStatement(jwtUtils, additionalClaims = {}) {
-    const now = Math.floor(Date.now() / 1000);
-    const payload = {
-      ...this.entityConfig,
-      iat: now,
-      exp: now + (24 * 60 * 60), // 24 hours
-      iss: this.entityConfig.sub,
-      ...additionalClaims
-    };
+    try {
+      const now = Math.floor(Date.now() / 1000);
+      const payload = {
+        ...this.entityConfig,
+        iat: now,
+        exp: now + (24 * 60 * 60), // 24 hours
+        iss: this.entityConfig.sub,
+        ...additionalClaims
+      };
 
-    return jwtUtils.signToken(payload, {
-      keyid: this.entityConfig.jwks?.keys?.[0]?.kid
-    });
+      return jwtUtils.signToken(payload, {
+        keyid: this.entityConfig.jwks?.keys?.[0]?.kid
+        // Note: Not setting expiresIn since payload contains manual exp
+      });
+    } catch (error) {
+      console.error('❌ Failed to create entity statement:', error.message);
+      throw new Error(`Entity statement creation failed: ${error.message}`);
+    }
   }
 
   /**
    * Create subordinate statement for an entity
    */
   createSubordinateStatement(jwtUtils, subjectEntityId, metadata = {}) {
-    const now = Math.floor(Date.now() / 1000);
-    const payload = {
-      iss: this.entityConfig.sub,
-      sub: subjectEntityId,
-      iat: now,
-      exp: now + (24 * 60 * 60),
-      metadata: {
-        federation_entity: {
-          organization_name: `Subordinate Entity: ${subjectEntityId}`,
-          trust_marks: [],
-          ...metadata
-        }
-      },
-      jwks: { keys: [] }
-    };
+    try {
+      const now = Math.floor(Date.now() / 1000);
+      const payload = {
+        iss: this.entityConfig.sub,
+        sub: subjectEntityId,
+        iat: now,
+        exp: now + (24 * 60 * 60),
+        metadata: {
+          federation_entity: {
+            organization_name: `Subordinate Entity: ${subjectEntityId}`,
+            trust_marks: [],
+            ...metadata
+          }
+        },
+        jwks: { keys: [] }
+      };
 
-    return jwtUtils.signToken(payload, {
-      keyid: this.entityConfig.jwks?.keys?.[0]?.kid
-    });
+      return jwtUtils.signToken(payload, {
+        keyid: this.entityConfig.jwks?.keys?.[0]?.kid
+        // Note: Not setting expiresIn since payload contains manual exp
+      });
+    } catch (error) {
+      console.error('❌ Failed to create subordinate statement:', error.message);
+      throw new Error(`Subordinate statement creation failed: ${error.message}`);
+    }
   }
 
   /**
    * Create trust mark
    */
   createTrustMark(jwtUtils, subjectId, trustMarkId, additionalClaims = {}) {
-    const now = Math.floor(Date.now() / 1000);
-    const payload = {
-      iss: this.entityConfig.sub,
-      sub: subjectId,
-      trust_mark_id: trustMarkId,
-      iat: now,
-      exp: now + 86400, // 24 hours
-      ...additionalClaims
-    };
+    try {
+      const now = Math.floor(Date.now() / 1000);
+      const payload = {
+        iss: this.entityConfig.sub,
+        sub: subjectId,
+        trust_mark_id: trustMarkId,
+        iat: now,
+        exp: now + 86400, // 24 hours
+        ...additionalClaims
+      };
 
-    return jwtUtils.signToken(payload);
+      return jwtUtils.signToken(payload);
+      // Note: Not setting expiresIn since payload contains manual exp
+    } catch (error) {
+      console.error('❌ Failed to create trust mark:', error.message);
+      throw new Error(`Trust mark creation failed: ${error.message}`);
+    }
   }
 }
 

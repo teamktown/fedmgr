@@ -28,6 +28,9 @@ fi
 echo "�� Building npm packages..."
 ./scripts/build-npm.sh
 
+#TODO: uninstall the old packaged and install the fedmgr package from ./build/npm/letsfederate-fedmgr*tgz
+
+
 # Clean up any existing containers and volumes
 echo "🧹 Cleaning up existing containers..."
 docker-compose down -v
@@ -35,6 +38,9 @@ docker-compose down -v
 # Initialize volumes with proper permissions
 #echo "🔧 Initializing volumes..."
 #docker-compose run --rm volume-init
+
+#TODO: use the new fedmgr package with fedmgr create fed alpha and create test federation sourced from .env $FEDERATION_NAME and if not there, default it to 'alpha'
+
 
 # Start the services
 echo "🚀 Starting services..."

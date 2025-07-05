@@ -19,6 +19,13 @@ if [ -d "/usr/src/app/build_data/keys" ]; then
     cp -r /usr/src/app/build_data/keys/* "$KEYS_DIR/" 2>/dev/null || true
 fi
 
+# Copy federation-specific keys if they exist
+if [ -d "/usr/src/app/build_data/federations/$FEDERATION_NAME/keys" ]; then
+    echo "📋 Copying federation-specific keys from build data..."
+    mkdir -p "$KEYS_DIR"
+    cp -r /usr/src/app/build_data/federations/$FEDERATION_NAME/keys/* "$KEYS_DIR/" 2>/dev/null || true
+fi
+
 if [ -d "/usr/src/app/build_data/federations" ]; then
     echo "📋 Copying federation configs from build data..."
     mkdir -p "$FEDERATIONS_DIR"
@@ -46,13 +53,13 @@ check_keys() {
     
     if [ ! -f "$private_key" ]; then
         echo "❌ FATAL: Missing private key: $private_key"
-        echo "   Run './scripts/setup-keys.sh $FEDERATION_NAME' before starting containers"
+        echo "   Run 'fedmgr create fed $FEDERATION_NAME' before starting containers"
         return 1
     fi
     
     if [ ! -f "$public_key" ]; then
         echo "❌ FATAL: Missing public key: $public_key"
-        echo "   Run './scripts/setup-keys.sh $FEDERATION_NAME' before starting containers"
+        echo "   Run 'fedmgr create fed $FEDERATION_NAME' before starting containers"
         return 1
     fi
     
@@ -66,11 +73,24 @@ check_federation_config() {
     
     if [ ! -f "$config_file" ]; then
         echo "❌ FATAL: Missing federation configuration: $config_file"
-        echo "   Run './scripts/setup-keys.sh $FEDERATION_NAME' before starting containers"
+        echo "   Run 'fedmgr create fed $FEDERATION_NAME' before starting containers"
         return 1
     fi
     
     echo "✅ Federation configuration found: $config_file"
+    
+    # Validate that the JSON is properly formatted
+    if ! command -v jq >/dev/null 2>&1; then
+        echo "⚠️  jq not available, skipping JSON validation"
+    else
+        if jq . "$config_file" >/dev/null 2>&1; then
+            echo "✅ Federation configuration is valid JSON"
+        else
+            echo "❌ FATAL: Federation configuration is not valid JSON: $config_file"
+            return 1
+        fi
+    fi
+    
     return 0
 }
 
@@ -111,9 +131,10 @@ echo "📋 Checking federation configuration..."
 if ! check_federation_config; then
     echo ""
     echo "💡 To generate required configuration, run:"
-    echo "   ./scripts/setup-keys.sh $FEDERATION_NAME"
+    echo "   fedmgr create fed $FEDERATION_NAME"
     exit 1
 fi
+
 
 echo "📄 Checking registry..."
 check_registry
@@ -151,4 +172,36 @@ echo "🚀 Starting Federation Admin for federation '$FEDERATION_NAME'..."
 echo "⏳ Allowing time for service initialization..."
 sleep 2
 
-exec node node_modules/@letsfederate/fedmgr/server/federation-admin.js --federation "$FEDERATION_NAME"
+# Start the federation admin server
+node node_modules/@letsfederate/fedmgr/server/federation-admin.js --federation "$FEDERATION_NAME" &
+FEDMGR_PID=$!
+
+# Wait for server to start and validate OpenID Federation endpoint
+echo "🔍 Waiting for server to start..."
+sleep 5
+
+# Validate that /.well-known/openid-federation endpoint returns a valid JWT
+echo "🔍 Validating OpenID Federation endpoint..."
+if command -v curl >/dev/null 2>&1; then
+    RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:3001/.well-known/openid-federation" 2>/dev/null || echo "000")
+    if [ "$RESPONSE" = "200" ]; then
+        echo "✅ OpenID Federation endpoint is responding (HTTP 200)"
+        JWT_CONTENT=$(curl -s "http://localhost:3001/.well-known/openid-federation" 2>/dev/null || echo "")
+        if [ -n "$JWT_CONTENT" ] && echo "$JWT_CONTENT" | grep -q "^eyJ"; then
+            echo "✅ OpenID Federation endpoint returns valid JWT format"
+        else
+            echo "⚠️  OpenID Federation endpoint response format may be incorrect"
+        fi
+    else
+        echo "⚠️  OpenID Federation endpoint not responding properly (HTTP $RESPONSE)"
+    fi
+else
+    echo "⚠️  curl not available, skipping endpoint validation"
+fi
+
+echo "🎯 Federation Admin is ready at http://localhost:3001"
+echo "📡 OpenID Federation endpoint: http://localhost:3001/.well-known/openid-federation"
+echo "🔍 Debug endpoint: http://localhost:3001/.well-known/openid-federation-debug"
+
+# Wait for the federation admin process
+wait $FEDMGR_PID
