@@ -635,4 +635,7 @@ Note over GW,RS: Begin standard MCP message exchange
 
 ```
 
-Note over GW: Key principles: Fed decides who to trust using trust marks anchored at TA, Runtime tokens remain per recipient with strict aud, No valid mark means no connect
+### Key principles: 
+Fed decides who to trust using trust marks anchored at TA, 
+Runtime tokens remain per recipient with strict aud, 
+No valid mark means no connect
