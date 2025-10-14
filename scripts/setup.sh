@@ -25,10 +25,18 @@ if [ -z "$GITHUB_CLIENT_ID" ] || [ -z "$GITHUB_CLIENT_SECRET" ]; then
 fi
 
 # Build npm packages
-echo "�� Building npm packages..."
+echo "Building npm packages..."
 ./scripts/build-npm.sh
 
 #TODO: uninstall the old packaged and install the fedmgr package from ./build/npm/letsfederate-fedmgr*tgz
+
+echo "Uninstalling old npm packages..."
+npm uninstall -g @letsfederate/fedmgr
+npm uninstall -g @letsfederate/mcp-core
+
+echo "Installing npm packages..."
+npm install -g ./build/npm/letsfederate-fedmgr-0.1.0.tgz
+npm install -g ./build/npm/letsfederate-mcp-core-0.1.0.tgz
 
 
 # Clean up any existing containers and volumes
