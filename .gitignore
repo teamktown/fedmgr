@@ -139,7 +139,8 @@ dist
 mcp_instances/
 federations/
 test-results/*
-
+reports/
+context/
 # automatically build files
 docker-compose.yaml
 docker-compose.generated.yaml
@@ -147,6 +148,21 @@ docker-compose.generated.yaml
 build/*
 ./prompts/*
 ./apply-md
+apply-md
+claude-flow
+.roomodes
+./prompts
+./prompts/
+
 ./context
 .claude/*
 ./.claude/*
+./reports/*
+./reports
+
+CLAUDE.md
+context
+test-federations/
+./build
+prompts
+filter.txt

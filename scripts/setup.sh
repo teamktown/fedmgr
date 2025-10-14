@@ -39,8 +39,8 @@ docker-compose down -v
 #echo "🔧 Initializing volumes..."
 #docker-compose run --rm volume-init
 
-#TODO: use the new fedmgr package with fedmgr create fed alpha and create test federation sourced from .env $FEDERATION_NAME and if not there, default it to 'alpha'
-
+# Ensure a test federation exists in the build/federations with appropriate private keys 
+fedmgr create fed alpha
 
 # Start the services
 echo "🚀 Starting services..."
