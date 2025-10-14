@@ -88,7 +88,7 @@ const validateFederationJwt = async (req, res, next) => {
     
     let validationResponse;
     try {
-      validationResponse = await fetch(`${federationAdminUrl}/validate-token`, {
+      validationResponse = await fetch(`${federationAdminUrl}/api/v1/federation/validate-token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ token }),

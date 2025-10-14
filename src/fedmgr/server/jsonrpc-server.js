@@ -391,8 +391,119 @@ class JSONRPCServer extends EventEmitter {
   }
   
   async validateFederationToken(params) {
-    // TODO: Implement federation token validation
-    throw new Error('Federation token validation not implemented');
+    const { token } = params;
+    
+    if (!token) {
+      throw new Error('Token is required');
+    }
+    
+    try {
+      // Import JWT library
+      const jwt = require('jsonwebtoken');
+      
+      // Decode token without verification first to get claims
+      const decoded = jwt.decode(token, { complete: true });
+      if (!decoded) {
+        return {
+          valid: false,
+          error: 'Invalid token format',
+          trust_chain_valid: false
+        };
+      }
+      
+      const payload = decoded.payload;
+      const issuer = payload.iss;
+      const subject = payload.sub;
+      
+      // Check if token is expired
+      const now = Math.floor(Date.now() / 1000);
+      if (payload.exp && payload.exp < now) {
+        return {
+          valid: false,
+          error: 'Token has expired',
+          trust_chain_valid: false
+        };
+      }
+      
+      // Load federation public key for verification
+      // Try multiple possible locations for the federation public key
+      const possiblePaths = [
+        path.join('/usr/src/app/build_data/federations/alpha/keys/anchor-public.pem'),
+        path.join(this.federationsDir, 'alpha', 'keys', 'anchor-public.pem'),
+        path.join(this.federationsDir, 'keys', 'anchor-public.pem'),
+        path.join(__dirname, '../../../federations/alpha/keys/anchor-public.pem'),
+        path.join(__dirname, '../../../build_data/federations/alpha/keys/anchor-public.pem')
+      ];
+      
+      let publicKeyPath = null;
+      for (const testPath of possiblePaths) {
+        if (fs.existsSync(testPath)) {
+          publicKeyPath = testPath;
+          break;
+        }
+      }
+      
+      if (!publicKeyPath) {
+        return {
+          valid: false,
+          error: `Federation public key not found. Tried paths: ${possiblePaths.join(', ')}`,
+          trust_chain_valid: false
+        };
+      }
+      
+      const publicKey = fs.readFileSync(publicKeyPath, 'utf-8');
+      
+      // Verify token signature
+      let verifiedPayload;
+      try {
+        verifiedPayload = jwt.verify(token, publicKey, { algorithms: ['RS256'] });
+      } catch (verifyError) {
+        return {
+          valid: false,
+          error: `Token signature verification failed: ${verifyError.message}`,
+          trust_chain_valid: false
+        };
+      }
+      
+      // Validate trust chain
+      const trustChainValid = verifiedPayload.trust_chain && 
+                             verifiedPayload.trust_chain.includes(issuer);
+      
+      // Check required claims
+      const requiredClaims = ['iss', 'sub', 'aud', 'exp', 'iat'];
+      const missingClaims = requiredClaims.filter(claim => !verifiedPayload[claim]);
+      
+      if (missingClaims.length > 0) {
+        return {
+          valid: false,
+          error: `Missing required claims: ${missingClaims.join(', ')}`,
+          trust_chain_valid: false
+        };
+      }
+      
+      // Token is valid
+      return {
+        valid: true,
+        payload: verifiedPayload,
+        trust_chain_valid: trustChainValid,
+        trust_anchor: issuer,
+        validation_details: {
+          signature_verified: true,
+          not_expired: true,
+          trust_chain_valid: trustChainValid,
+          audience_valid: Array.isArray(verifiedPayload.aud) && verifiedPayload.aud.length > 0,
+          trust_marks_present: Array.isArray(verifiedPayload.trust_marks) && verifiedPayload.trust_marks.length > 0,
+          federation_entity_present: !!verifiedPayload.federation_entity
+        }
+      };
+      
+    } catch (error) {
+      return {
+        valid: false,
+        error: `Token validation failed: ${error.message}`,
+        trust_chain_valid: false
+      };
+    }
   }
   
   async listMCPServers() {

@@ -144,6 +144,19 @@
                         <h4>User Information</h4>
                         <div id="user-details"></div>
                     </div>
+                    <div id="federation-token-section" style="display: none; margin-top: 15px;">
+                        <h4>🏷️ Federation Token</h4>
+                        <div class="token-display" id="federation-token-display" style="max-height: 100px; overflow-y: auto;"></div>
+                        <div style="margin-top: 10px;">
+                            <button class="btn btn-sm btn-success" onclick="copyFederationToken()">📋 Copy Token</button>
+                            <button class="btn btn-sm btn-primary" onclick="decodeFederationToken()">🔍 Decode Token</button>
+                            <button class="btn btn-sm btn-warning" onclick="testMcpWithToken()">🤖 Test MCP Server</button>
+                        </div>
+                        <div id="decoded-federation-token" style="display: none; margin-top: 15px;">
+                            <h5>📄 Decoded Token</h5>
+                            <div id="federation-token-payload" class="log-display" style="max-height: 300px; overflow-y: auto;"></div>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="card">
@@ -581,6 +594,8 @@
             document.getElementById('token-container').style.display = 'none';
             document.getElementById('no-token').style.display = 'block';
             document.getElementById('decoded-token').style.display = 'none';
+            document.getElementById('federation-token-section').style.display = 'none';
+            document.getElementById('decoded-federation-token').style.display = 'none';
         }
 
         function updateAuthStatus(authenticated, username = null) {
@@ -588,6 +603,7 @@
             const loginBtn = document.getElementById('login-btn');
             const logoutBtn = document.getElementById('logout-btn');
             const userInfo = document.getElementById('user-info');
+            const tokenSection = document.getElementById('federation-token-section');
             
             if (authenticated && username) {
                 statusEl.className = 'status success';
@@ -595,18 +611,44 @@
                 loginBtn.style.display = 'none';
                 logoutBtn.style.display = 'inline-block';
                 userInfo.style.display = 'block';
+                
+                // Decode token to get user info and trust marks
+                let userRole = 'User';
+                let trustMarks = [];
+                let isAdmin = false;
+                
+                if (currentToken) {
+                    try {
+                        const parts = currentToken.split('.');
+                        const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+                        isAdmin = payload.admin === true || payload.role === 'admin' || (payload.roles && payload.roles.includes('admin'));
+                        userRole = isAdmin ? 'Trust Anchor Administrator' : 'Federation User';
+                        trustMarks = payload.trust_marks || [];
+                    } catch (e) {
+                        console.warn('Error decoding token for user info:', e);
+                    }
+                }
+                
                 document.getElementById('user-details').innerHTML = `
                     <p><strong>GitHub Username:</strong> ${username}</p>
-                    <p><strong>Federation Role:</strong> Trust Anchor Authority</p>
-                    <p><strong>Token Authority:</strong> Can issue federation tokens</p>
+                    <p><strong>Federation Role:</strong> ${userRole}</p>
+                    <p><strong>Trust Marks:</strong> ${trustMarks.length} issued</p>
+                    <p><strong>Admin Status:</strong> ${isAdmin ? '✅ Administrator' : '👤 Standard User'}</p>
                     <p><strong>Trust Chain:</strong> Root level (self-issued)</p>
                 `;
+                
+                // Show federation token section if we have a token
+                if (currentToken) {
+                    tokenSection.style.display = 'block';
+                    displayFederationToken(currentToken);
+                }
             } else {
                 statusEl.className = 'status offline';
                 statusEl.innerHTML = 'Not authenticated';
                 loginBtn.style.display = 'inline-block';
                 logoutBtn.style.display = 'none';
                 userInfo.style.display = 'none';
+                tokenSection.style.display = 'none';
             }
         }
 
@@ -651,6 +693,86 @@
                 window.open(mcpUrl, '_blank');
             } else {
                 alert('Please login first to get a token');
+            }
+        }
+
+        // Federation token management
+        function displayFederationToken(token) {
+            const tokenDisplay = document.getElementById('federation-token-display');
+            if (tokenDisplay) {
+                tokenDisplay.textContent = token;
+            }
+        }
+
+        function copyFederationToken() {
+            if (currentToken) {
+                navigator.clipboard.writeText(currentToken).then(() => {
+                    // Create a temporary success message
+                    const originalText = event.target.textContent;
+                    event.target.textContent = '✅ Copied!';
+                    event.target.style.background = '#28a745';
+                    setTimeout(() => {
+                        event.target.textContent = originalText;
+                        event.target.style.background = '';
+                    }, 2000);
+                }).catch(() => {
+                    alert('Failed to copy token to clipboard');
+                });
+            } else {
+                alert('No token available to copy');
+            }
+        }
+
+        function decodeFederationToken() {
+            if (!currentToken) {
+                alert('No token available to decode');
+                return;
+            }
+            
+            try {
+                const parts = currentToken.split('.');
+                const header = JSON.parse(atob(parts[0].replace(/-/g, '+').replace(/_/g, '/')));
+                const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+
+                // Create a nicely formatted view of the token
+                const decodedInfo = {
+                    'JWT Header': header,
+                    'User Identity': {
+                        subject: payload.sub,
+                        preferred_username: payload.preferred_username,
+                        name: payload.name || 'Not provided',
+                        email: payload.email || 'Not provided',
+                        picture: payload.picture || 'Not provided'
+                    },
+                    'Federation Claims': {
+                        issuer: payload.iss,
+                        audience: payload.aud,
+                        issued_at: new Date(payload.iat * 1000).toISOString(),
+                        expires_at: new Date(payload.exp * 1000).toISOString(),
+                        auth_time: new Date(payload.auth_time * 1000).toISOString()
+                    },
+                    'Trust Information': {
+                        trust_chain: payload.trust_chain || [],
+                        trust_marks: payload.trust_marks || [],
+                        federation_entity: payload.federation_entity || {}
+                    },
+                    'Authorization': {
+                        role: payload.role || 'user',
+                        roles: payload.roles || ['user'],
+                        admin: payload.admin || false
+                    },
+                    'GitHub Information': payload.github || {},
+                    'Full Payload': payload
+                };
+                
+                document.getElementById('federation-token-payload').textContent = JSON.stringify(decodedInfo, null, 2);
+                document.getElementById('decoded-federation-token').style.display = 'block';
+                
+                // Scroll to the decoded token section
+                document.getElementById('decoded-federation-token').scrollIntoView({ behavior: 'smooth' });
+                
+            } catch (error) {
+                alert('Error decoding token: ' + error.message);
             }
         }
 
@@ -721,8 +843,26 @@
         async function refreshFederationConfig() {
             try {
                 const response = await fetch('/.well-known/openid-federation');
-                const data = await response.json();
-                document.getElementById('federation-config').textContent = JSON.stringify(data, null, 2);
+                const jwtText = await response.text();
+                
+                // Parse JWT to extract the payload
+                const parts = jwtText.split('.');
+                if (parts.length !== 3) {
+                    throw new Error('Invalid JWT format');
+                }
+                
+                const header = JSON.parse(atob(parts[0].replace(/-/g, '+').replace(/_/g, '/')));
+                const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+                
+                // Display the parsed JWT content
+                const federationConfigDisplay = {
+                    note: 'This is the decoded OpenID Federation entity configuration from the signed JWT',
+                    jwt_header: header,
+                    jwt_payload: payload,
+                    raw_jwt: jwtText.substring(0, 100) + '...'
+                };
+                
+                document.getElementById('federation-config').textContent = JSON.stringify(federationConfigDisplay, null, 2);
             } catch (error) {
                 document.getElementById('federation-config').textContent = 'Error loading federation config: ' + error.message;
             }
