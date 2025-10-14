@@ -48,9 +48,21 @@ docker-compose down -v
 #docker-compose run --rm volume-init
 
 # Ensure a test federation exists in the build/federations with appropriate private keys 
+# this creates the boilerplate for a federation and an MCP instance
+
+echo "📁 Setting up federation and MCP instance..."
 fedmgr create fed alpha
 
+echo "✅ Federation 'alpha' created"
+
+echo "Setting up MCP instance 'mcp-demo' in federation 'alpha'"
+fedmgr create mcp mcp-demo --federation alpha
+
+echo "✅ MCP instance 'mcp-demo' created in federation 'alpha'"
+
+
 # Start the services
+
 echo "🚀 Starting services..."
 docker-compose up --build -d
 
