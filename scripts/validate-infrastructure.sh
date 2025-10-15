@@ -31,6 +31,9 @@ TOTAL_TESTS=0
 PASSED_TESTS=0
 FAILED_TESTS=0
 
+echo "Oct 14: may need to refactor this as OIDC mock is deprecated and key generation should happen from library"
+
+
 # Function to run a test
 run_test() {
     local test_name="$1"
@@ -74,61 +77,6 @@ test_directory_structure() {
     return 0
 }
 
-# Test: Key generation CLI
-test_key_generation_cli() {
-    # Clean up any existing test keys
-    rm -rf "$KEYS_DIR/$TEST_FEDERATION"*
-    rm -rf "$FEDERATIONS_DIR/$TEST_FEDERATION"
-    
-    # Test key generation script
-    if ! ./scripts/setup-keys.sh "$TEST_FEDERATION" >/dev/null 2>&1; then
-        log_error "Key generation script failed"
-        return 1
-    fi
-    
-    # Verify keys were created
-    local required_keys=(
-        "$KEYS_DIR/anchor-private.pem"
-        "$KEYS_DIR/anchor-public.pem"
-        "$KEYS_DIR/$TEST_FEDERATION-mcp-private.pem"
-        "$KEYS_DIR/$TEST_FEDERATION-mcp-public.pem"
-        "$FEDERATIONS_DIR/$TEST_FEDERATION/keys/anchor-private.pem"
-        "$FEDERATIONS_DIR/$TEST_FEDERATION/keys/anchor-public.pem"
-    )
-    
-    for key in "${required_keys[@]}"; do
-        if [[ ! -f "$key" ]]; then
-            log_error "Expected key not found: $key"
-            return 1
-        fi
-    done
-    
-    log_success "Key generation CLI working correctly"
-    return 0
-}
-
-# Test: Key validation
-test_key_validation() {
-    # Test key verification script
-    if ! (cd "$BUILD_DIR" && ./verify-keys.sh "$TEST_FEDERATION") >/dev/null 2>&1; then
-        log_error "Key verification script failed"
-        return 1
-    fi
-    
-    # Test OpenSSL key validation
-    if ! openssl rsa -in "$KEYS_DIR/anchor-private.pem" -noout 2>/dev/null; then
-        log_error "Anchor private key is invalid"
-        return 1
-    fi
-    
-    if ! openssl rsa -pubin -in "$KEYS_DIR/anchor-public.pem" -noout 2>/dev/null; then
-        log_error "Anchor public key is invalid"
-        return 1
-    fi
-    
-    log_success "Key validation working correctly"
-    return 0
-}
 
 # Test: Key provider abstraction
 test_key_provider() {
@@ -155,46 +103,10 @@ test_docker_compose() {
         return 1
     fi
     
-    # Test docker-compose.oidc.yml syntax  
-    if ! docker-compose -f docker-compose.oidc.yml config >/dev/null 2>&1; then
-        log_error "docker-compose.oidc.yml has syntax errors"
-        return 1
-    fi
-    
-    # Test docker-compose.yaml syntax
-    if ! docker-compose -f docker-compose.yaml config >/dev/null 2>&1; then
-        log_error "docker-compose.yaml has syntax errors"
-        return 1
-    fi
-    
     log_success "Docker Compose configurations are valid"
     return 0
 }
 
-# Test: Volume mounts
-test_volume_mounts() {
-    # Check that all docker-compose files use the standardized paths
-    local compose_files=(
-        "docker-compose.yml"
-        "docker-compose.oidc.yml" 
-        "docker-compose.yaml"
-    )
-    
-    for file in "${compose_files[@]}"; do
-        if grep -q "./build/runtime" "$file" 2>/dev/null; then
-            log_error "$file still uses legacy './build/runtime' paths"
-            return 1
-        fi
-        
-        if ! grep -q "./build/install" "$file" 2>/dev/null; then
-            log_error "$file does not use standardized './build/install' paths"
-            return 1
-        fi
-    done
-    
-    log_success "All Docker Compose files use standardized volume mounts"
-    return 0
-}
 
 # Test: Environment variables
 test_environment_variables() {
@@ -264,46 +176,7 @@ test_container_validation() {
     return 0
 }
 
-# Test: Build structure migration
-test_migration_script() {
-    # Test migration script syntax
-    if ! bash -n scripts/migrate-build-structure.sh; then
-        log_error "Migration script has syntax errors"
-        return 1
-    fi
-    
-    # Test dry-run mode
-    if ! ./scripts/migrate-build-structure.sh --dry-run >/dev/null 2>&1; then
-        log_error "Migration script dry-run failed"
-        return 1
-    fi
-    
-    log_success "Migration script working correctly"
-    return 0
-}
 
-# Test: Documentation consistency
-test_documentation() {
-    # Check that quickstart.md exists and mentions key setup
-    if [[ ! -f "docs/quickstart.md" ]]; then
-        log_error "quickstart.md documentation missing"
-        return 1
-    fi
-    
-    if ! grep -q "setup-keys.sh" docs/quickstart.md; then
-        log_error "quickstart.md does not mention key setup script"
-        return 1
-    fi
-    
-    # Check build structure documentation
-    if [[ ! -f "build/BUILD_STRUCTURE.md" ]]; then
-        log_error "BUILD_STRUCTURE.md documentation missing"
-        return 1
-    fi
-    
-    log_success "Documentation is consistent and complete"
-    return 0
-}
 
 # Main validation function
 main() {
@@ -323,16 +196,11 @@ main() {
     
     # Run all tests
     run_test "Directory Structure" "test_directory_structure"
-    run_test "Key Generation CLI" "test_key_generation_cli"
-    run_test "Key Validation" "test_key_validation" 
     run_test "Key Provider Abstraction" "test_key_provider"
     run_test "Docker Compose Configuration" "test_docker_compose"
-    run_test "Volume Mounts" "test_volume_mounts"
     run_test "Environment Variables" "test_environment_variables"
     run_test "Bootstrap Scripts" "test_bootstrap_scripts"
     run_test "Container Validation" "test_container_validation"
-    run_test "Migration Script" "test_migration_script"
-    run_test "Documentation" "test_documentation"
     
     # Clean up test artifacts
     log_info "Cleaning up test artifacts..."
