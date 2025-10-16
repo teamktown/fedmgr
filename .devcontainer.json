@@ -1,7 +1,7 @@
 {
   "name": "FedMgr Development Environment",
   "image": "mcr.microsoft.com/devcontainers/javascript-node:22",
-  
+
   "features": {
     "ghcr.io/devcontainers/features/docker-in-docker:2": {
       "version": "latest",
@@ -11,8 +11,8 @@
       "version": "latest"
     }
   },
-  
- /* "forwardPorts": [3000, 8080],
+
+  /* "forwardPorts": [3000, 8080],
   "portsAttributes": {
     "3000": {
       "label": "FedMgr Server",
@@ -28,7 +28,7 @@
   "containerEnv": {
     "NODE_ENV": "development"
   },
-  
+
   "customizations": {
     "vscode": {
       "extensions": [
@@ -56,19 +56,18 @@
       }
     }
   },
-  
+
   "onCreateCommand": "true",
   "postCreateCommand": "true",
   "postStartCommand": "true",
-//  "onCreateCommand": "npm install",
- // "postCreateCommand": "chmod +x scripts/*.sh && chmod +x claude-flow",
- // "postStartCommand": "npm run test:unit",
-
-  
+  //  "onCreateCommand": "npm install",
+  // "postCreateCommand": "chmod +x scripts/*.sh && chmod +x claude-flow",
+  // "postStartCommand": "npm run test:unit",
 
   "remoteUser": "node",
-  "workspaceFolder": "/workspace",
-  "mounts": [
+  "workspaceFolder": "/workspace"
+  /*  "mounts": [
     "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
   ]
+*/
 }
