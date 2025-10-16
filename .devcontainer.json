@@ -5,7 +5,7 @@
   "features": {
     "ghcr.io/devcontainers/features/docker-in-docker:2": {
       "version": "latest",
-      "enableNonRootDocker": "true"
+      "enableNonRootDocker": true
     },
     "ghcr.io/devcontainers/features/git:1": {
       "version": "latest"
@@ -59,13 +59,25 @@
 
   "onCreateCommand": "true",
   "postCreateCommand": "true",
-  "postStartCommand": "true",
+  //  "postStartCommand": "true",
   //  "onCreateCommand": "npm install",
   // "postCreateCommand": "chmod +x scripts/*.sh && chmod +x claude-flow",
   // "postStartCommand": "npm run test:unit",
 
+  "postStartCommand": "sudo /usr/local/share/docker-init.sh",
+  "runArgs": [
+    "--privileged",
+    "--init",
+    "--tmpfs",
+    "/tmp",
+    "--tmpfs",
+    "/run",
+    "--cgroupns=host"
+  ],
+
   "remoteUser": "node",
   "workspaceFolder": "/workspace"
+
   /*  "mounts": [
     "source=/var/run/docker.sock,target=/var/run/docker.sock,type=bind"
   ]
