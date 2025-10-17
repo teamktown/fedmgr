@@ -9,6 +9,14 @@
     },
     "ghcr.io/devcontainers/features/git:1": {
       "version": "latest"
+    },
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "22",
+      "installTools": true, // includes nvm/node tools
+
+      "enableGlobalCache": false, // default is fine; set true for pnpm global cache
+
+      "nodeGypDependencies": true // installs build deps for native modules // or "20", "22.10", etc.
     }
   },
 
