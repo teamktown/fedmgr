@@ -75,7 +75,7 @@
     "--cgroupns=host"
   ],
 
-  "remoteUser": "node",
+  "remoteUser": "vscode",
   "workspaceFolder": "/workspace"
 
   /*  "mounts": [
