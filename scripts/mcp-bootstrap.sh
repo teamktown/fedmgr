@@ -6,27 +6,6 @@
 
 set -e
 
-# Copy keys and configurations from build data if they exist
-if [ -d "/usr/src/app/build_data/keys" ]; then
-    echo "📋 Copying keys from build data..."
-    mkdir -p "/usr/src/app/keys"
-    cp -r /usr/src/app/build_data/keys/* "/usr/src/app/keys/" 2>/dev/null || true
-fi
-
-# Copy MCP instances from build data if they exist
-if [ -d "/usr/src/app/build_data/mcp_instances" ]; then
-    echo "📋 Copying MCP instances from build data..."
-    mkdir -p "/usr/src/app/mcp_instances"
-    cp -r /usr/src/app/build_data/mcp_instances/* "/usr/src/app/mcp_instances/" 2>/dev/null || true
-fi
-
-# Copy MCP protocol servers from build data if they exist
-if [ -d "/usr/src/app/build_data/mcp_protocol_servers" ]; then
-    echo "📋 Copying MCP protocol servers from build data..."
-    mkdir -p "/usr/src/app/mcp_protocol_servers"
-    cp -r /usr/src/app/build_data/mcp_protocol_servers/* "/usr/src/app/mcp_protocol_servers/" 2>/dev/null || true
-fi
-
 echo "🚀 Starting MCP Bootstrap..."
 
 # Set default environment variables if not provided
@@ -40,6 +19,20 @@ export FEDERATION_NAME=${FEDERATION_NAME:-"alpha"}
 # Key and configuration paths
 KEYS_DIR=${FEDMGR_KEYS_PATH:-"/usr/src/app/keys"}
 DATA_DIR="/usr/src/app/data"
+MCP_INSTANCES_DIR=${FEDMGR_MCP_INSTANCES_DIR:-"/usr/src/app/mcp_instances"}
+
+# Ensure mounted directories exist
+if [ ! -d "$KEYS_DIR" ]; then
+    echo "❌ FATAL: Keys directory not found at $KEYS_DIR"
+    echo "   Ensure the host keys directory is mounted into the container."
+    exit 1
+fi
+
+if [ ! -d "$MCP_INSTANCES_DIR" ]; then
+    echo "❌ FATAL: MCP instances directory not found at $MCP_INSTANCES_DIR"
+    echo "   Ensure the host MCP instances directory is mounted into the container."
+    exit 1
+fi
 
 echo "🔍 MCP Bootstrap - Validating Prerequisites..."
 echo "   MCP ID: $MCP_ID"
@@ -50,7 +43,7 @@ echo "   Data directory: $DATA_DIR"
 # Function to check if required MCP keys exist
 check_mcp_keys() {
     # Check for MCP instance keys first (new structure)
-    local mcp_instance_dir="/usr/src/app/mcp_instances/$MCP_ID"
+    local mcp_instance_dir="$MCP_INSTANCES_DIR/$MCP_ID"
     local instance_private_key="$mcp_instance_dir/keys/mcp-private.pem"
     local instance_public_key="$mcp_instance_dir/keys/mcp-public.pem"
     

@@ -61,6 +61,45 @@ fedmgr create mcp mcp-demo --federation alpha
 echo "✅ MCP instance 'mcp-demo' created in federation 'alpha'"
 
 
+# Validate that key directories exist before starting containers
+FEDERATION_NAME=${FEDERATION_NAME:-alpha}
+MCP_INSTANCE=${MCP_ID:-mcp-demo}
+ANCHOR_KEYS_DIR="./build/install/federations/${FEDERATION_NAME}/keys"
+MCP_KEYS_DIR="./build/install/mcp_instances/${MCP_INSTANCE}/keys"
+REGISTRY_DIR="./build/install/fed-reg"
+
+echo "🔍 Validating required directories before container startup..."
+
+if [ ! -d "$ANCHOR_KEYS_DIR" ]; then
+    echo "❌ Missing federation keys directory: $ANCHOR_KEYS_DIR"
+    echo "   Ensure 'fedmgr create fed ${FEDERATION_NAME}' completed successfully before running docker-compose."
+    exit 1
+fi
+
+if [ ! -f "$ANCHOR_KEYS_DIR/anchor-private.pem" ] || [ ! -f "$ANCHOR_KEYS_DIR/anchor-public.pem" ]; then
+    echo "❌ Federation key files not found in $ANCHOR_KEYS_DIR"
+    echo "   Expected anchor-private.pem and anchor-public.pem to exist."
+    exit 1
+fi
+
+if [ ! -d "$MCP_KEYS_DIR" ]; then
+    echo "❌ Missing MCP keys directory: $MCP_KEYS_DIR"
+    echo "   Ensure 'fedmgr create mcp ${MCP_INSTANCE} --federation ${FEDERATION_NAME}' completed successfully before running docker-compose."
+    exit 1
+fi
+
+if [ ! -f "$MCP_KEYS_DIR/mcp-private.pem" ] || [ ! -f "$MCP_KEYS_DIR/mcp-public.pem" ]; then
+    echo "❌ MCP key files not found in $MCP_KEYS_DIR"
+    echo "   Expected mcp-private.pem and mcp-public.pem to exist."
+    exit 1
+fi
+
+if [ ! -d "$REGISTRY_DIR" ]; then
+    echo "ℹ️  Creating registry directory at $REGISTRY_DIR"
+    mkdir -p "$REGISTRY_DIR"
+fi
+
+
 # Start the services
 
 echo "🚀 Starting services..."
