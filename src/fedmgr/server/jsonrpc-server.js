@@ -427,13 +427,16 @@ class JSONRPCServer extends EventEmitter {
       
       // Load federation public key for verification
       // Try multiple possible locations for the federation public key
+      const envKeyPath = process.env.FEDMGR_KEYS_PATH
+        ? path.join(process.env.FEDMGR_KEYS_PATH, 'anchor-public.pem')
+        : null;
+
       const possiblePaths = [
-        path.join('/usr/src/app/build_data/federations/alpha/keys/anchor-public.pem'),
+        envKeyPath,
         path.join(this.federationsDir, 'alpha', 'keys', 'anchor-public.pem'),
         path.join(this.federationsDir, 'keys', 'anchor-public.pem'),
-        path.join(__dirname, '../../../federations/alpha/keys/anchor-public.pem'),
-        path.join(__dirname, '../../../build_data/federations/alpha/keys/anchor-public.pem')
-      ];
+        path.join(__dirname, '../../../federations/alpha/keys/anchor-public.pem')
+      ].filter(Boolean);
       
       let publicKeyPath = null;
       for (const testPath of possiblePaths) {

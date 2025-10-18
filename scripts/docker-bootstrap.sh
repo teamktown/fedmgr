@@ -12,37 +12,24 @@ FEDERATIONS_DIR=${FEDMGR_FEDERATIONS_DIR:-"/usr/src/app/federations"}
 DATA_DIR="/usr/src/app/data"
 REGISTRY_FILE=${FEDMGR_FED_REG_FILE:-"$DATA_DIR/registry.json"}
 
-# Copy keys and configurations from build data if they exist
-if [ -d "/usr/src/app/build_data/keys" ]; then
-    echo "📋 Copying keys from build data..."
-    mkdir -p "$KEYS_DIR"
-    cp -r /usr/src/app/build_data/keys/* "$KEYS_DIR/" 2>/dev/null || true
-fi
-
-# Copy federation-specific keys if they exist
-if [ -d "/usr/src/app/build_data/federations/$FEDERATION_NAME/keys" ]; then
-    echo "📋 Copying federation-specific keys from build data..."
-    mkdir -p "$KEYS_DIR"
-    cp -r /usr/src/app/build_data/federations/$FEDERATION_NAME/keys/* "$KEYS_DIR/" 2>/dev/null || true
-fi
-
-if [ -d "/usr/src/app/build_data/federations" ]; then
-    echo "📋 Copying federation configs from build data..."
-    mkdir -p "$FEDERATIONS_DIR"
-    cp -r /usr/src/app/build_data/federations/* "$FEDERATIONS_DIR/" 2>/dev/null || true
-fi
-
-if [ -d "/usr/src/app/build_data/fed-reg" ]; then
-    echo "📋 Copying registry data from build data..."
-    mkdir -p "$DATA_DIR"
-    cp -r /usr/src/app/build_data/fed-reg/* "$DATA_DIR/" 2>/dev/null || true
-fi
-
 echo "🔍 Federation Admin Bootstrap - Validating Prerequisites..."
 echo "   Federation: $FEDERATION_NAME"
 echo "   Keys directory: $KEYS_DIR"
 echo "   Federations directory: $FEDERATIONS_DIR"
 echo "   Registry file: $REGISTRY_FILE"
+
+# Ensure mounted directories exist
+if [ ! -d "$KEYS_DIR" ]; then
+    echo "❌ FATAL: Keys directory not found at $KEYS_DIR"
+    echo "   Ensure the host keys directory is mounted into the container."
+    exit 1
+fi
+
+if [ ! -d "$FEDERATIONS_DIR" ]; then
+    echo "❌ FATAL: Federations directory not found at $FEDERATIONS_DIR"
+    echo "   Ensure the host federations directory is mounted into the container."
+    exit 1
+fi
 
 # Function to check if required keys exist
 check_keys() {
