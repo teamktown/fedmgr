@@ -57,34 +57,44 @@ GITHUB_CLIENT_SECRET=abc123def456ghi789jkl012mno345pqr678stu
 FEDERATION_NAME=alpha
 ```
 
-### 4. Generate Required Cryptographic Keys
+### 4. Run the Setup Script (Generates Keys & Default MCP)
 
-**Important**: Keys must be generated before starting containers.
+`./scripts/setup.sh` is now required **before** any Docker builds. It prepares the
+filesystem layout that is mounted into the containers and creates the default
+federation and MCP instance.
 
 ```bash
-# Generate federation keys and configurations
-./scripts/setup-keys.sh alpha
+# Build packages, generate keys, and scaffold default assets
+./scripts/setup.sh
 ```
 
-This script will create:
-- Federation anchor keys (trust anchor)
-- Federation entity keys (federation-specific)
-- MCP server keys
-- Entity configuration files
-- OIDC mock configuration
+Running the setup script will:
+1. Build the npm packages (`@letsfederate/fedmgr` and `@letsfederate/mcp-core`)
+2. Generate federation keys and configuration under `build/install/`
+3. Create the default MCP instance (`mcp-demo`) under `/usr/src/app/build/install/mcp_instances`
+4. Clean up any existing containers and attempt to start the stack
+
+After the script finishes (or after the build phase if you stop it before the
+Docker step), verify that the following host directories now exist:
+
+- `build/install/keys` – shared federation anchor keys copied into containers as `/usr/src/app/keys`
+- `build/install/federations/<federation-name>` – federation configs copied to `/usr/src/app/federations`
+- `build/install/fed-reg/registry.json` – registry copied to `/usr/src/app/data/registry.json`
+- `/usr/src/app/build/install/mcp_instances/<instance-name>` – MCP runtime assets copied into the MCP container
+
+> 💡 If you prefer to start Docker manually, run the setup script once to
+> materialize these directories and then proceed with `docker-compose` commands.
 
 ### 5. Start the Federation System
 
 ```bash
-# Run the complete setup (builds packages and starts containers)
-./scripts/setup.sh
+# (Re)build images and start services after setup assets exist
+docker-compose up --build -d
 ```
 
-The setup script will:
-1. Build the npm packages (`@letsfederate/fedmgr` and `@letsfederate/mcp-core`)
-2. Clean up any existing containers
-3. Build and start the Docker containers
-4. Perform health checks
+The containers expect the directories listed above to be present so that the
+bootstrap process can mount/copy keys and registry data into `/usr/src/app` at
+runtime.
 
 ### 6. Verify the System is Running
 
@@ -164,6 +174,23 @@ docker-compose logs -f
 docker-compose logs -f federation-admin
 docker-compose logs -f mcp-server
 ```
+
+### Missing `build/install` Assets
+
+If the containers fail during bootstrap because `build/install/...` directories
+are empty or missing:
+
+```bash
+# Re-run the setup script to regenerate keys, federation data, and MCP assets
+./scripts/setup.sh
+
+# After the assets exist, rebuild the containers
+docker-compose down
+docker-compose up --build -d
+```
+
+Double-check that the directories listed in the setup section are populated
+before rebuilding the images.
 
 ## Manual Container Management
 
