@@ -14,9 +14,10 @@ services:
       - OAUTH_REDIRECT_URI=http://localhost:3001/oauth/callback
       - FEDERATION_NAME=${FEDERATION_NAME:-alpha}
       - FEDMGR_PUBLIC_DIR=/usr/src/app/public
-      - FEDMGR_KEYS_PATH=/usr/src/app/keys
+      - FEDMGR_KEYS_PATH=/usr/src/app/federations/${FEDERATION_NAME:-alpha}/keys
       - FEDMGR_FEDERATIONS_DIR=/usr/src/app/federations
       - FEDMGR_FED_REG_FILE=/usr/src/app/data/registry.json
+      - FEDMGR_MCP_INSTANCES_DIR=/usr/src/app/mcp_instances
     volumes:
       # Static files (read-only)
       - ./public:/usr/src/app/public:ro
@@ -54,7 +55,9 @@ services:
       - FEDERATION_ADMIN_URL=http://federation-admin:3007
       - FEDERATION_NAME=${FEDERATION_NAME:-alpha}
       - MCP_PUBLIC_DIR=/usr/src/app/public
-      - FEDMGR_KEYS_PATH=/usr/src/app/keys
+      - FEDMGR_KEYS_PATH=/usr/src/app/mcp_instances/${MCP_ID:-mcp-demo}/keys
+      - FEDMGR_FEDERATIONS_DIR=/usr/src/app/federations
+      - FEDMGR_MCP_INSTANCES_DIR=/usr/src/app/mcp_instances
     volumes:
       # Static files (read-only)
       - ./public-mcp:/usr/src/app/public:ro
