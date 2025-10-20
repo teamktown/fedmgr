@@ -38,6 +38,15 @@ echo "Installing npm packages..."
 npm install -g ./build/npm/letsfederate-fedmgr-0.1.0.tgz
 npm install -g ./build/npm/letsfederate-mcp-core-0.1.0.tgz
 
+# Configure fedmgr workspace paths to use the repository build/install directory
+export FEDMGR_HOME="$(pwd)"
+export FEDMGR_FEDERATIONS_DIR="$FEDMGR_HOME/build/install/federations"
+export FEDMGR_FED_REG_FILE="$FEDMGR_HOME/build/install/data/fed-reg/registry.json"
+
+mkdir -p "$FEDMGR_FEDERATIONS_DIR" \
+         "$FEDMGR_HOME/build/install/mcp_instances" \
+         "$(dirname "$FEDMGR_FED_REG_FILE")"
+
 
 # Clean up any existing containers and volumes
 echo "🧹 Cleaning up existing containers..."
@@ -51,14 +60,22 @@ docker-compose down -v
 # this creates the boilerplate for a federation and an MCP instance
 
 echo "📁 Setting up federation and MCP instance..."
-fedmgr create fed alpha
+FEDERATION_CONFIG="$FEDMGR_FEDERATIONS_DIR/alpha/config/entity-configuration.json"
+if [ -f "$FEDERATION_CONFIG" ]; then
+    echo "⚠️  Federation 'alpha' already exists - skipping creation"
+else
+    fedmgr create fed alpha
+    echo "✅ Federation 'alpha' created"
+fi
 
-echo "✅ Federation 'alpha' created"
-
-echo "Setting up MCP instance 'mcp-demo' in federation 'alpha'"
-fedmgr create mcp mcp-demo --federation alpha
-
-echo "✅ MCP instance 'mcp-demo' created in federation 'alpha'"
+MCP_CONFIG="$FEDMGR_HOME/build/install/mcp_instances/mcp-demo/config/entity-configuration.json"
+if [ -f "$MCP_CONFIG" ]; then
+    echo "⚠️  MCP instance 'mcp-demo' already exists - skipping creation"
+else
+    echo "Setting up MCP instance 'mcp-demo' in federation 'alpha'"
+    fedmgr create mcp mcp-demo --federation alpha
+    echo "✅ MCP instance 'mcp-demo' created in federation 'alpha'"
+fi
 
 
 # Validate that key directories exist before starting containers
