@@ -20,6 +20,8 @@ services:
     volumes:
       # Static files (read-only)
       - ./public:/usr/src/app/public:ro
+      # Federation keys (read-only)
+      - ./build/install/federations/alpha/keys:/usr/src/app/keys:ro
     networks:
       - federation_net
     healthcheck:
@@ -56,6 +58,8 @@ services:
     volumes:
       # Static files (read-only)
       - ./public-mcp:/usr/src/app/public:ro
+      # MCP instance keys (read-only)
+      - ./build/install/mcp_instances/mcp-demo/keys:/usr/src/app/keys:ro
     networks:
       - federation_net
     depends_on:
