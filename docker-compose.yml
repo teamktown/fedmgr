@@ -22,7 +22,9 @@ services:
       # Static files (read-only)
       - ./public:/usr/src/app/public:ro
       # Federation keys (read-only)
-      - ./build/install/federations/alpha/keys:/usr/src/app/keys:ro
+      - ./build/install/federations/alpha/keys:/usr/src/app/federations/alpha/keys:ro
+      # Entity configuration (read-only)
+      - ./build/install/federations/alpha/config:/usr/src/app/federations/alpha/config:ro
     networks:
       - federation_net
     healthcheck:
@@ -51,7 +53,7 @@ services:
       - MCP_PORT=4007
       - MCP_ID=${MCP_ID:-mcp-demo}
       - MCP_PUBLIC_KEY=${MCP_PUBLIC_KEY:-mcp-demo-key}
-      - MCP_BASE_URL=http://localhost:4001
+      - MCP_BASE_URL=http://localhost:${PORT:-4007}
       - FEDERATION_ADMIN_URL=http://federation-admin:3007
       - FEDERATION_NAME=${FEDERATION_NAME:-alpha}
       - MCP_PUBLIC_DIR=/usr/src/app/public
@@ -62,7 +64,7 @@ services:
       # Static files (read-only)
       - ./public-mcp:/usr/src/app/public:ro
       # MCP instance keys (read-only)
-      - ./build/install/mcp_instances/mcp-demo/keys:/usr/src/app/keys:ro
+      - ./build/install/mcp_instances/mcp-demo/keys:/usr/src/app/mcp_instances/mcp-demo/keys:ro
     networks:
       - federation_net
     depends_on:
