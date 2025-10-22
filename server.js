@@ -14,7 +14,7 @@ const http = require('http');
 const WebSocket = require('ws');
 const fs = require('fs');
 const fetch = require('node-fetch');
-const MCPInterface = require('./src/server/mcp-interface');
+const MCPInterface = require('./src/fedmgr/mcp-interface');
 
 const app = express();
 const server = http.createServer(app);

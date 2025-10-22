@@ -1,0 +1,8 @@
+FROM node:current-alpine3.21
+
+WORKDIR /app
+
+COPY src/fedmgr/letsfederate-fedmgr-*.tgz ./
+RUN npm install ./letsfederate-fedmgr-*.tgz
+
+CMD ["node", "node_modules/@letsfederate/fedmgr/dist/cli/fedmgr.js"]

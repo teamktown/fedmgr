@@ -1,0 +1,45 @@
+FROM node:current-alpine3.21 AS builder
+
+ARG FEDMGR_BUILD_REL_NPM_DIR
+RUN test -n "$FEDMGR_BUILD_REL_NPM_DIR" || (echo "FEDMGR_BUILD_REL_NPM_DIR build arg is required" && exit 1)
+
+WORKDIR /usr/src/app
+
+# Copy the packaged application
+COPY ${FEDMGR_BUILD_REL_NPM_DIR}/letsfederate-mcp-core-*.tgz ./
+
+# Install the package
+RUN npm install ./letsfederate-mcp-core-*.tgz --omit=dev --ignore-scripts
+
+# Install additional dependencies for MCP server
+RUN npm install sqlite3 express jsonwebtoken node-fetch
+
+FROM node:current-alpine3.21 AS final
+
+# Install OpenSSL (though MCP server doesn't need it, keeping consistent)
+RUN apk add --no-cache openssl
+
+WORKDIR /usr/src/app
+
+# Create necessary directories with proper ownership
+RUN mkdir -p /usr/src/app/data /usr/src/app/public && \
+    chown -R node:node /usr/src/app
+
+# Copy from builder
+COPY --chown=node:node --from=builder /usr/src/app/node_modules ./node_modules
+
+# Copy the MCP-specific public directory (not the federation admin's public)
+COPY --chown=node:node public-mcp/ ./public/
+
+# Create bootstrap script for MCP
+COPY --chown=node:node scripts/mcp-bootstrap.sh ./bootstrap.sh
+RUN chmod +x ./bootstrap.sh
+
+USER node
+
+# Set environment variable for public directory
+ENV MCP_PUBLIC_DIR=/usr/src/app/public
+
+EXPOSE 4001
+
+CMD ["./bootstrap.sh"]

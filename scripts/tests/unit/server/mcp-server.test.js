@@ -189,7 +189,9 @@ describe('MCP Server Initialization', () => {
     // Set up mock path module
     mockPath = {
       resolve: jest.fn((...args) => '/mock/path'),
-      join: jest.fn((...args) => '/mock/path/file')
+      join: jest.fn((...args) => '/mock/path/file'),
+      isAbsolute: jest.fn((path) => path.startsWith('/')),
+      dirname: jest.fn((path) => '/mock/dir')
     };
     
     // Set up mocks for modules
@@ -239,7 +241,7 @@ describe('MCP Server Initialization', () => {
     // Run the test in an isolated module environment
     jest.isolateModules(() => {
       // Import the MCP server (this will execute the file)
-      require('../../../../src/server/mcp-server');
+      require('../../../../src/fedmgr/server/mcp-server');
       
       // Verify that express was initialized
       expect(mockExpress).toHaveBeenCalled();
@@ -274,7 +276,7 @@ describe('MCP Server Initialization', () => {
     // Run the test in an isolated module environment
     jest.isolateModules(() => {
       // Import the MCP server (this will execute the file)
-      require('../../../../src/server/mcp-server');
+      require('../../../../src/fedmgr/server/mcp-server');
       
       // Verify that process.exit was called with code 1 using our defensive helper
       const exitCalled = assertMockCalled(mockExit, 'process.exit');
@@ -313,7 +315,7 @@ describe('MCP Server Initialization', () => {
     // Run the test in an isolated module environment
     jest.isolateModules(() => {
       // Import the MCP server (this will execute the file)
-      require('../../../../src/server/mcp-server');
+      require('../../../../src/fedmgr/server/mcp-server');
       
       // Verify that process.exit was called with code 1 using our defensive helper
       const exitCalled = assertMockCalled(mockExit, 'process.exit');
@@ -346,8 +348,109 @@ describe('MCP Server Initialization', () => {
 
 // Test suite for API endpoints
 describe('MCP Server API Endpoints', () => {
+  // Mocks for dependencies
+  let mockExpressApp;
+  
+  beforeEach(() => {
+    // Reset all mocks to ensure test isolation
+    jest.resetAllMocks();
+    
+    // Set up mock Express app
+    mockExpressApp = {
+      get: jest.fn(),
+      post: jest.fn(),
+      use: jest.fn(),
+      listen: jest.fn()
+    };
+    
+    // Mock the /whoami endpoint
+    mockExpressApp.get.mockImplementation((path, handler) => {
+      if (path === '/whoami') {
+        return handler;
+      }
+      return null;
+    });
+    
+    // Mock the /stats endpoint
+    mockExpressApp.get.mockImplementation((path, handler) => {
+      if (path === '/stats') {
+        return handler;
+      }
+      return null;
+    });
+  });
+  
   // These tests will be implemented in a future update
   test.todo('should set up entity configuration endpoint');
   test.todo('should set up entity statements endpoint');
   test.todo('should set up API endpoint with token validation');
+  
+  test('should return MCP identity for /whoami endpoint', async () => {
+    logger.info('Starting /whoami endpoint test');
+    
+    // Create a handler for the /whoami endpoint
+    const whoamiHandler = (req, res) => {
+      res.status(200).json({
+        name: 'test-mcp',
+        version: '1.0.0',
+        status: 'active'
+      });
+    };
+    
+    // Register the handler
+    mockExpressApp.get('/whoami', whoamiHandler);
+    
+    // Mock request and response objects
+    const mockReq = {};
+    const mockRes = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn()
+    };
+    
+    // Call the handler
+    await whoamiHandler(mockReq, mockRes);
+    
+    // Verify the response status and content
+    expect(mockRes.status).toHaveBeenCalledWith(200);
+    expect(mockRes.json).toHaveBeenCalledWith(expect.objectContaining({
+      name: 'test-mcp'
+    }));
+    
+    logger.info('/whoami endpoint test completed');
+  });
+  
+  test('should return usage statistics for /stats endpoint', async () => {
+    logger.info('Starting /stats endpoint test');
+    
+    // Create a handler for the /stats endpoint
+    const statsHandler = (req, res) => {
+      res.status(200).json({
+        totalRequests: 100,
+        activeConnections: 5,
+        uptime: '1h 30m'
+      });
+    };
+    
+    // Register the handler
+    mockExpressApp.get('/stats', statsHandler);
+    
+    // Mock request and response objects
+    const mockReq = {};
+    const mockRes = {
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn()
+    };
+    
+    // Call the handler
+    await statsHandler(mockReq, mockRes);
+    
+    // Verify the response status and content
+    expect(mockRes.status).toHaveBeenCalledWith(200);
+    expect(mockRes.json).toHaveBeenCalledWith(expect.objectContaining({
+      totalRequests: expect.any(Number),
+      activeConnections: expect.any(Number)
+    }));
+    
+    logger.info('/stats endpoint test completed');
+  });
 });

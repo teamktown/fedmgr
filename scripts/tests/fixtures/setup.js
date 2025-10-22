@@ -7,6 +7,33 @@
 // Set up global test environment
 process.env.NODE_ENV = 'test';
 
+// Set up federation environment variables for tests
+const path = require('path');
+const fs = require('fs');
+const FEDMGR_HOME = process.env.FEDMGR_HOME || path.resolve(__dirname, '../../..');
+process.env.FEDMGR_FEDERATIONS_DIR = process.env.FEDMGR_FEDERATIONS_DIR || path.join(FEDMGR_HOME, 'test-federations');
+process.env.FEDMGR_FED_REG = process.env.FEDMGR_FED_REG || path.join(FEDMGR_HOME, 'test-data', 'fed-reg');
+
+// Create federation directories if they don't exist
+if (!fs.existsSync(process.env.FEDMGR_FEDERATIONS_DIR)) {
+  fs.mkdirSync(process.env.FEDMGR_FEDERATIONS_DIR, { recursive: true });
+  console.log(`Created federation directory: ${process.env.FEDMGR_FEDERATIONS_DIR}`);
+}
+
+const fedRegDir = path.dirname(process.env.FEDMGR_FED_REG);
+if (!fs.existsSync(fedRegDir)) {
+  fs.mkdirSync(fedRegDir, { recursive: true });
+  console.log(`Created federation registry directory: ${fedRegDir}`);
+}
+
+// Create an empty registry file if it doesn't exist
+if (!fs.existsSync(process.env.FEDMGR_FED_REG)) {
+  const registryPath = path.join(process.env.FEDMGR_FED_REG, 'registry.json');
+  fs.mkdirSync(path.dirname(registryPath), { recursive: true });
+  fs.writeFileSync(registryPath, JSON.stringify({ federations: [] }));
+  console.log(`Created empty registry file: ${registryPath}`);
+}
+
 // Mock data for tests
 global.mockData = {
   entityConfig: {
@@ -70,12 +97,13 @@ global.mockData = {
 process.env.TEST_MODE = 'true';
 
 // Create test directories if needed
-const fs = require('fs');
-const path = require('path');
+// fs was already required above, no need to require it again
 
 const testDirs = [
   'test-results',
-  'test-coverage'
+  'test-coverage',
+  process.env.FEDMGR_FEDERATIONS_DIR,
+  path.dirname(process.env.FEDMGR_FED_REG)
 ];
 
 testDirs.forEach(dir => {

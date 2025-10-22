@@ -1,0 +1,43 @@
+FROM node:current-alpine3.21 AS builder
+
+# build argument for the relative path to the npm package directory
+ARG FEDMGR_BUILD_REL_NPM_DIR
+RUN test -n "$FEDMGR_BUILD_REL_NPM_DIR" || (echo "FEDMGR_BUILD_REL_NPM_DIR build arg is required" && exit 1)
+
+WORKDIR /usr/src/app
+
+# Copy the packaged application
+RUN echo `pwd` "copying the package into the container from ${FEDMGR_BUILD_REL_NPM_DIR} "
+
+COPY ${FEDMGR_BUILD_REL_NPM_DIR}/letsfederate-fedmgr-*.tgz ./
+
+# Install the package using npm
+# --omit=dev: Ensures only production dependencies are installed
+# --ignore-scripts: Enhances security by not running arbitrary package scripts
+RUN npm install ./letsfederate-fedmgr-*.tgz --omit=dev --ignore-scripts
+
+# --- Production Stage ---
+# Use a fresh  image for the final stage
+FROM node:current-alpine3.21 AS final
+
+WORKDIR /usr/src/app
+
+# Create a non-root user and group
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+
+# Copy only the installed application and node_modules from the builder stage
+# Set ownership directly during copy
+COPY --chown=appuser:appgroup --from=builder /usr/src/app/node_modules ./node_modules
+
+# Switch to the non-root user before running the application
+USER appuser
+
+
+# Copy source code
+#COPY . .
+
+# Expose the token exchange service port
+EXPOSE 3457
+
+# Run the Token Exchange Service
+CMD ["node", "node_modules/@letsfederate/fedmgr/server/token-exchange-service.js"]

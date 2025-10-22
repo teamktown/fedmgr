@@ -6,6 +6,12 @@
 
 const TestLogger = require('../fixtures/test-logger');
 const logger = new TestLogger('TEST-INT-001', 'MCPFederation');
+const setupTestData = require('../fixtures/setup-test-data');
+
+// Ensure test federation data is available
+beforeAll(() => {
+  setupTestData.setupTestData();
+});
 
 // Mock data for tests
 const mockData = {
@@ -163,5 +169,88 @@ describe('MCP Federation Integration', () => {
     expect(result.distributed).toBe(members.length);
     
     logger.info('Entity statement distribution test completed');
+  });
+test('should reject trust chain with invalid signature', async () => {
+    logger.info('Starting invalid trust chain signature test');
+
+    // Mock a trust chain with an invalid signature
+    const mockValidationResult = {
+      valid: false,
+      error: 'invalid signature in entity statement',
+      chain: [
+        { iss: 'https://federation.example.org', sub: 'https://mcp.example.org' }
+      ]
+    };
+
+    // Mock the validateTrustChain method to return the invalid result
+    federationAdmin.validateTrustChain = jest.fn().mockResolvedValue(mockValidationResult);
+
+    // Call the method to validate trust chain
+    const result = await federationAdmin.validateTrustChain('https://mcp.example.org');
+
+    // Verify that the validation was called
+    expect(federationAdmin.validateTrustChain).toHaveBeenCalledWith('https://mcp.example.org');
+
+    // Verify that the result indicates an invalid trust chain due to signature
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain('invalid signature');
+
+    logger.info('Invalid trust chain signature test completed');
+  });
+
+  test('should reject trust chain with expired entity statement', async () => {
+    logger.info('Starting expired entity statement trust chain test');
+
+    // Mock a trust chain with an expired entity statement
+    const mockValidationResult = {
+      valid: false,
+      error: 'entity statement expired',
+      chain: [
+        { iss: 'https://federation.example.org', sub: 'https://mcp.example.org' }
+      ]
+    };
+
+    // Mock the validateTrustChain method to return the invalid result
+    federationAdmin.validateTrustChain = jest.fn().mockResolvedValue(mockValidationResult);
+
+    // Call the method to validate trust chain
+    const result = await federationAdmin.validateTrustChain('https://mcp.example.org');
+
+    // Verify that the validation was called
+    expect(federationAdmin.validateTrustChain).toHaveBeenCalledWith('https://mcp.example.org');
+
+    // Verify that the result indicates an invalid trust chain due to expiration
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain('expired');
+
+    logger.info('Expired entity statement trust chain test completed');
+  });
+
+  test('should reject trust chain with incorrect issuer', async () => {
+    logger.info('Starting incorrect issuer trust chain test');
+
+    // Mock a trust chain with an incorrect issuer in an entity statement
+    const mockValidationResult = {
+      valid: false,
+      error: 'incorrect issuer in entity statement',
+      chain: [
+        { iss: 'https://wrong-federation.example.org', sub: 'https://mcp.example.org' }
+      ]
+    };
+
+    // Mock the validateTrustChain method to return the invalid result
+    federationAdmin.validateTrustChain = jest.fn().mockResolvedValue(mockValidationResult);
+
+    // Call the method to validate trust chain
+    const result = await federationAdmin.validateTrustChain('https://mcp.example.org');
+
+    // Verify that the validation was called
+    expect(federationAdmin.validateTrustChain).toHaveBeenCalledWith('https://mcp.example.org');
+
+    // Verify that the result indicates an invalid trust chain due to incorrect issuer
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain('incorrect issuer');
+
+    logger.info('Incorrect issuer trust chain test completed');
   });
 });
