@@ -39,6 +39,7 @@ import {
   type JWTPayload,
   type KeyLike,
 } from "jose";
+import { createHash } from "node:crypto";
 import type { KeyProvider } from "../index.js";
 
 // ---------------------------------------------------------------------------
@@ -165,8 +166,11 @@ export class Pkcs11Provider implements KeyProvider {
     const payloadB64 = base64url(JSON.stringify(payload));
     const signingInput = `${headerB64}.${payloadB64}`;
 
-    const derSig = await this._pkcs11Sign(Buffer.from(signingInput));
-    const rawSig = derEcdsaToRaw(derSig, 32);
+    // PKCS#11 CKM_ECDSA signs the *hash* of the message (not the message itself).
+    // Pre-compute SHA-256 of the signing input for JWS ES256 (RFC 7518 §3.4).
+    // Output from CKM_ECDSA is raw R||S (32 bytes each = 64 bytes for P-256).
+    const hash = createHash("sha256").update(signingInput).digest();
+    const rawSig = await this._pkcs11Sign(hash);
     const sigB64 = rawSig.toString("base64url");
 
     // Suppress unused variable
@@ -206,7 +210,15 @@ export class Pkcs11Provider implements KeyProvider {
     } }).PKCS11();
 
     pkcs11.load(this.cfg.libraryPath);
-    pkcs11.C_Initialize();
+    try {
+      pkcs11.C_Initialize();
+    } catch (err: unknown) {
+      // CKR_CRYPTOKI_ALREADY_INITIALIZED (0x191 = 401): library already
+      // initialised in this process (e.g. multiple providers in tests). Safe
+      // to continue — the library is ready.
+      const pkcs11Err = err as { code?: number };
+      if (pkcs11Err.code !== 401) throw err;
+    }
 
     const slots = pkcs11.C_GetSlotList(true);
     const slotIndex = this.cfg.slot ?? 0;
@@ -216,11 +228,20 @@ export class Pkcs11Provider implements KeyProvider {
       );
     }
 
-    // CKF_SERIAL_SESSION | CKF_RW_SESSION
+    // CKF_SERIAL_SESSION (0x4) | CKF_RW_SESSION (0x2) — RW required for login
     const CKF_SERIAL_SESSION = 0x00000004;
-    const session = pkcs11.C_OpenSession(slots[slotIndex], CKF_SERIAL_SESSION);
+    const CKF_RW_SESSION = 0x00000002;
+    const session = pkcs11.C_OpenSession(slots[slotIndex], CKF_SERIAL_SESSION | CKF_RW_SESSION);
     const CKU_USER = 1;
-    pkcs11.C_Login(session, CKU_USER, this.cfg.pin);
+    try {
+      pkcs11.C_Login(session, CKU_USER, this.cfg.pin);
+    } catch (err: unknown) {
+      // CKR_USER_ALREADY_LOGGED_IN (0x100 = 256): token's user is already
+      // authenticated on another session in this process. The session we just
+      // opened inherits that login state — safe to continue.
+      const pkcs11Err = err as { code?: number };
+      if (pkcs11Err.code !== 256) throw err;
+    }
 
     this._pkcs11 = pkcs11;
     this._session = session;
@@ -237,15 +258,17 @@ export class Pkcs11Provider implements KeyProvider {
       C_FindObjectsFinal(session: unknown): void;
       C_GetAttributeValue(session: unknown, obj: unknown, template: unknown[]): unknown[];
     };
-    const CKO_PUBLIC_KEY = 3;
+    const CKO_PUBLIC_KEY = 2; // CKO_PUBLIC_KEY = 0x00000002
     const CKA_CLASS = 0;
     const CKA_LABEL = 3;
     const CKA_EC_POINT = 0x0181;
     const CKA_EC_PARAMS = 0x0180;
 
+    // pkcs11js accepts plain numbers/strings; it marshals to the correct
+    // CK_ULONG / UTF8String buffer internally.
     p11.C_FindObjectsInit(this._session, [
-      { type: CKA_CLASS, value: Buffer.from([0, 0, 0, CKO_PUBLIC_KEY]) },
-      { type: CKA_LABEL, value: Buffer.from(this.cfg.keyLabel, "utf8") },
+      { type: CKA_CLASS, value: CKO_PUBLIC_KEY },
+      { type: CKA_LABEL, value: this.cfg.keyLabel },
     ]);
     const objs = p11.C_FindObjects(this._session, 1);
     p11.C_FindObjectsFinal(this._session);
@@ -290,17 +313,18 @@ export class Pkcs11Provider implements KeyProvider {
       C_FindObjects(session: unknown, max: number): unknown[];
       C_FindObjectsFinal(session: unknown): void;
       C_SignInit(session: unknown, mechanism: unknown, key: unknown): void;
-      C_Sign(session: unknown, data: Buffer): Buffer;
+      // pkcs11js C_Sign(session, data, outputBuffer): fills outputBuffer and
+      // returns a slice of it containing the actual signature bytes.
+      C_Sign(session: unknown, data: Buffer, out: Buffer): Buffer;
     };
 
-    const CKO_PRIVATE_KEY = 3; // PKCS#11 CKO_PRIVATE_KEY is actually 3 in some implementations
-    // Correct: CKO_PRIVATE_KEY = 0x00000003
+    const CKO_PRIVATE_KEY = 3; // CKO_PRIVATE_KEY = 0x00000003
     const CKA_CLASS = 0;
     const CKA_LABEL = 3;
 
     p11.C_FindObjectsInit(this._session, [
-      { type: CKA_CLASS, value: Buffer.from([0, 0, 0, CKO_PRIVATE_KEY]) },
-      { type: CKA_LABEL, value: Buffer.from(this.cfg.keyLabel, "utf8") },
+      { type: CKA_CLASS, value: CKO_PRIVATE_KEY },
+      { type: CKA_LABEL, value: this.cfg.keyLabel },
     ]);
     const objs = p11.C_FindObjects(this._session, 1);
     p11.C_FindObjectsFinal(this._session);
@@ -311,10 +335,14 @@ export class Pkcs11Provider implements KeyProvider {
       );
     }
 
-    // CKM_ECDSA = 0x00001041
+    // CKM_ECDSA (0x1041): raw ECDSA — caller must pre-hash the message.
+    // signJwt() passes SHA-256(signingInput), giving us ES256 semantics.
+    // Output is raw R||S (32 bytes each for P-256 = 64 bytes total).
     const CKM_ECDSA = 0x00001041;
     p11.C_SignInit(this._session, { mechanism: CKM_ECDSA }, objs[0]);
-    return p11.C_Sign(this._session, data);
+    // pkcs11js C_Sign(session, data, outputBuffer): returns a slice of
+    // outputBuffer containing exactly the signature bytes.
+    return p11.C_Sign(this._session, data, Buffer.allocUnsafe(128));
   }
 }
 
