@@ -59,16 +59,24 @@ export class TrustMarkStatusRegistry {
 // Express router factory
 // ---------------------------------------------------------------------------
 
+/** Minimal interface required by the trust-mark-status router. */
+export interface StatusChecker {
+  isActive(sub: string, id: string): boolean;
+}
+
 /**
  * Creates an Express router for the /trust-mark-status endpoint.
  * Mount at: app.use("/trust-mark-status", createTrustMarkStatusRouter(reg))
+ *
+ * Accepts any object implementing StatusChecker (in-memory TrustMarkStatusRegistry
+ * or a DB-backed implementation).
  *
  * GET /trust-mark-status?sub=<entityId>&id=<trustMarkTypeUri>
  *   → 200 { active: true | false }
  *   → 400 { error: "invalid_request", error_description: "..." } on missing params
  */
 export function createTrustMarkStatusRouter(
-  registry: TrustMarkStatusRegistry
+  registry: StatusChecker
 ): Router {
   const router = Router();
 

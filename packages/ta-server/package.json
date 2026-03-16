@@ -15,15 +15,22 @@
   },
   "dependencies": {
     "@letsfederate/kms": "*",
+    "better-sqlite3": "^12.8.0",
     "express": "^4.19.2",
+    "jose": "^5.2.4",
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.10",
     "@types/express": "^4.17.21",
     "tsx": "^4.7.0",
     "typescript": "^5.4.0"
   },
-  "files": ["dist", "CHANGELOG.md", "README.md"],
+  "files": [
+    "dist",
+    "CHANGELOG.md",
+    "README.md"
+  ],
   "publishConfig": {
     "access": "public",
     "provenance": true

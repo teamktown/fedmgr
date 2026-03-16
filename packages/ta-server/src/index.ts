@@ -9,6 +9,21 @@
  *   GET /federation_fetch?sub=<entityId> — signed subordinate statement
  *   GET /health                          — liveness
  *
+ * Enrollment & management (new in Increment G):
+ *   POST   /enroll                            — start proof-of-key enrollment
+ *   POST   /enroll/:id/complete               — complete enrollment with signed proof
+ *   GET    /enroll/:id                        — check enrollment status
+ *   GET    /subordinates                      — list subordinates (admin)
+ *   POST   /subordinates/:entityId/revoke     — revoke a subordinate
+ *   POST   /subordinates/:entityId/restore    — restore a revoked subordinate
+ *   DELETE /subordinates/:entityId            — decommission a subordinate
+ *   GET    /revocations                       — trustmark revocation log
+ *   POST   /trustmarks/revoke                 — revoke a specific trustmark
+ *   POST   /trustmarks/restore                — restore a revoked trustmark
+ *   GET    /audit                             — audit log
+ *   GET    /dashboard                         — admin dashboard UI
+ *   GET    /dashboard/api/*                   — dashboard JSON API
+ *
  * Key policy (same as tmi-server):
  *   TA_PRIVATE_JWK must point to a tmpfs-decrypted file at runtime.
  *   Use scripts/tmi-keys-init.sh --dir packages/ta-server/keys and
@@ -21,11 +36,12 @@
  *   TA_PUBLIC_JWK     default keys/ta.pub.jwk
  *   TA_PRIVATE_JWK    default keys/ta.priv.jwk (decrypted, on tmpfs)
  *   TA_ORG_NAME       default "letsfederate Trust Anchor"
- *   TA_REGISTRY_PATH  path to JSON subordinate registry (persistent); unset = in-memory
+ *   TA_DB_PATH        default ./ta.db — SQLite database path
+ *   ADMIN_TOKEN       optional — if set, enables Bearer auth on management endpoints
  *
- * Subordinates are registered via TA_SUBORDINATES env var (JSON array):
- *   [{ "entityId": "https://...", "jwksUrl": "https://.../.well-known/jwks.json" }]
- * The TA fetches each subordinate's JWKS at startup to populate the registry.
+ * Startup subordinates (bootstrap only — DB is authoritative afterwards):
+ *   TA_SUBORDINATES   JSON array of { entityId, jwksUrl, fetchEndpoint? }
+ *                     These are upserted into the DB on first boot.
  *
  * Trust policy:
  *   TRUST_POLICY  strict (default) | permissive | audit
@@ -33,31 +49,25 @@
  *   strict:      startup aborts on any JWKS fetch failure
  *   permissive:  failed subordinates are logged and skipped
  *   audit:       all states logged, never blocks
- *
- * Trust states logged at startup:
- *   [TRUST:VALID]  — subordinate JWKS fetched and cached successfully
- *   [TRUST:WARN]   — subordinate JWKS not yet fetched (registry-only entry)
- *   [TRUST:FAIL]   — JWKS fetch failed (strict: abort; permissive: skip subordinate)
  */
 
 import express, { type Request, type Response } from "express";
 import { SoftKmsProvider, trustPolicyFromEnv } from "@letsfederate/kms";
 import {
   signSubordinateStatement,
-  SubordinateRegistry,
   isIntermediate,
-  type SubordinateEntry,
 } from "./federation/subordinate-statements.js";
-import { FileSubordinateRegistry } from "./federation/file-registry.js";
 import {
   signEntityStatement,
   trustAnchorMetadata,
 } from "./federation/entity-statements.js";
-import {
-  TrustMarkStatusRegistry,
-  createTrustMarkStatusRouter,
-} from "./federation/trust-mark-status.js";
+import { createTrustMarkStatusRouter } from "./federation/trust-mark-status.js";
+import { SqliteFederationStore } from "./db/sqlite-store.js";
+import { createEnrollmentRouter } from "./enrollment/index.js";
+import { createManagementRouter } from "./management/index.js";
+import { createDashboardRouter } from "./dashboard/index.js";
 import path from "node:path";
+import type { JWK } from "jose";
 
 // ---------------------------------------------------------------------------
 // Config
@@ -75,7 +85,8 @@ const PRIV_JWK =
   process.env["TA_PRIVATE_JWK"] ?? path.resolve("keys", "ta.priv.jwk");
 const ORG_NAME =
   process.env["TA_ORG_NAME"] ?? "letsfederate Trust Anchor";
-const REGISTRY_PATH = process.env["TA_REGISTRY_PATH"];
+const DB_PATH =
+  process.env["TA_DB_PATH"] ?? path.resolve("ta.db");
 const TRUST_POLICY = trustPolicyFromEnv();
 
 if (!ENTITY_ID.startsWith("http")) {
@@ -94,19 +105,25 @@ const kms = new SoftKmsProvider({
 });
 
 // ---------------------------------------------------------------------------
-// Subordinate registry and trust-mark status registry — populated at startup
+// Persistent store (SQLite) — source of truth for all subordinate state
 // ---------------------------------------------------------------------------
 
-const registry: SubordinateRegistry = REGISTRY_PATH
-  ? new FileSubordinateRegistry(REGISTRY_PATH)
-  : new SubordinateRegistry();
-const statusRegistry = new TrustMarkStatusRegistry();
+const store = new SqliteFederationStore(DB_PATH);
+store.migrate();
+process.stderr.write(
+  `[ta-server] DB opened: ${DB_PATH}\n`
+);
+
+// ---------------------------------------------------------------------------
+// Bootstrap subordinates from TA_SUBORDINATES env var
+// (upserted into DB — subsequent restarts skip entities that already exist)
+// ---------------------------------------------------------------------------
 
 async function loadSubordinates(): Promise<void> {
   const raw = process.env["TA_SUBORDINATES"];
   if (!raw) {
-    process.stdout.write(
-      "[ta-server] TA_SUBORDINATES not set — no subordinates registered.\n"
+    process.stderr.write(
+      "[ta-server] TA_SUBORDINATES not set — using DB-only subordinate list.\n"
     );
     return;
   }
@@ -125,16 +142,25 @@ async function loadSubordinates(): Promise<void> {
   }
 
   for (const spec of specs) {
+    // Skip if already active in the DB — DB is authoritative
+    const existing = store.getSubordinate(spec.entityId);
+    if (existing?.status === "active") {
+      process.stderr.write(
+        `[ta-server] [TRUST:VALID] ${spec.entityId} already active in DB — skipping bootstrap fetch.\n`
+      );
+      continue;
+    }
+
     process.stderr.write(
-      `[ta-server] Fetching JWKS for subordinate ${spec.entityId}...\n`
+      `[ta-server] Fetching JWKS for bootstrap subordinate ${spec.entityId}...\n`
     );
-    let jwks: { keys: unknown[] };
+    let jwks: { keys: JWK[] };
     try {
       const r = await fetch(spec.jwksUrl);
       if (!r.ok) {
         throw new Error(`HTTP ${r.status} ${r.statusText}`);
       }
-      jwks = (await r.json()) as { keys: unknown[] };
+      jwks = (await r.json()) as { keys: JWK[] };
       if (!Array.isArray(jwks.keys) || jwks.keys.length === 0) {
         throw new Error("JWKS response has no keys");
       }
@@ -149,30 +175,34 @@ async function loadSubordinates(): Promise<void> {
       if (TRUST_POLICY === "strict") {
         process.exit(1);
       }
-      // permissive/audit: log and skip this subordinate
       process.stderr.write(
         `  [TRUST:POLICY] ${TRUST_POLICY} mode — skipping ${spec.entityId} and continuing startup.\n`
       );
       continue;
     }
 
-    const entry: SubordinateEntry = {
-      entityId: spec.entityId,
-      jwks: jwks as SubordinateEntry["jwks"],
-      ...(spec.fetchEndpoint
-        ? {
-            metadata: {
-              federation_entity: {
-                federation_fetch_endpoint: spec.fetchEndpoint,
-              },
-            },
-          }
-        : {}),
-    };
-    registry.register(entry);
-    const kind = isIntermediate(entry) ? "intermediate" : "leaf";
+    const metadata: Record<string, unknown> | null = spec.fetchEndpoint
+      ? { federation_entity: { federation_fetch_endpoint: spec.fetchEndpoint } }
+      : null;
+
+    store.upsertSubordinate({
+      entityId:         spec.entityId,
+      jwksUrl:          spec.jwksUrl,
+      jwks:             jwks as { keys: never[] },
+      metadata,
+      status:           "active",
+      isIntermediate:   !!spec.fetchEndpoint,
+      revocationReason: null,
+      revokedAt:        null,
+      revokedBy:        null,
+      notes:            "Bootstrapped from TA_SUBORDINATES env var",
+    });
+    store.audit("subordinate_bootstrapped", spec.entityId, "server-startup", {
+      jwks_url: spec.jwksUrl,
+    });
+
     process.stderr.write(
-      `[ta-server] [TRUST:VALID] Registered ${spec.entityId} (${kind})\n`
+      `[ta-server] [TRUST:VALID] Bootstrapped subordinate: ${spec.entityId}\n`
     );
   }
 }
@@ -183,6 +213,7 @@ async function loadSubordinates(): Promise<void> {
 
 const app = express();
 app.disable("x-powered-by");
+app.use(express.json());
 
 // ---------------------------------------------------------------------------
 // GET /.well-known/jwks.json
@@ -226,28 +257,24 @@ app.get(
 // Per OIDF draft-43 §8.3: returns JSON array of entity ID strings.
 //
 // Optional query parameters:
-//   entity_type=intermediate  — return only intermediates (entities with
-//                               federation_fetch_endpoint in their metadata)
+//   entity_type=intermediate  — return only intermediates
 //   entity_type=leaf          — return only leaf entities
 //   limit=N                   — return at most N results
 //   after=<entityId>          — pagination cursor: return entries after this ID
 // ---------------------------------------------------------------------------
 
 app.get("/federation_list", (req: Request, res: Response) => {
-  let ids = registry.listEntityIds();
+  // Only active subordinates appear in federation_list
+  let rows = store.listSubordinates({ status: "active" });
 
   const entityType = req.query["entity_type"] as string | undefined;
   if (entityType === "intermediate") {
-    ids = ids.filter((id) => {
-      const e = registry.get(id);
-      return e ? isIntermediate(e) : false;
-    });
+    rows = rows.filter((r) => r.isIntermediate);
   } else if (entityType === "leaf") {
-    ids = ids.filter((id) => {
-      const e = registry.get(id);
-      return e ? !isIntermediate(e) : false;
-    });
+    rows = rows.filter((r) => !r.isIntermediate);
   }
+
+  let ids = rows.map((r) => r.entityId);
 
   const after = req.query["after"] as string | undefined;
   if (after) {
@@ -267,7 +294,8 @@ app.get("/federation_list", (req: Request, res: Response) => {
 
 // ---------------------------------------------------------------------------
 // GET /federation_fetch?sub=<entityId>
-// Per spec §8.1: returns signed subordinate statement JWT
+// Per spec §8.1: returns signed subordinate statement JWT.
+// Returns 404 for revoked/decommissioned subordinates.
 // ---------------------------------------------------------------------------
 
 app.get(
@@ -283,9 +311,8 @@ app.get(
       return;
     }
 
-    const entry = registry.get(sub);
-    if (!entry) {
-      // Spec requires an error JSON (not a 404 HTML page) for unknown subjects.
+    const row = store.getSubordinate(sub);
+    if (!row) {
       res.status(404).json({
         error: "not_found",
         error_description: `No subordinate statement found for sub: ${sub}`,
@@ -293,52 +320,116 @@ app.get(
       return;
     }
 
+    if (row.status === "revoked") {
+      res.status(403).json({
+        error: "subordinate_revoked",
+        error_description:
+          `[TRUST:WARN] ${sub} has been revoked and cannot be fetched. ` +
+          "An administrator may restore it via POST /subordinates/:entityId/restore.",
+      });
+      return;
+    }
+
+    if (row.status === "decommissioned") {
+      res.status(404).json({
+        error: "not_found",
+        error_description: `No subordinate statement found for sub: ${sub}`,
+      });
+      return;
+    }
+
+    if (row.status === "pending") {
+      res.status(404).json({
+        error: "not_found",
+        error_description: `${sub} has a pending enrollment and is not yet active.`,
+      });
+      return;
+    }
+
+    if (!row.jwks) {
+      res.status(503).json({
+        error: "jwks_unavailable",
+        error_description:
+          `[TRUST:WARN] No cached JWKS for ${sub}. ` +
+          "The subordinate must complete enrollment with proof-of-key to populate its JWKS.",
+      });
+      return;
+    }
+
+    const metadata = row.metadata ?? undefined;
+    const subEntry = {
+      entityId: row.entityId,
+      jwks: row.jwks as { keys: JWK[] },
+      metadata,
+    };
+
     const jws = await signSubordinateStatement(
       {
-        issuerEntityId: ENTITY_ID,
-        subjectEntityId: entry.entityId,
-        subjectJwks: entry.jwks,
-        subjectMetadata: entry.metadata,
-        ttlSeconds: 86400,
+        issuerEntityId:  ENTITY_ID,
+        subjectEntityId: row.entityId,
+        subjectJwks:     subEntry.jwks,
+        subjectMetadata: subEntry.metadata,
+        ttlSeconds:      86400,
       },
       kms
     );
 
     res.setHeader("Content-Type", "application/entity-statement+jwt");
-    res.setHeader("Cache-Control", "no-store"); // subordinate statements are per-subject
+    res.setHeader("Cache-Control", "no-store");
     res.send(jws);
   }
 );
 
 // ---------------------------------------------------------------------------
 // GET /trust-mark-status — OIDF §12 trust mark status query
+// Backed by the DB revocations table.
 // ---------------------------------------------------------------------------
 
-app.use("/trust-mark-status", createTrustMarkStatusRouter(statusRegistry));
+const dbStatusChecker = {
+  isActive: (sub: string, id: string) => store.isActive(sub, id),
+};
+
+app.use("/trust-mark-status", createTrustMarkStatusRouter(dbStatusChecker));
 
 // ---------------------------------------------------------------------------
-// GET /intermediates — management endpoint: list intermediate entity IDs
-// (Not part of OIDF core spec; management-plane convenience only)
+// GET /intermediates — convenience: list intermediate entity IDs
 // ---------------------------------------------------------------------------
 
 app.get("/intermediates", (_req: Request, res: Response) => {
-  const all = registry.listEntityIds();
-  const intermediates = all.filter((id) => {
-    const entry = registry.get(id);
-    return entry ? isIntermediate(entry) : false;
-  });
-  res.json(intermediates);
+  const rows = store.listSubordinates({ status: "active", isIntermediate: true });
+  res.json(rows.map((r) => r.entityId));
 });
+
+// ---------------------------------------------------------------------------
+// Enrollment router — POST /enroll, POST /enroll/:id/complete, GET /enroll/:id
+// ---------------------------------------------------------------------------
+
+app.use("/", createEnrollmentRouter(store, kms, ENTITY_ID, JWKS_URL));
+
+// ---------------------------------------------------------------------------
+// Management router — admin CRUD for subordinates, revocations, audit log
+// Protected by ADMIN_TOKEN Bearer auth when env var is set.
+// ---------------------------------------------------------------------------
+
+app.use("/", createManagementRouter(store));
+
+// ---------------------------------------------------------------------------
+// Dashboard router — GET /dashboard (UI) + GET /dashboard/api/*
+// ---------------------------------------------------------------------------
+
+app.use("/", createDashboardRouter(store, ENTITY_ID));
 
 // ---------------------------------------------------------------------------
 // Health
 // ---------------------------------------------------------------------------
 
 app.get("/health", (_req: Request, res: Response) => {
+  const active = store.listSubordinates({ status: "active" }).length;
   res.json({
     status: "ok",
     entity_id: ENTITY_ID,
-    subordinates: registry.listEntityIds().length,
+    subordinates: active,
+    db_path: DB_PATH,
   });
 });
 
@@ -349,30 +440,32 @@ app.get("/health", (_req: Request, res: Response) => {
 loadSubordinates()
   .then(() => {
     app.listen(PORT, () => {
-      const subCount = registry.listEntityIds().length;
+      const active = store.listSubordinates({ status: "active" }).length;
       process.stderr.write(
         `[ta-server] listening on :${PORT}  entity_id=${ENTITY_ID}  policy=${TRUST_POLICY}\n`
       );
-      if (subCount > 0) {
+      if (active > 0) {
         process.stderr.write(
-          `[ta-server] [TRUST:VALID] ${subCount} subordinate(s) registered\n`
+          `[ta-server] [TRUST:VALID] ${active} active subordinate(s) in DB\n`
         );
       } else {
         process.stderr.write(
-          "[ta-server] [TRUST:WARN] No subordinates registered — " +
+          "[ta-server] [TRUST:WARN] No active subordinates in DB — " +
           "federation_list will return an empty array.\n" +
-          "  Info: Set TA_SUBORDINATES=[{\"entityId\":\"...\",\"jwksUrl\":\"...\"}] " +
-          "or use TA_REGISTRY_PATH for a persistent registry.\n"
+          "  Info: Enroll subordinates via POST /enroll or set TA_SUBORDINATES=[...] for bootstrap.\n"
         );
       }
+      process.stderr.write(
+        `[ta-server] Dashboard: http://localhost:${PORT}/dashboard\n`
+      );
     });
   })
   .catch((err: unknown) => {
     process.stderr.write(
       `[ta-server] [TRUST:FAIL] Startup failed: ${String(err)}\n` +
-      "  Recommended: Check TA_SUBORDINATES, TA_ENTITY_ID, and key paths are correct.\n"
+      "  Recommended: Check TA_ENTITY_ID, key paths, and TA_DB_PATH are correct.\n"
     );
     process.exit(1);
   });
 
-export { app, registry };
+export { app, store };

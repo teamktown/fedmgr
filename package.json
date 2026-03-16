@@ -30,7 +30,9 @@
     "ta:keys:init": "bash scripts/tmi-keys-init.sh packages/ta-server/keys",
     "ta:dev": "npm run dev -w @letsfederate/ta-server",
     "lab:up": "docker compose -f examples/lab/docker-compose.yml up --build",
-    "lab:down": "docker compose -f examples/lab/docker-compose.yml down"
+    "lab:down": "docker compose -f examples/lab/docker-compose.yml down",
+    "mcp:dev": "npm run dev -w @letsfederate/fedmgr-mcp",
+    "mcp:start": "npm run start -w @letsfederate/fedmgr-mcp"
   },
   "repository": {
     "type": "git",
