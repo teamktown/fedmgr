@@ -1,0 +1,148 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: release
+  cancel-in-progress: false   # never cancel a running release
+
+permissions:
+  contents: write        # push changelog + tag
+  issues: write          # create release issues
+  pull-requests: write   # update PRs with release notes
+  id-token: write        # npm provenance (OIDC)
+
+jobs:
+  # ── Verify everything passes before releasing ─────────────────────────────
+  pre-release-check:
+    name: Pre-release verification
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20.x"
+          cache: npm
+      - run: npm ci
+      - run: npm run build -ws --if-present
+      - run: ./scripts/test-report.sh
+
+  # ── @letsfederate/kms — released first (others depend on it) ─────────────
+  release-kms:
+    name: Release @letsfederate/kms
+    needs: pre-release-check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0      # full history for commit-analyzer
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20.x"
+          registry-url: "https://registry.npmjs.org"
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build kms
+        run: npm run build -w @letsfederate/kms
+
+      - name: Semantic release — @letsfederate/kms
+        working-directory: packages/kms
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_PROVENANCE: "true"
+        run: npx semantic-release-monorepo
+
+  # ── Dependent packages — released after kms ───────────────────────────────
+  release-tmi-server:
+    name: Release @letsfederate/tmi-server
+    needs: release-kms
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20.x"
+          registry-url: "https://registry.npmjs.org"
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build tmi-server
+        run: npm run build -w @letsfederate/tmi-server
+
+      - name: Semantic release — @letsfederate/tmi-server
+        working-directory: packages/tmi-server
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_PROVENANCE: "true"
+        run: npx semantic-release-monorepo
+
+  release-ta-server:
+    name: Release @letsfederate/ta-server
+    needs: release-kms
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20.x"
+          registry-url: "https://registry.npmjs.org"
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build ta-server
+        run: npm run build -w @letsfederate/ta-server
+
+      - name: Semantic release — @letsfederate/ta-server
+        working-directory: packages/ta-server
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_PROVENANCE: "true"
+        run: npx semantic-release-monorepo
+
+  release-fedmgr-cli:
+    name: Release @letsfederate/fedmgr-cli
+    needs: release-kms
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20.x"
+          registry-url: "https://registry.npmjs.org"
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build fedmgr-cli
+        run: npm run build -w @letsfederate/fedmgr-cli
+
+      - name: Semantic release — @letsfederate/fedmgr-cli
+        working-directory: packages/fedmgr-cli
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_PROVENANCE: "true"
+        run: npx semantic-release-monorepo

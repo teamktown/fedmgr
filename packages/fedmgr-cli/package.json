@@ -14,7 +14,16 @@
       "types": "./dist/index.d.ts"
     }
   },
-  "files": ["dist"],
+  "files": ["dist", "CHANGELOG.md", "README.md"],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/teamktown/fedmgr.git",
+    "directory": "packages/fedmgr-cli"
+  },
   "scripts": {
     "build": "tsc -b",
     "dev": "tsx src/bin.ts",

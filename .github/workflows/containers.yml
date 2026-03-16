@@ -1,0 +1,271 @@
+name: Containers
+
+# Triggered when semantic-release pushes a version tag.
+# Also manually dispatchable.
+on:
+  push:
+    tags:
+      - "@letsfederate/ta-server@*"
+      - "@letsfederate/tmi-server@*"
+  workflow_dispatch:
+    inputs:
+      image:
+        description: "Image to build (ta-server | tmi-server | both)"
+        required: true
+        default: "both"
+      tag:
+        description: "Image tag (e.g. v1.2.3 or 'latest')"
+        required: true
+        default: "latest"
+
+permissions:
+  contents: read
+  packages: write       # push to GHCR
+  id-token: write       # cosign keyless OIDC + npm provenance
+
+env:
+  REGISTRY: ghcr.io
+  REPO_OWNER: ${{ github.repository_owner }}
+
+jobs:
+  # ── Determine which images to build ───────────────────────────────────────
+  matrix-setup:
+    name: Resolve build matrix
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set.outputs.matrix }}
+    steps:
+      - id: set
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            input="${{ github.event.inputs.image }}"
+            if [ "$input" = "both" ]; then
+              echo 'matrix={"include":[{"service":"ta-server"},{"service":"tmi-server"}]}' >> "$GITHUB_OUTPUT"
+            else
+              echo "matrix={\"include\":[{\"service\":\"${input}\"}]}" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            # derive from tag name
+            tag="${{ github.ref_name }}"
+            if [[ "$tag" == *ta-server* ]]; then
+              echo 'matrix={"include":[{"service":"ta-server"}]}' >> "$GITHUB_OUTPUT"
+            elif [[ "$tag" == *tmi-server* ]]; then
+              echo 'matrix={"include":[{"service":"tmi-server"}]}' >> "$GITHUB_OUTPUT"
+            else
+              echo 'matrix={"include":[{"service":"ta-server"},{"service":"tmi-server"}]}' >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
+  # ── Build, push, sign, attest ─────────────────────────────────────────────
+  build-sign-attest:
+    name: Build & sign ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    needs: matrix-setup
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.matrix-setup.outputs.matrix) }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── Resolve image tag ────────────────────────────────────────────────
+      - name: Resolve image tag
+        id: tag
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "version=${{ github.event.inputs.tag }}" >> "$GITHUB_OUTPUT"
+          else
+            # Extract version from tag like @letsfederate/ta-server@1.2.3
+            echo "version=$(echo '${{ github.ref_name }}' | sed 's/.*@//')" >> "$GITHUB_OUTPUT"
+          fi
+          echo "image=${{ env.REGISTRY }}/${{ env.REPO_OWNER }}/${{ matrix.service }}" >> "$GITHUB_OUTPUT"
+
+      # ── Build environment ────────────────────────────────────────────────
+      - name: Set up QEMU (multi-arch)
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # ── Install cosign ────────────────────────────────────────────────────
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      # ── Install Syft (SBOM) ───────────────────────────────────────────────
+      - name: Install Syft
+        uses: anchore/sbom-action/download-syft@v0
+
+      # ── Build & push ──────────────────────────────────────────────────────
+      - name: Build and push ${{ matrix.service }}
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: Dockerfile.${{ matrix.service }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ steps.tag.outputs.image }}:${{ steps.tag.outputs.version }}
+            ${{ steps.tag.outputs.image }}:latest
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+            org.opencontainers.image.version=${{ steps.tag.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # ── Vulnerability scan (gate on HIGH/CRITICAL) ────────────────────────
+      - name: Trivy vulnerability scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ steps.tag.outputs.image }}@${{ steps.build.outputs.digest }}
+          format: sarif
+          output: trivy-${{ matrix.service }}.sarif
+          exit-code: "1"
+          severity: CRITICAL
+
+      - name: Upload Trivy SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-${{ matrix.service }}.sarif
+          category: trivy-${{ matrix.service }}
+
+      # ── Sign container (cosign keyless — Sigstore OIDC) ──────────────────
+      - name: Sign container image
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          cosign sign --yes \
+            "${{ steps.tag.outputs.image }}@${DIGEST}"
+
+      # ── Generate and attach SBOM attestation ─────────────────────────────
+      - name: Generate SBOM
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          syft "${{ steps.tag.outputs.image }}@${DIGEST}" \
+            -o cyclonedx-json \
+            --file sbom-${{ matrix.service }}.cyclonedx.json
+
+      - name: Attach SBOM attestation
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          cosign attest --yes \
+            --type cyclonedx \
+            --predicate sbom-${{ matrix.service }}.cyclonedx.json \
+            "${{ steps.tag.outputs.image }}@${DIGEST}"
+
+      # ── Issue trustmark via fedmgr (self-attestation) ────────────────────
+      #
+      # Prerequisites (set as GitHub Actions secrets):
+      #   TMI_PRIV_JWE       — base64-encoded tmi.priv.jwe (PBES2 encrypted JWK)
+      #   TMI_JWE_PASSPHRASE — passphrase to decrypt TMI_PRIV_JWE
+      #   TMI_ISSUER         — public URL of the TMI (e.g. https://tmi.letsfederate.org)
+      #   TMI_JWKS_URL       — public JWKS URL  (e.g. https://tmi.letsfederate.org/.well-known/jwks.json)
+      #   TA_ENTITY_ID       — Trust Anchor entity ID (https://letsfederate.org)
+      #
+      # If TMI_PRIV_JWE is not set, this step is skipped (trustmark not attached).
+      - name: Setup fedmgr CLI
+        if: secrets.TMI_PRIV_JWE != ''
+        run: npm ci && npm run build -w @letsfederate/fedmgr-cli
+
+      - name: Decrypt TMI key to tmpfs
+        if: ${{ secrets.TMI_PRIV_JWE != '' }}
+        env:
+          TMI_PRIV_JWE: ${{ secrets.TMI_PRIV_JWE }}
+          TMI_JWE_PASSPHRASE: ${{ secrets.TMI_JWE_PASSPHRASE }}
+        run: |
+          mkdir -p /dev/shm/tmi-ci
+          echo "$TMI_PRIV_JWE" | base64 -d > /dev/shm/tmi-ci/tmi.priv.jwe
+          # Decrypt JWE → plaintext JWK on tmpfs
+          echo "$TMI_JWE_PASSPHRASE" | \
+            step crypto jwe decrypt \
+              --in /dev/shm/tmi-ci/tmi.priv.jwe \
+              > /dev/shm/tmi-ci/tmi.priv.jwk
+          echo "TMI_KEY=/dev/shm/tmi-ci/tmi.priv.jwk" >> "$GITHUB_ENV"
+
+      - name: Issue trustmark for ${{ matrix.service }}
+        if: ${{ secrets.TMI_PRIV_JWE != '' }}
+        id: trustmark
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+          IMAGE_REF: ${{ steps.tag.outputs.image }}@${{ steps.build.outputs.digest }}
+          TMI_ISSUER: ${{ secrets.TMI_ISSUER }}
+          TMI_JWKS_URL: ${{ secrets.TMI_JWKS_URL }}
+        run: |
+          # Start a one-shot local TMI process with the decrypted key
+          TMI_PRIV_JWK_PATH="$TMI_KEY" \
+          TMI_PUB_JWK_PATH="packages/${{ matrix.service }}/keys/tmi.pub.jwk" \
+          TMI_ISSUER="$TMI_ISSUER" \
+          TMI_JWKS_URL="$TMI_JWKS_URL" \
+          TMI_PORT=18080 \
+            node packages/tmi-server/dist/index.js &
+          TMI_PID=$!
+          sleep 2
+
+          JWS=$(node packages/fedmgr-cli/dist/bin.js trustmark issue \
+            --sub "$IMAGE_REF" \
+            --tmi "http://localhost:18080" \
+            --image-digest "$DIGEST" \
+            --repo "${{ github.server_url }}/${{ github.repository }}")
+
+          kill $TMI_PID 2>/dev/null || true
+          echo "jws=$JWS" >> "$GITHUB_OUTPUT"
+          echo "$JWS" > trustmark-${{ matrix.service }}.jws
+
+      - name: Attach trustmark attestation
+        if: ${{ secrets.TMI_PRIV_JWE != '' && steps.trustmark.outputs.jws != '' }}
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          node packages/fedmgr-cli/dist/bin.js oci attach-trustmark \
+            --image "${{ steps.tag.outputs.image }}@${DIGEST}" \
+            --jws "$(cat trustmark-${{ matrix.service }}.jws)"
+
+      - name: Wipe decrypted key
+        if: always()
+        run: rm -rf /dev/shm/tmi-ci || true
+
+      # ── Summary ───────────────────────────────────────────────────────────
+      - name: Release summary
+        run: |
+          echo "## Container Release: ${{ matrix.service }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| | |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Image | \`${{ steps.tag.outputs.image }}:${{ steps.tag.outputs.version }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Digest | \`${{ steps.build.outputs.digest }}\` |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Platforms | linux/amd64, linux/arm64 |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| cosign signature | keyless (Sigstore OIDC) |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| SBOM | CycloneDX JSON (cosign attest) |" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ secrets.TMI_PRIV_JWE }}" != "" ]; then
+            echo "| Trustmark | issued + attached (OIDF JWS) |" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "| Trustmark | skipped (TMI_PRIV_JWE not set) |" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### Verify" >> "$GITHUB_STEP_SUMMARY"
+          echo '```bash' >> "$GITHUB_STEP_SUMMARY"
+          echo "# 1. Verify cosign signature" >> "$GITHUB_STEP_SUMMARY"
+          echo "cosign verify ${{ steps.tag.outputs.image }}@${{ steps.build.outputs.digest }} \\" >> "$GITHUB_STEP_SUMMARY"
+          echo "  --certificate-identity-regexp 'https://github.com/${{ github.repository }}' \\" >> "$GITHUB_STEP_SUMMARY"
+          echo "  --certificate-oidc-issuer https://token.actions.githubusercontent.com" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "# 2. Verify SBOM attestation" >> "$GITHUB_STEP_SUMMARY"
+          echo "cosign verify-attestation --type cyclonedx \\" >> "$GITHUB_STEP_SUMMARY"
+          echo "  ${{ steps.tag.outputs.image }}@${{ steps.build.outputs.digest }} \\" >> "$GITHUB_STEP_SUMMARY"
+          echo "  --certificate-identity-regexp 'https://github.com/${{ github.repository }}' \\" >> "$GITHUB_STEP_SUMMARY"
+          echo "  --certificate-oidc-issuer https://token.actions.githubusercontent.com" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "# 3. Verify trustmark (if issued)" >> "$GITHUB_STEP_SUMMARY"
+          echo "fedmgr oci verify-trustmark --image ${{ steps.tag.outputs.image }}@${{ steps.build.outputs.digest }}" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
