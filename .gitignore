@@ -166,3 +166,13 @@ test-federations/
 ./build
 prompts
 filter.txt
+# ---- KMS / secrets — NEVER commit these ----
+packages/*/keys/*.priv.jwe
+packages/*/keys/*.priv.jwk
+packages/*/keys/.pass
+*.priv.jwk
+
+# TypeScript build output
+packages/*/dist/
+packages/*/.tmp/
+packages/*/test/.tmp/
