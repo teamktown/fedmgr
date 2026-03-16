@@ -138,6 +138,11 @@ dist
 #letsfederate
 mcp_instances/
 federations/
+data/
+test-data/
+*.db
+*.db-wal
+*.db-shm
 test-results/*.junit.xml
 test-results/*.tap
 test-results/*.log
