@@ -80,7 +80,7 @@ export function isIntermediate(entry: SubordinateEntry): boolean {
 }
 
 export class SubordinateRegistry {
-  private readonly entries = new Map<string, SubordinateEntry>();
+  protected readonly entries = new Map<string, SubordinateEntry>();
 
   register(entry: SubordinateEntry): void {
     this.entries.set(entry.entityId, entry);

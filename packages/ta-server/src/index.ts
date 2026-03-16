@@ -35,6 +35,7 @@ import {
   isIntermediate,
   type SubordinateEntry,
 } from "./federation/subordinate-statements.js";
+import { FileSubordinateRegistry } from "./federation/file-registry.js";
 import {
   signEntityStatement,
   trustAnchorMetadata,
@@ -61,6 +62,7 @@ const PRIV_JWK =
   process.env["TA_PRIVATE_JWK"] ?? path.resolve("keys", "ta.priv.jwk");
 const ORG_NAME =
   process.env["TA_ORG_NAME"] ?? "letsfederate Trust Anchor";
+const REGISTRY_PATH = process.env["TA_REGISTRY_PATH"];
 
 if (!ENTITY_ID.startsWith("http")) {
   throw new Error(`TA_ENTITY_ID must be an HTTP(S) URL, got: ${ENTITY_ID}`);
@@ -77,7 +79,9 @@ const kms = new SoftKmsProvider({
 // Subordinate registry and trust-mark status registry — populated at startup
 // ---------------------------------------------------------------------------
 
-const registry = new SubordinateRegistry();
+const registry: SubordinateRegistry = REGISTRY_PATH
+  ? new FileSubordinateRegistry(REGISTRY_PATH)
+  : new SubordinateRegistry();
 const statusRegistry = new TrustMarkStatusRegistry();
 
 async function loadSubordinates(): Promise<void> {
@@ -175,11 +179,46 @@ app.get(
 
 // ---------------------------------------------------------------------------
 // GET /federation_list — list of immediate subordinate entity IDs
-// Per spec §8.3: returns JSON array of entity ID strings
+// Per OIDF draft-43 §8.3: returns JSON array of entity ID strings.
+//
+// Optional query parameters:
+//   entity_type=intermediate  — return only intermediates (entities with
+//                               federation_fetch_endpoint in their metadata)
+//   entity_type=leaf          — return only leaf entities
+//   limit=N                   — return at most N results
+//   after=<entityId>          — pagination cursor: return entries after this ID
 // ---------------------------------------------------------------------------
 
-app.get("/federation_list", (_req: Request, res: Response) => {
-  res.json(registry.listEntityIds());
+app.get("/federation_list", (req: Request, res: Response) => {
+  let ids = registry.listEntityIds();
+
+  const entityType = req.query["entity_type"] as string | undefined;
+  if (entityType === "intermediate") {
+    ids = ids.filter((id) => {
+      const e = registry.get(id);
+      return e ? isIntermediate(e) : false;
+    });
+  } else if (entityType === "leaf") {
+    ids = ids.filter((id) => {
+      const e = registry.get(id);
+      return e ? !isIntermediate(e) : false;
+    });
+  }
+
+  const after = req.query["after"] as string | undefined;
+  if (after) {
+    const idx = ids.indexOf(after);
+    ids = idx >= 0 ? ids.slice(idx + 1) : [];
+  }
+
+  const limitRaw = req.query["limit"];
+  if (limitRaw) {
+    const limit = parseInt(String(limitRaw), 10);
+    if (!isNaN(limit) && limit > 0) ids = ids.slice(0, limit);
+  }
+
+  res.setHeader("Content-Type", "application/json");
+  res.json(ids);
 });
 
 // ---------------------------------------------------------------------------
