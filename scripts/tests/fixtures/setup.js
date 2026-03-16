@@ -13,6 +13,8 @@ const fs = require('fs');
 const FEDMGR_HOME = process.env.FEDMGR_HOME || path.resolve(__dirname, '../../..');
 process.env.FEDMGR_FEDERATIONS_DIR = process.env.FEDMGR_FEDERATIONS_DIR || path.join(FEDMGR_HOME, 'test-federations');
 process.env.FEDMGR_FED_REG = process.env.FEDMGR_FED_REG || path.join(FEDMGR_HOME, 'test-data', 'fed-reg');
+// FEDMGR_FED_REG_FILE is the full path to the registry JSON file
+process.env.FEDMGR_FED_REG_FILE = process.env.FEDMGR_FED_REG_FILE || path.join(process.env.FEDMGR_FED_REG, 'registry.json');
 
 // Create federation directories if they don't exist
 if (!fs.existsSync(process.env.FEDMGR_FEDERATIONS_DIR)) {
