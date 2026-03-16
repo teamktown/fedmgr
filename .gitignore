@@ -138,7 +138,9 @@ dist
 #letsfederate
 mcp_instances/
 federations/
-test-results/*
+test-results/*.junit.xml
+test-results/*.tap
+test-results/*.log
 reports/
 context/
 # automatically build files

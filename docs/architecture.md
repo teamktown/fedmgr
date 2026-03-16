@@ -68,8 +68,16 @@ SoftKmsProvider (implements KeyProvider)
 ├── Validates: EC P-256 only (fails fast on wrong key type)
 └── Signs: ES256 via jose
 
-Pkcs11Provider (stub — Increment D)
-└── Throws: "not yet implemented"
+Pkcs11Provider (implements KeyProvider — Increment E)
+├── Lazy-loads pkcs11js via dynamic import (absent in CI; Decision 2)
+├── C_Initialize: tolerates CKR_CRYPTOKI_ALREADY_INITIALIZED (code 401)
+├── C_Login: tolerates CKR_USER_ALREADY_LOGGED_IN (code 256)
+├── Signing: CKM_ECDSA; caller pre-hashes with SHA-256; output is raw R||S
+├── Public key export: CKA_EC_POINT → strip OCTET STRING wrapper → x/y base64url
+└── Config: { libraryPath, slot?, pin, keyLabel, kid? }
+
+createProvider(tag, config): KeyProvider
+└── Factory: "softkms" → SoftKmsProvider | "pkcs11" → Pkcs11Provider
 ```
 
 **Key policy:**
@@ -77,6 +85,7 @@ Pkcs11Provider (stub — Increment D)
 - Decrypted only into tmpfs (`/dev/shm` or Docker `type: tmpfs` volume)
 - `SoftKmsProvider` never writes key material
 - `jwks()` strips `d` before returning
+- `Pkcs11Provider`: private key never leaves HSM; only public key is extracted via PKCS#11
 
 ### 3.2 `@letsfederate/ta-server` — Trust Anchor
 
@@ -86,13 +95,28 @@ Endpoints:
   GET  /.well-known/jwks.json                   — TA public JWKS
   GET  /federation_list                         — JSON array of subordinate entity IDs
   GET  /federation_fetch?sub=<entityId>         — signed subordinate statement JWT
-  GET  /trust-mark-status                       — stub (501 until Increment E)
+  GET  /trust-mark-status?sub=&id=              — active/revoked status per OIDF §10
+  GET  /intermediates                           — management: list intermediate entity IDs
   GET  /health                                  — liveness + subordinate count
 
-SubordinateRegistry (in-memory):
-  Populated at startup from TA_SUBORDINATES env var (JSON array of {entityId, jwksUrl})
-  TA fetches each subordinate's JWKS and caches it
-  Fail-fast if any JWKS fetch fails at startup
+SubordinateRegistry (in-memory, default):
+  Populated at startup from TA_SUBORDINATES env var (JSON array of {entityId, jwksUrl, fetchEndpoint?})
+  TA fetches each subordinate's JWKS and caches it; fail-fast if any JWKS fetch fails
+
+FileSubordinateRegistry (persistent, optional):
+  Activated by TA_REGISTRY_PATH env var
+  Writes JSON on every register()/remove(); reloads on construction
+  Drop-in replacement: extends SubordinateRegistry
+
+TrustChainVerifier (src/federation/chain-verifier.ts):
+  verifyTrustChain(leaf, trustAnchor, opts) — OIDF draft-43 §9
+  Traversal: follows authority_hints[0] (NOT iss) at each hop
+  Injectable fetchFn for unit testing without HTTP
+
+federation_list query parameters (OIDF §8.3 + extensions):
+  entity_type=intermediate | leaf     — filter by entity type
+  limit=N                             — max results per page
+  after=<entityId>                    — pagination cursor
 ```
 
 ### 3.3 `@letsfederate/tmi-server` — Trustmark Issuer

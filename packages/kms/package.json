@@ -11,14 +11,20 @@
       "types": "./dist/index.d.ts"
     }
   },
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc -b",
     "test": "node --test test/*.test.mjs",
+    "test:hsm": "SOFTHSM2_MODULE=${SOFTHSM2_MODULE} PKCS11_PIN=${PKCS11_PIN:-testpin} PKCS11_KEY_LABEL=${PKCS11_KEY_LABEL:-kms-test-key} node --test test/pkcs11.test.mjs",
+    "test:report": "node --test test/*.test.mjs --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=../../test-results/kms.junit.xml",
+    "test:hsm:report": "SOFTHSM2_MODULE=${SOFTHSM2_MODULE} node --test test/pkcs11.test.mjs --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=../../test-results/kms-hsm.junit.xml",
     "prepublishOnly": "npm run build && npm test"
   },
   "dependencies": {
-    "jose": "^5.2.0"
+    "jose": "^5.2.0",
+    "pkcs11js": "^2.1.6"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",

@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="jest tests" tests="8" failures="0" errors="0" time="0.504">
+  <testsuite name="Token Validation Security" errors="0" failures="0" skipped="0" timestamp="2026-03-16T13:06:26" time="0.474" tests="8">
+    <testcase classname="Token Validation Security should validate a properly signed JWT" name="Token Validation Security should validate a properly signed JWT" time="0.077">
+    </testcase>
+    <testcase classname="Token Validation Security should reject a JWT with invalid signature" name="Token Validation Security should reject a JWT with invalid signature" time="0.07">
+    </testcase>
+    <testcase classname="Token Validation Security should reject an expired JWT" name="Token Validation Security should reject an expired JWT" time="0.049">
+    </testcase>
+    <testcase classname="Token Validation Security should reject a JWT with incorrect audience" name="Token Validation Security should reject a JWT with incorrect audience" time="0.034">
+    </testcase>
+    <testcase classname="Token Validation Security should reject a tampered JWT" name="Token Validation Security should reject a tampered JWT" time="0.038">
+    </testcase>
+    <testcase classname="Token Validation Security should reject a request with missing JWT" name="Token Validation Security should reject a request with missing JWT" time="0.048">
+    </testcase>
+    <testcase classname="Token Validation Security should reject a malformed JWT" name="Token Validation Security should reject a malformed JWT" time="0.039">
+    </testcase>
+    <testcase classname="Token Validation Security should reject a JWT with invalid claims" name="Token Validation Security should reject a JWT with invalid claims" time="0.024">
+    </testcase>
+  </testsuite>
+</testsuites>
