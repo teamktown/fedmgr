@@ -2,22 +2,22 @@
 #
 # Local Trust Lab — brings up:
 #   registry   — OCI registry (distribution/distribution) on :5000
+#   ta-server  — Trust Anchor on :8090
 #   tmi-server — Trustmark Issuer on :8080
 #
 # KEY POLICY:
-#   The decrypted private JWK lives in a tmpfs volume (/run/secrets) that
-#   Docker creates in RAM. It is never written to the host filesystem.
-#   The public JWK is bind-mounted read-only from the host.
+#   Each service's decrypted private JWK lives in its own tmpfs volume.
+#   Keys are never written to the host filesystem or persisted to disk.
+#   Public JWKs are bind-mounted read-only from the host.
 #
 # Prerequisites:
-#   1. Generate encrypted keys:     npm run tmi:keys:init
-#   2. Decrypt into tmpfs dir:      bash scripts/lab-prep-keys.sh
-#   3. Start:                       docker compose -f examples/lab/docker-compose.yml up
+#   1. Generate TA keys:   npm run ta:keys:init
+#   2. Generate TMI keys:  npm run tmi:keys:init
+#   3. Start:              docker compose -f examples/lab/docker-compose.yml up --build
 #
-# Environment variables (override via .env file or shell exports):
-#   TMI_ISSUER     — public URL of the TMI service (default http://localhost:8080)
-#   TMI_JWKS_URL   — public URL of the JWKS endpoint
-#   KEYS_DIR       — path to keys dir on host (default packages/tmi-server/keys)
+# Environment variables (override via .env or shell):
+#   TA_ENTITY_ID   — public URL of the TA  (default http://localhost:8090)
+#   TMI_ISSUER     — public URL of the TMI (default http://localhost:8080)
 
 version: "3.9"
 
@@ -26,8 +26,15 @@ networks:
     driver: bridge
 
 volumes:
-  # tmpfs volume for decrypted private key — exists only in RAM
+  # tmpfs volumes — exist only in RAM, never touch disk
   tmi-secrets:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: "size=1m,mode=0700"
+
+  ta-secrets:
     driver: local
     driver_opts:
       type: tmpfs
@@ -38,7 +45,7 @@ volumes:
 
 services:
   # -------------------------------------------------------------------------
-  # OCI Registry (local push/pull for attestation testing)
+  # OCI Registry
   # -------------------------------------------------------------------------
   registry:
     image: registry:2
@@ -54,9 +61,74 @@ services:
     restart: unless-stopped
 
   # -------------------------------------------------------------------------
+  # TA decrypt sidecar — decrypts TA private JWE into ta-secrets tmpfs
+  # -------------------------------------------------------------------------
+  ta-decrypt:
+    image: smallstep/step-cli:latest
+    container_name: trust-lab-ta-decrypt
+    volumes:
+      - type: bind
+        source: ../../packages/ta-server/keys
+        target: /keys
+        read_only: true
+      - ta-secrets:/run/secrets
+    command: >
+      sh -c "
+        step crypto jwk decrypt
+          --in /keys/ta.priv.jwe
+          --out /run/secrets/ta.priv.jwk
+          --password-file /keys/.pass &&
+        chmod 600 /run/secrets/ta.priv.jwk &&
+        echo '[ta-decrypt] TA key decrypted to tmpfs.'
+      "
+    networks:
+      - trust-lab
+
+  # -------------------------------------------------------------------------
+  # Trust Anchor Server
+  # -------------------------------------------------------------------------
+  ta-server:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.ta-server
+    container_name: trust-lab-ta
+    ports:
+      - "8090:8090"
+    volumes:
+      - type: bind
+        source: ../../packages/ta-server/keys/ta.pub.jwk
+        target: /app/keys/ta.pub.jwk
+        read_only: true
+      - ta-secrets:/run/secrets:ro
+    environment:
+      PORT: "8090"
+      TA_ENTITY_ID: "${TA_ENTITY_ID:-http://localhost:8090}"
+      TA_JWKS_URL: "${TA_ENTITY_ID:-http://localhost:8090}/.well-known/jwks.json"
+      TA_PUBLIC_JWK: "/app/keys/ta.pub.jwk"
+      TA_PRIVATE_JWK: "/run/secrets/ta.priv.jwk"
+      TA_ORG_NAME: "letsfederate Trust Anchor (local lab)"
+      # Register TMI as a subordinate — fetched at startup
+      TA_SUBORDINATES: >
+        [{"entityId":"${TMI_ISSUER:-http://localhost:8080}",
+          "jwksUrl":"${TMI_ISSUER:-http://localhost:8080}/.well-known/jwks.json"}]
+    depends_on:
+      ta-decrypt:
+        condition: service_completed_successfully
+      tmi-server:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e",
+        "fetch('http://localhost:8090/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks:
+      - trust-lab
+    restart: unless-stopped
+
+  # -------------------------------------------------------------------------
   # TMI decrypt sidecar
-  # Decrypts the PBES2-encrypted private JWK into the tmpfs volume.
-  # Exits after writing; the main tmi-server container reads from the volume.
   # -------------------------------------------------------------------------
   tmi-decrypt:
     image: smallstep/step-cli:latest
@@ -67,7 +139,6 @@ services:
         target: /keys
         read_only: true
       - tmi-secrets:/run/secrets
-    # Decrypt JWE → plaintext JWK on tmpfs; chmod 600 for tmi user (uid 1001)
     command: >
       sh -c "
         step crypto jwk decrypt
@@ -75,7 +146,7 @@ services:
           --out /run/secrets/tmi.priv.jwk
           --password-file /keys/.pass &&
         chmod 600 /run/secrets/tmi.priv.jwk &&
-        echo '[tmi-decrypt] Key decrypted to tmpfs.'
+        echo '[tmi-decrypt] TMI key decrypted to tmpfs.'
       "
     networks:
       - trust-lab
@@ -99,7 +170,7 @@ services:
     environment:
       PORT: "8080"
       TMI_ISSUER: "${TMI_ISSUER:-http://localhost:8080}"
-      TMI_JWKS_URL: "${TMI_JWKS_URL:-http://localhost:8080/.well-known/jwks.json}"
+      TMI_JWKS_URL: "${TMI_ISSUER:-http://localhost:8080}/.well-known/jwks.json"
       TMI_PUBLIC_JWK: "/app/keys/tmi.pub.jwk"
       TMI_PRIVATE_JWK: "/run/secrets/tmi.priv.jwk"
     depends_on:

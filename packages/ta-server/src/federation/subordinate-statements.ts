@@ -1,0 +1,89 @@
+/**
+ * OIDF Subordinate Statement signing
+ *
+ * A subordinate statement is a JWT where:
+ *   iss = issuing entity (the Trust Anchor or intermediate that vouches)
+ *   sub = subject entity (the entity being vouched for)
+ *
+ * Per OpenID Federation 1.0 draft-43 §8.1:
+ *   - Returned by the federation_fetch endpoint
+ *   - Content-Type: application/entity-statement+jwt
+ *   - Contains the subject's jwks and optional metadata/trust_marks
+ *
+ * The TA signs subordinate statements using its own private key. Verifiers
+ * fetch the TA's JWKS to check the signature.
+ */
+
+import { type KeyProvider } from "@letsfederate/kms";
+import { type JWK } from "jose";
+
+export type SubordinateConfig = {
+  /** Entity ID of the Trust Anchor (issuer of this statement). */
+  issuerEntityId: string;
+  /** Entity ID of the subordinate (TMI, MCP server, OP, etc.). */
+  subjectEntityId: string;
+  /** The subject's public JWKS. */
+  subjectJwks: { keys: JWK[] };
+  /** Optional role-specific metadata for the subject. */
+  subjectMetadata?: Record<string, unknown>;
+  /** Token lifetime in seconds (default 86400 = 24h). */
+  ttlSeconds?: number;
+};
+
+/**
+ * Signs a subordinate statement JWT.
+ * `kms` must hold the TA's private key.
+ */
+export async function signSubordinateStatement(
+  config: SubordinateConfig,
+  kms: KeyProvider
+): Promise<string> {
+  const now = Math.floor(Date.now() / 1000);
+  const ttl = config.ttlSeconds ?? 86400;
+
+  const payload = {
+    iss: config.issuerEntityId,
+    sub: config.subjectEntityId,
+    iat: now,
+    exp: now + ttl,
+    jwks: config.subjectJwks,
+    ...(config.subjectMetadata ? { metadata: config.subjectMetadata } : {}),
+  };
+
+  return kms.signJwt(payload, {
+    typ: "entity-statement+jwt",
+  });
+}
+
+/**
+ * In-memory registry of subordinates the TA knows about.
+ * Maps entity_id → { jwks, metadata? }
+ *
+ * In production this would be backed by persistent storage.
+ * For the lab, it is populated at startup from environment config.
+ */
+export type SubordinateEntry = {
+  entityId: string;
+  jwks: { keys: JWK[] };
+  metadata?: Record<string, unknown>;
+};
+
+export class SubordinateRegistry {
+  private readonly entries = new Map<string, SubordinateEntry>();
+
+  register(entry: SubordinateEntry): void {
+    this.entries.set(entry.entityId, entry);
+  }
+
+  get(entityId: string): SubordinateEntry | undefined {
+    return this.entries.get(entityId);
+  }
+
+  listEntityIds(): string[] {
+    return Array.from(this.entries.keys());
+  }
+
+  has(entityId: string): boolean {
+    return this.entries.has(entityId);
+  }
+}

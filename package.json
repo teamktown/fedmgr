@@ -26,7 +26,11 @@
     "tmi:keys:init": "bash scripts/tmi-keys-init.sh",
     "tmi:decrypt": "source scripts/tmi-decrypt.sh",
     "tmi:dev": "npm run dev -w @letsfederate/tmi-server",
-    "tmi:start": "bash scripts/tmi-decrypt.sh --start"
+    "tmi:start": "bash scripts/tmi-decrypt.sh --start",
+    "ta:keys:init": "bash scripts/tmi-keys-init.sh packages/ta-server/keys",
+    "ta:dev": "npm run dev -w @letsfederate/ta-server",
+    "lab:up": "docker compose -f examples/lab/docker-compose.yml up --build",
+    "lab:down": "docker compose -f examples/lab/docker-compose.yml down"
   },
   "repository": {
     "type": "git",
