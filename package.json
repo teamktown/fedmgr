@@ -71,6 +71,9 @@
     "sinon": "^15.2.0",
     "supertest": "^6.3.3"
   },
+  "overrides": {
+    "serialize-javascript": "^7.0.4"
+  },
   "engines": {
     "node": ">=18.0.0"
   }

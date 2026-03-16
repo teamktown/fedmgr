@@ -22,6 +22,7 @@ import {
   formatTrustMessage,
   type TrustResult,
 } from "@letsfederate/kms";
+import { assertSafeUrl, UrlSafetyError } from "./validate-url.js";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -68,9 +69,11 @@ async function fetchJson(
 }
 
 /**
- * Decode a compact JWT without verification, returning header + payload.
+ * Decode a compact JWT without signature verification, returning header + payload.
+ * WARNING: This function performs NO cryptographic verification. Use only for
+ * displaying informational content to the user, never for authorization decisions.
  */
-function decodeJwtParts(jwt: string): {
+function unsafeDecodeJwtParts(jwt: string): {
   header: Record<string, unknown>;
   payload: Record<string, unknown>;
 } {
@@ -123,9 +126,19 @@ function trustPrefix(result: TrustResult): string {
 // Tool implementations
 // ---------------------------------------------------------------------------
 
+/** Validate a URL arg; returns the cleaned URL string or throws with a user-friendly message. */
+function requireSafeUrl(rawUrl: string, fieldName: string): string {
+  try {
+    return assertSafeUrl(rawUrl, fieldName).toString().replace(/\/$/, "");
+  } catch (err) {
+    if (err instanceof UrlSafetyError) throw new Error(`[TRUST:FAIL] ${err.message}`);
+    throw err;
+  }
+}
+
 async function toolFederationStatus(args: Record<string, unknown>): Promise<string> {
-  const taUrl = String(args["ta_url"] ?? DEFAULT_TA_URL).replace(/\/$/, "");
-  const tmiUrl = String(args["tmi_url"] ?? DEFAULT_TMI_URL).replace(/\/$/, "");
+  const taUrl  = requireSafeUrl(String(args["ta_url"]  ?? DEFAULT_TA_URL),  "ta_url");
+  const tmiUrl = requireSafeUrl(String(args["tmi_url"] ?? DEFAULT_TMI_URL), "tmi_url");
 
   const results: string[] = [];
 
@@ -145,7 +158,7 @@ async function toolFederationStatus(args: Record<string, unknown>): Promise<stri
 }
 
 async function toolListSubordinates(args: Record<string, unknown>): Promise<string> {
-  const taUrl = String(args["ta_url"] ?? DEFAULT_TA_URL).replace(/\/$/, "");
+  const taUrl = requireSafeUrl(String(args["ta_url"] ?? DEFAULT_TA_URL), "ta_url");
   const entityType = String(args["entity_type"] ?? "all");
 
   let url = `${taUrl}/federation_list`;
@@ -158,9 +171,9 @@ async function toolListSubordinates(args: Record<string, unknown>): Promise<stri
 }
 
 async function toolEnrollServer(args: Record<string, unknown>): Promise<string> {
-  const taUrl = String(args["ta_url"] ?? DEFAULT_TA_URL).replace(/\/$/, "");
-  const entityId = String(args["entity_id"]);
-  const jwksUrl = String(args["jwks_url"]);
+  const taUrl    = requireSafeUrl(String(args["ta_url"]    ?? DEFAULT_TA_URL), "ta_url");
+  const entityId = requireSafeUrl(String(args["entity_id"]),                   "entity_id");
+  const jwksUrl  = requireSafeUrl(String(args["jwks_url"]),                    "jwks_url");
 
   const data = await fetchJson(`${taUrl}/enroll`, {
     method: "POST",
@@ -185,7 +198,7 @@ async function toolEnrollServer(args: Record<string, unknown>): Promise<string> 
 }
 
 async function toolCompleteEnrollment(args: Record<string, unknown>): Promise<string> {
-  const taUrl = String(args["ta_url"] ?? DEFAULT_TA_URL).replace(/\/$/, "");
+  const taUrl = requireSafeUrl(String(args["ta_url"] ?? DEFAULT_TA_URL), "ta_url");
   const enrollmentId = String(args["enrollment_id"]);
   const proofJws = String(args["proof_jws"]);
 
@@ -199,8 +212,8 @@ async function toolCompleteEnrollment(args: Record<string, unknown>): Promise<st
 }
 
 async function toolIssueTrustmark(args: Record<string, unknown>): Promise<string> {
-  const tmiUrl = String(args["tmi_url"] ?? DEFAULT_TMI_URL).replace(/\/$/, "");
-  const subjectUrl = String(args["subject_url"]);
+  const tmiUrl     = requireSafeUrl(String(args["tmi_url"]     ?? DEFAULT_TMI_URL), "tmi_url");
+  const subjectUrl = requireSafeUrl(String(args["subject_url"]),                    "subject_url");
   const ttlSeconds = Number(args["ttl_seconds"] ?? 3600);
 
   const body: Record<string, unknown> = {
@@ -245,8 +258,8 @@ async function toolVerifyTrustmark(args: Record<string, unknown>): Promise<strin
 }
 
 async function toolCheckTrustChain(args: Record<string, unknown>): Promise<string> {
-  const subjectUrl = String(args["subject_url"]);
-  const trustAnchorUrl = String(args["trust_anchor_url"] ?? DEFAULT_TA_URL);
+  const subjectUrl     = requireSafeUrl(String(args["subject_url"]),                           "subject_url");
+  const trustAnchorUrl = requireSafeUrl(String(args["trust_anchor_url"] ?? DEFAULT_TA_URL),    "trust_anchor_url");
 
   const result = await validateTrustChain(subjectUrl, trustAnchorUrl);
   const formatted = formatTrustMessage(result);
@@ -272,8 +285,8 @@ async function toolCheckTrustChain(args: Record<string, unknown>): Promise<strin
 }
 
 async function toolRevokeSubordinate(args: Record<string, unknown>): Promise<string> {
-  const taUrl = String(args["ta_url"] ?? DEFAULT_TA_URL).replace(/\/$/, "");
-  const entityId = String(args["entity_id"]);
+  const taUrl    = requireSafeUrl(String(args["ta_url"]    ?? DEFAULT_TA_URL), "ta_url");
+  const entityId = requireSafeUrl(String(args["entity_id"]),                   "entity_id");
   const reason = String(args["reason"]);
 
   const encodedId = encodeURIComponent(entityId);
@@ -287,7 +300,7 @@ async function toolRevokeSubordinate(args: Record<string, unknown>): Promise<str
 }
 
 async function toolGetSignedConfig(args: Record<string, unknown>): Promise<string> {
-  const entityUrl = String(args["entity_url"]).replace(/\/$/, "");
+  const entityUrl = requireSafeUrl(String(args["entity_url"]), "entity_url").replace(/\/$/, "");
   const configUrl = `${entityUrl}/.well-known/openid-federation`;
 
   const res = await fetch(configUrl);
@@ -295,7 +308,7 @@ async function toolGetSignedConfig(args: Record<string, unknown>): Promise<strin
     throw new Error(`GET ${configUrl} returned HTTP ${res.status} ${res.statusText}`);
   }
   const jwtText = await res.text();
-  const { header, payload } = decodeJwtParts(jwtText.trim());
+  const { header, payload } = unsafeDecodeJwtParts(jwtText.trim());
 
   return [
     `Signed entity configuration for ${entityUrl}`,

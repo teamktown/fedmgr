@@ -213,6 +213,9 @@ async function loadSubordinates(): Promise<void> {
 
 const app = express();
 app.disable("x-powered-by");
+// Trust proxy headers (X-Forwarded-For) so req.ip is accurate in audit logs
+// when running behind a reverse proxy (nginx, Caddy, AWS ALB, etc.)
+app.set("trust proxy", process.env["TRUST_PROXY"] ?? false);
 app.use(express.json());
 
 // ---------------------------------------------------------------------------

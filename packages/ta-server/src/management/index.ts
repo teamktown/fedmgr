@@ -29,6 +29,8 @@ import type { FederationStore } from "../db/store.js";
 // Schemas
 // ---------------------------------------------------------------------------
 
+const VALID_STATUSES = new Set(["pending", "active", "revoked", "decommissioned"]);
+
 const RevokeSchema = z.object({
   reason: z.string().min(1).max(500).optional(),
 });
@@ -81,6 +83,14 @@ export function createManagementRouter(store: FederationStore): Router {
   router.get("/subordinates", auth, (req: Request, res: Response): void => {
     const statusFilter = req.query["status"] as string | undefined;
     const typeFilter   = req.query["type"] as string | undefined;
+
+    if (statusFilter && !VALID_STATUSES.has(statusFilter)) {
+      res.status(400).json({
+        error: "invalid_request",
+        message: `Invalid status filter "${statusFilter}". Valid values: ${[...VALID_STATUSES].join(", ")}`,
+      });
+      return;
+    }
 
     const rows = store.listSubordinates({
       ...(statusFilter ? { status: statusFilter as never } : {}),
@@ -211,7 +221,8 @@ export function createManagementRouter(store: FederationStore): Router {
     (req: Request, res: Response): void => {
       const entityId = decodeURIComponent(req.params["entityId"] ?? "");
       const actor    = req.ip ?? "unknown";
-      const reason   = (req.query["reason"] as string | undefined) ?? "decommissioned by administrator";
+      const rawReason = (req.query["reason"] as string | undefined) ?? "decommissioned by administrator";
+      const reason   = rawReason.slice(0, 500); // cap at 500 chars
 
       const row = store.getSubordinate(entityId);
       if (!row) {

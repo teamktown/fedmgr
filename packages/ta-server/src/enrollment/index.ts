@@ -39,6 +39,10 @@ import type { KeyProvider } from "@letsfederate/kms";
 import {
   signSubordinateStatement,
 } from "../federation/subordinate-statements.js";
+import { assertSafeUrl, UrlSafetyError } from "../utils/validate-url.js";
+
+// Maximum JWKS response body size (64 KB) to prevent memory exhaustion
+const JWKS_MAX_BYTES = 64 * 1024;
 
 // ---------------------------------------------------------------------------
 // Schema
@@ -80,6 +84,18 @@ export function createEnrollmentRouter(
     }
 
     const { entity_id, jwks_url, notes } = parsed.data;
+
+    // Reject unsafe JWKS URLs (SSRF protection)
+    try {
+      assertSafeUrl(jwks_url, "jwks_url");
+      assertSafeUrl(entity_id, "entity_id");
+    } catch (err) {
+      if (err instanceof UrlSafetyError) {
+        res.status(400).json({ error: "invalid_request", message: err.message });
+        return;
+      }
+      throw err;
+    }
 
     // Reject if already active
     const existing = store.getSubordinate(entity_id);
@@ -146,9 +162,9 @@ export function createEnrollmentRouter(
       nonce,
       expires_at:   expiresAt.toISOString(),
       instructions:
-        "Sign the nonce using your private key: " +
-        `create a JWS with payload {"nonce":"${nonce}","entity_id":"${entity_id}"} ` +
-        `and POST it to /enroll/${enrollmentId}/complete as {"proof_jws":"<compact-jws>"}`,
+        "Sign the nonce field value using your entity's private key. " +
+        `Create a JWS with payload {"nonce":"<nonce_value>","entity_id":"${entity_id}"} ` +
+        `and POST it to /enroll/${enrollmentId}/complete as {"proof_jws":"<compact-jws>"}.`,
     });
   });
 
@@ -203,7 +219,16 @@ export function createEnrollmentRouter(
       try {
         const r = await fetch(enrollment.jwksUrl);
         if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        const body = (await r.json()) as { keys?: JWK[] };
+        // Guard against oversized responses (max 64 KB) to prevent memory exhaustion
+        const contentLength = Number(r.headers.get("content-length") ?? 0);
+        if (contentLength > JWKS_MAX_BYTES) {
+          throw new Error(`JWKS response too large (${contentLength} bytes, max ${JWKS_MAX_BYTES})`);
+        }
+        const text = await r.text();
+        if (text.length > JWKS_MAX_BYTES) {
+          throw new Error(`JWKS response too large (${text.length} bytes, max ${JWKS_MAX_BYTES})`);
+        }
+        const body = JSON.parse(text) as { keys?: JWK[] };
         if (!Array.isArray(body.keys) || body.keys.length === 0) {
           throw new Error("JWKS has no keys");
         }
@@ -226,9 +251,12 @@ export function createEnrollmentRouter(
       let proofPayload: Record<string, unknown> | null = null;
       for (const jwk of keys) {
         try {
+          // importJWK pins the algorithm; jwtVerify algorithms option prevents
+          // algorithm confusion attacks (e.g. RS256/HS256 substitution)
           const cryptoKey = await importJWK(jwk, "ES256");
           const { payload } = await jwtVerify(proof_jws, cryptoKey, {
             clockTolerance: 60,
+            algorithms: ["ES256"],
           });
           proofPayload = payload as Record<string, unknown>;
           break;
