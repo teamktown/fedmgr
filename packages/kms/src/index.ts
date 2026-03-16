@@ -147,6 +147,24 @@ export { Pkcs11Provider, type Pkcs11Config } from "./providers/pkcs11.js";
 import { Pkcs11Provider, type Pkcs11Config } from "./providers/pkcs11.js";
 
 // ---------------------------------------------------------------------------
+// Trust Validator — validate trustmark JWS tokens and OIDF trust chains.
+// ---------------------------------------------------------------------------
+
+export {
+  validateTrustmark,
+  validateTrustChain,
+  applyPolicy,
+  trustPolicyFromEnv,
+  formatTrustMessage,
+  TrustPolicyError,
+  type TrustState,
+  type TrustPolicy,
+  type TrustResult,
+  type ValidateTrustmarkOptions,
+  type ValidateChainOptions,
+} from "./trust-validator.js";
+
+// ---------------------------------------------------------------------------
 // Factory — resolves provider from a string tag.
 // ---------------------------------------------------------------------------
 

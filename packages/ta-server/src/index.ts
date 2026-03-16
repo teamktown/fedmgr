@@ -21,14 +21,27 @@
  *   TA_PUBLIC_JWK     default keys/ta.pub.jwk
  *   TA_PRIVATE_JWK    default keys/ta.priv.jwk (decrypted, on tmpfs)
  *   TA_ORG_NAME       default "letsfederate Trust Anchor"
+ *   TA_REGISTRY_PATH  path to JSON subordinate registry (persistent); unset = in-memory
  *
  * Subordinates are registered via TA_SUBORDINATES env var (JSON array):
  *   [{ "entityId": "https://...", "jwksUrl": "https://.../.well-known/jwks.json" }]
  * The TA fetches each subordinate's JWKS at startup to populate the registry.
+ *
+ * Trust policy:
+ *   TRUST_POLICY  strict (default) | permissive | audit
+ *   Controls behaviour when JWKS fetch for a subordinate fails at startup.
+ *   strict:      startup aborts on any JWKS fetch failure
+ *   permissive:  failed subordinates are logged and skipped
+ *   audit:       all states logged, never blocks
+ *
+ * Trust states logged at startup:
+ *   [TRUST:VALID]  — subordinate JWKS fetched and cached successfully
+ *   [TRUST:WARN]   — subordinate JWKS not yet fetched (registry-only entry)
+ *   [TRUST:FAIL]   — JWKS fetch failed (strict: abort; permissive: skip subordinate)
  */
 
 import express, { type Request, type Response } from "express";
-import { SoftKmsProvider } from "@letsfederate/kms";
+import { SoftKmsProvider, trustPolicyFromEnv } from "@letsfederate/kms";
 import {
   signSubordinateStatement,
   SubordinateRegistry,
@@ -63,9 +76,14 @@ const PRIV_JWK =
 const ORG_NAME =
   process.env["TA_ORG_NAME"] ?? "letsfederate Trust Anchor";
 const REGISTRY_PATH = process.env["TA_REGISTRY_PATH"];
+const TRUST_POLICY = trustPolicyFromEnv();
 
 if (!ENTITY_ID.startsWith("http")) {
-  throw new Error(`TA_ENTITY_ID must be an HTTP(S) URL, got: ${ENTITY_ID}`);
+  process.stderr.write(
+    `[ta-server] [TRUST:FAIL] TA_ENTITY_ID must be an HTTP(S) URL, got: "${ENTITY_ID}"\n` +
+    "  Recommended: Set TA_ENTITY_ID=https://letsfederate.org (your domain)\n"
+  );
+  process.exit(78); // EX_CONFIG
 }
 
 const kms = new SoftKmsProvider({
@@ -97,26 +115,50 @@ async function loadSubordinates(): Promise<void> {
   try {
     specs = JSON.parse(raw) as Array<{ entityId: string; jwksUrl: string; fetchEndpoint?: string }>;
   } catch {
-    throw new Error(
-      `TA_SUBORDINATES must be a JSON array of {entityId, jwksUrl, fetchEndpoint?} objects`
+    process.stderr.write(
+      "[ta-server] [TRUST:FAIL] TA_SUBORDINATES must be a JSON array of " +
+      "{entityId, jwksUrl, fetchEndpoint?} objects\n" +
+      "  Recommended: Check TA_SUBORDINATES env var format. " +
+      "Example: [{\"entityId\":\"https://tmi.example.com\",\"jwksUrl\":\"https://tmi.example.com/.well-known/jwks.json\"}]\n"
     );
+    process.exit(78); // EX_CONFIG
   }
 
   for (const spec of specs) {
-    process.stdout.write(
+    process.stderr.write(
       `[ta-server] Fetching JWKS for subordinate ${spec.entityId}...\n`
     );
-    const r = await fetch(spec.jwksUrl);
-    if (!r.ok) {
-      throw new Error(
-        `Failed to fetch JWKS for ${spec.entityId} from ${spec.jwksUrl}: ${r.status}`
+    let jwks: { keys: unknown[] };
+    try {
+      const r = await fetch(spec.jwksUrl);
+      if (!r.ok) {
+        throw new Error(`HTTP ${r.status} ${r.statusText}`);
+      }
+      jwks = (await r.json()) as { keys: unknown[] };
+      if (!Array.isArray(jwks.keys) || jwks.keys.length === 0) {
+        throw new Error("JWKS response has no keys");
+      }
+    } catch (err) {
+      const msg =
+        `[ta-server] [TRUST:FAIL] JWKS fetch failed for ${spec.entityId} ` +
+        `from ${spec.jwksUrl}: ${String(err)}\n` +
+        `  Recommended: Verify ${spec.entityId} is deployed and serving JWKS before starting the TA.\n` +
+        "  To skip failed subordinates at startup: set TRUST_POLICY=permissive\n";
+      process.stderr.write(msg);
+
+      if (TRUST_POLICY === "strict") {
+        process.exit(1);
+      }
+      // permissive/audit: log and skip this subordinate
+      process.stderr.write(
+        `  [TRUST:POLICY] ${TRUST_POLICY} mode — skipping ${spec.entityId} and continuing startup.\n`
       );
+      continue;
     }
-    const jwks = (await r.json()) as { keys: unknown[] };
+
     const entry: SubordinateEntry = {
       entityId: spec.entityId,
       jwks: jwks as SubordinateEntry["jwks"],
-      // If fetchEndpoint is provided, this is an intermediate entity
       ...(spec.fetchEndpoint
         ? {
             metadata: {
@@ -129,7 +171,9 @@ async function loadSubordinates(): Promise<void> {
     };
     registry.register(entry);
     const kind = isIntermediate(entry) ? "intermediate" : "leaf";
-    process.stdout.write(`[ta-server]   ✔ Registered ${spec.entityId} (${kind})\n`);
+    process.stderr.write(
+      `[ta-server] [TRUST:VALID] Registered ${spec.entityId} (${kind})\n`
+    );
   }
 }
 
@@ -305,16 +349,29 @@ app.get("/health", (_req: Request, res: Response) => {
 loadSubordinates()
   .then(() => {
     app.listen(PORT, () => {
-      process.stdout.write(
-        `[ta-server] listening on :${PORT}  entity_id=${ENTITY_ID}\n`
+      const subCount = registry.listEntityIds().length;
+      process.stderr.write(
+        `[ta-server] listening on :${PORT}  entity_id=${ENTITY_ID}  policy=${TRUST_POLICY}\n`
       );
-      process.stdout.write(
-        `[ta-server] ${registry.listEntityIds().length} subordinate(s) registered\n`
-      );
+      if (subCount > 0) {
+        process.stderr.write(
+          `[ta-server] [TRUST:VALID] ${subCount} subordinate(s) registered\n`
+        );
+      } else {
+        process.stderr.write(
+          "[ta-server] [TRUST:WARN] No subordinates registered — " +
+          "federation_list will return an empty array.\n" +
+          "  Info: Set TA_SUBORDINATES=[{\"entityId\":\"...\",\"jwksUrl\":\"...\"}] " +
+          "or use TA_REGISTRY_PATH for a persistent registry.\n"
+        );
+      }
     });
   })
   .catch((err: unknown) => {
-    process.stderr.write(`[ta-server] startup failed: ${String(err)}\n`);
+    process.stderr.write(
+      `[ta-server] [TRUST:FAIL] Startup failed: ${String(err)}\n` +
+      "  Recommended: Check TA_SUBORDINATES, TA_ENTITY_ID, and key paths are correct.\n"
+    );
     process.exit(1);
   });
 

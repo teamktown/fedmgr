@@ -1,14 +1,30 @@
 /**
- * fedmgr trustmark — trustmark issuance commands
+ * fedmgr trustmark — trustmark issuance, verification, chain-check, and adoption
  *
- * trustmark issue --sub <url> [--id <url>] [--tmi <url>] [--ttl <seconds>]
- *   POSTs to the TMI server and prints the signed JWS trustmark.
+ * trustmark issue  --sub <url> [--id] [--tmi] [--ttl] [--image-digest] ...
+ *   POSTs to the TMI and prints the signed JWS trustmark.
  *
  * trustmark verify --jws <token> [--jwks <url>]
  *   Verifies a trustmark JWS against its jku JWKS.
+ *
+ * trustmark check  --sub <url> [--ta <url>] [--policy strict|permissive|audit]
+ *   Fetches and validates the full OIDF trust chain for a subject entity.
+ *   Exits 0 = VALID, 1 = INVALID, 2 = WARN.
+ *
+ * trustmark adopt  --source <jws> --tmi <url> --sub <url> [--id] [--evidence]
+ *   Adopts an existing trustmark: issues a new one from your TMI that cites
+ *   the original as evidence.  The adopted_from_iss / adopted_from_id claims
+ *   let verifiers trace back to the original issuer's chain.
  */
 import { type Command } from "commander";
-import { importJWK, jwtVerify, decodeProtectedHeader } from "jose";
+import { importJWK, jwtVerify, decodeProtectedHeader, decodeJwt } from "jose";
+import {
+  validateTrustmark,
+  validateTrustChain,
+  applyPolicy,
+  formatTrustMessage,
+  type TrustPolicy,
+} from "@letsfederate/kms";
 
 const DEFAULT_TMI = "http://localhost:8080";
 const DEFAULT_TRUSTMARK_ID =
@@ -127,8 +143,229 @@ export function registerTrustmarkCommands(program: Command): void {
       }
 
       if (!verified) {
-        process.stderr.write("✘ Trustmark JWS verification FAILED — no matching key in JWKS\n");
+        process.stderr.write(
+          "[TRUST:FAIL] Trustmark JWS verification FAILED — no matching key in JWKS at " +
+            jwksUrl +
+            "\n" +
+            "  Recommended: Verify the TMI JWKS endpoint is up-to-date. " +
+            "If keys were rotated, re-issue with: fedmgr trustmark issue --sub <url>\n"
+        );
         process.exit(1);
       }
     });
+
+  // ----- check -----
+  tm.command("check")
+    .description(
+      "Validate the full OIDF trust chain for a subject entity (JWS + chain to TA)"
+    )
+    .requiredOption(
+      "--sub <url>",
+      "Entity ID of the subject to check (TMI entity URL)"
+    )
+    .option(
+      "--ta <url>",
+      "Expected Trust Anchor entity ID",
+      "https://letsfederate.org"
+    )
+    .option(
+      "--jws <token>",
+      "Trustmark JWS to validate (optional — validates JWS then chain)"
+    )
+    .option(
+      "--policy <mode>",
+      "Trust policy: strict (exit 1 on INVALID) | permissive | audit",
+      "strict"
+    )
+    .option("--json", "Output result as JSON")
+    .action(
+      async (opts: {
+        sub: string;
+        ta: string;
+        jws?: string;
+        policy: string;
+        json?: boolean;
+      }) => {
+        const policy = (opts.policy as TrustPolicy) ?? "strict";
+
+        // ── Step 1: validate JWS if provided ────────────────────────────
+        if (opts.jws) {
+          const jwsResult = await validateTrustmark(opts.jws);
+          if (opts.json) {
+            process.stdout.write(JSON.stringify(jwsResult, null, 2) + "\n");
+          } else {
+            process.stderr.write(formatTrustMessage(jwsResult) + "\n");
+            if (jwsResult.recommendedAction) {
+              process.stderr.write(
+                `  Recommended: ${jwsResult.recommendedAction}\n`
+              );
+            }
+          }
+
+          if (jwsResult.state === "INVALID") {
+            if (policy === "strict") process.exit(1);
+            if (policy === "permissive")
+              process.stderr.write(
+                "  [TRUST:POLICY] Continuing in permissive mode.\n"
+              );
+          }
+          if (jwsResult.state === "WARN" && policy === "strict") {
+            process.exit(2);
+          }
+        }
+
+        // ── Step 2: validate the OIDF trust chain ────────────────────────
+        const chainResult = await validateTrustChain(opts.sub, opts.ta);
+
+        if (opts.json) {
+          process.stdout.write(JSON.stringify(chainResult, null, 2) + "\n");
+        } else {
+          process.stderr.write(formatTrustMessage(chainResult) + "\n");
+          if (chainResult.recommendedAction) {
+            process.stderr.write(
+              `  Recommended: ${chainResult.recommendedAction}\n`
+            );
+          }
+        }
+
+        try {
+          applyPolicy(chainResult, policy);
+        } catch {
+          process.exit(chainResult.state === "WARN" ? 2 : 1);
+        }
+
+        if (chainResult.state === "VALID") process.exit(0);
+        if (chainResult.state === "WARN") process.exit(2);
+        process.exit(1);
+      }
+    );
+
+  // ----- adopt -----
+  tm.command("adopt")
+    .description(
+      "Adopt an existing trustmark: issue a new one from your TMI that cites the original. " +
+        "Creates an 'adopted_from_iss' / 'adopted_from_id' claim chain so verifiers can " +
+        "trace back to the original issuer."
+    )
+    .requiredOption(
+      "--source <jws>",
+      "The existing trustmark JWS being adopted"
+    )
+    .requiredOption(
+      "--sub <url>",
+      "Entity ID of the subject (usually same as in source JWS)"
+    )
+    .option("--tmi <url>", "Your TMI server base URL", DEFAULT_TMI)
+    .option(
+      "--id <url>",
+      "Your trustmark type URI",
+      DEFAULT_TRUSTMARK_ID
+    )
+    .option("--ttl <seconds>", "Token lifetime in seconds", "3600")
+    .option(
+      "--evidence <url>",
+      "Optional additional evidence URL (source JWS is always included)"
+    )
+    .option("--json", "Output full JSON response")
+    .action(
+      async (opts: {
+        source: string;
+        sub: string;
+        tmi: string;
+        id: string;
+        ttl: string;
+        evidence?: string;
+        json?: boolean;
+      }) => {
+        // ── Validate the source trustmark first ──────────────────────────
+        process.stderr.write(
+          "[trustmark adopt] Validating source trustmark before adoption...\n"
+        );
+        const sourceResult = await validateTrustmark(opts.source);
+
+        if (sourceResult.state === "INVALID") {
+          process.stderr.write(
+            formatTrustMessage(sourceResult) + "\n" +
+            "  [TRUST:FAIL] Cannot adopt an invalid trustmark.\n" +
+            "  Recommended: Obtain a valid trustmark for the source entity first.\n"
+          );
+          process.exit(1);
+        }
+
+        if (sourceResult.state === "WARN") {
+          process.stderr.write(
+            formatTrustMessage(sourceResult) + "\n" +
+            "  [TRUST:WARN] Source trustmark has warnings — proceeding with adoption.\n" +
+            "  Recommended: Consider re-issuing the source trustmark before adopting.\n"
+          );
+        } else {
+          process.stderr.write(formatTrustMessage(sourceResult) + "\n");
+        }
+
+        // ── Extract source claims for the adopted_from fields ────────────
+        let sourceIss = "(unknown)";
+        let sourceId = "(unknown)";
+        try {
+          const decoded = decodeJwt(opts.source) as Record<string, unknown>;
+          sourceIss = (decoded["iss"] as string | undefined) ?? "(unknown)";
+          sourceId = (decoded["id"] as string | undefined) ?? "(unknown)";
+        } catch {
+          // Non-fatal — best effort
+        }
+
+        // ── Issue the adoption trustmark via your TMI ────────────────────
+        const body: Record<string, unknown> = {
+          sub: opts.sub,
+          trustmark_id: opts.id,
+          ttl_s: parseInt(opts.ttl, 10),
+          adopted_from_iss: sourceIss,
+          adopted_from_id: sourceId,
+          adopted_from_jws: opts.source,  // source trustmark embedded as evidence
+        };
+        if (opts.evidence) body["evidence"] = opts.evidence;
+
+        const url = `${opts.tmi.replace(/\/$/, "")}/trustmarks/issue`;
+
+        let res: Response;
+        try {
+          res = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
+        } catch (err) {
+          process.stderr.write(
+            `[TRUST:FAIL] Cannot reach your TMI at ${url}: ${String(err)}\n` +
+            "  Recommended: Verify your TMI server is running with: " +
+            "npm run tmi:dev  (local) or check the deployment at " + opts.tmi + "\n"
+          );
+          process.exit(1);
+        }
+
+        if (!res.ok) {
+          const text = await res.text();
+          process.stderr.write(
+            `[TRUST:FAIL] TMI returned ${res.status}: ${text}\n` +
+            "  Recommended: Check TMI logs for the reason the issuance was rejected.\n"
+          );
+          process.exit(1);
+        }
+
+        const data = (await res.json()) as {
+          trustmark_jws: string;
+          payload: unknown;
+        };
+
+        process.stderr.write(
+          `[TRUST:VALID] Adoption trustmark issued — sub=${opts.sub} ` +
+          `adopted_from=${sourceIss}\n`
+        );
+
+        if (opts.json) {
+          process.stdout.write(JSON.stringify(data, null, 2) + "\n");
+        } else {
+          process.stdout.write(data.trustmark_jws + "\n");
+        }
+      }
+    );
 }
