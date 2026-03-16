@@ -25,6 +25,10 @@
 import express, { type Request, type Response } from "express";
 import { z } from "zod";
 import { SoftKmsProvider } from "@letsfederate/kms";
+import {
+  signEntityStatement,
+  tmiMetadata,
+} from "./federation/entity-statements.js";
 import path from "node:path";
 
 // ---------------------------------------------------------------------------
@@ -138,6 +142,31 @@ app.post(
     const trustmark_jws = await kms.signJwt(payload, { jku: JWKS_URL });
 
     res.status(201).json({ trustmark_jws, payload });
+  }
+);
+
+// ---------------------------------------------------------------------------
+// OIDF: GET /.well-known/openid-federation
+//
+// Returns a self-signed entity statement JWT for the TMI.
+// Content-Type: application/entity-statement+jwt (per spec §4.3)
+// ---------------------------------------------------------------------------
+
+app.get(
+  "/.well-known/openid-federation",
+  async (_req: Request, res: Response): Promise<void> => {
+    const jws = await signEntityStatement(
+      {
+        entityId: ISSUER,
+        authorityHints: [],          // TMI is a leaf; TA is defined separately
+        ttlSeconds: 86400,
+        metadata: tmiMetadata(JWKS_URL),
+      },
+      kms
+    );
+    res.setHeader("Content-Type", "application/entity-statement+jwt");
+    res.setHeader("Cache-Control", "public, max-age=3600");
+    res.send(jws);
   }
 );
 
