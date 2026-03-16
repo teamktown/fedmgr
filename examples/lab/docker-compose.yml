@@ -1,0 +1,117 @@
+# examples/lab/docker-compose.yml
+#
+# Local Trust Lab — brings up:
+#   registry   — OCI registry (distribution/distribution) on :5000
+#   tmi-server — Trustmark Issuer on :8080
+#
+# KEY POLICY:
+#   The decrypted private JWK lives in a tmpfs volume (/run/secrets) that
+#   Docker creates in RAM. It is never written to the host filesystem.
+#   The public JWK is bind-mounted read-only from the host.
+#
+# Prerequisites:
+#   1. Generate encrypted keys:     npm run tmi:keys:init
+#   2. Decrypt into tmpfs dir:      bash scripts/lab-prep-keys.sh
+#   3. Start:                       docker compose -f examples/lab/docker-compose.yml up
+#
+# Environment variables (override via .env file or shell exports):
+#   TMI_ISSUER     — public URL of the TMI service (default http://localhost:8080)
+#   TMI_JWKS_URL   — public URL of the JWKS endpoint
+#   KEYS_DIR       — path to keys dir on host (default packages/tmi-server/keys)
+
+version: "3.9"
+
+networks:
+  trust-lab:
+    driver: bridge
+
+volumes:
+  # tmpfs volume for decrypted private key — exists only in RAM
+  tmi-secrets:
+    driver: local
+    driver_opts:
+      type: tmpfs
+      device: tmpfs
+      o: "size=1m,mode=0700"
+
+  registry-data:
+
+services:
+  # -------------------------------------------------------------------------
+  # OCI Registry (local push/pull for attestation testing)
+  # -------------------------------------------------------------------------
+  registry:
+    image: registry:2
+    container_name: trust-lab-registry
+    ports:
+      - "5000:5000"
+    volumes:
+      - registry-data:/var/lib/registry
+    environment:
+      REGISTRY_STORAGE_DELETE_ENABLED: "true"
+    networks:
+      - trust-lab
+    restart: unless-stopped
+
+  # -------------------------------------------------------------------------
+  # TMI decrypt sidecar
+  # Decrypts the PBES2-encrypted private JWK into the tmpfs volume.
+  # Exits after writing; the main tmi-server container reads from the volume.
+  # -------------------------------------------------------------------------
+  tmi-decrypt:
+    image: smallstep/step-cli:latest
+    container_name: trust-lab-tmi-decrypt
+    volumes:
+      - type: bind
+        source: ../../packages/tmi-server/keys
+        target: /keys
+        read_only: true
+      - tmi-secrets:/run/secrets
+    # Decrypt JWE → plaintext JWK on tmpfs; chmod 600 for tmi user (uid 1001)
+    command: >
+      sh -c "
+        step crypto jwk decrypt
+          --in /keys/tmi.priv.jwe
+          --out /run/secrets/tmi.priv.jwk
+          --password-file /keys/.pass &&
+        chmod 600 /run/secrets/tmi.priv.jwk &&
+        echo '[tmi-decrypt] Key decrypted to tmpfs.'
+      "
+    networks:
+      - trust-lab
+
+  # -------------------------------------------------------------------------
+  # TMI Server
+  # -------------------------------------------------------------------------
+  tmi-server:
+    build:
+      context: ../..
+      dockerfile: Dockerfile.tmi-server
+    container_name: trust-lab-tmi
+    ports:
+      - "8080:8080"
+    volumes:
+      - type: bind
+        source: ../../packages/tmi-server/keys/tmi.pub.jwk
+        target: /app/keys/tmi.pub.jwk
+        read_only: true
+      - tmi-secrets:/run/secrets:ro
+    environment:
+      PORT: "8080"
+      TMI_ISSUER: "${TMI_ISSUER:-http://localhost:8080}"
+      TMI_JWKS_URL: "${TMI_JWKS_URL:-http://localhost:8080/.well-known/jwks.json}"
+      TMI_PUBLIC_JWK: "/app/keys/tmi.pub.jwk"
+      TMI_PRIVATE_JWK: "/run/secrets/tmi.priv.jwk"
+    depends_on:
+      tmi-decrypt:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "node", "-e",
+        "fetch('http://localhost:8080/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    networks:
+      - trust-lab
+    restart: unless-stopped
