@@ -137,23 +137,14 @@ export class SoftKmsProvider implements KeyProvider {
 // PKCS#11 stub — not yet implemented; placeholder for SoftHSM2/YubiKey.
 // ---------------------------------------------------------------------------
 
-export class Pkcs11Provider implements KeyProvider {
-  constructor(_config: unknown) {
-    throw new Error(
-      "Pkcs11Provider: not yet implemented. Use SoftKmsProvider for dev/test."
-    );
-  }
+// ---------------------------------------------------------------------------
+// PKCS#11 provider — implemented in providers/pkcs11.ts
+// Requires pkcs11js npm package + a PKCS#11 library (e.g. SoftHSM2).
+// Per Decision 2: CI uses SoftKMS only; PKCS#11 tests are integration-gated.
+// ---------------------------------------------------------------------------
 
-  async kid(): Promise<string> {
-    throw new Error("not implemented");
-  }
-  async jwks(): Promise<{ keys: JWK[] }> {
-    throw new Error("not implemented");
-  }
-  async signJwt(_payload: JWTPayload): Promise<string> {
-    throw new Error("not implemented");
-  }
-}
+export { Pkcs11Provider, type Pkcs11Config } from "./providers/pkcs11.js";
+import { Pkcs11Provider, type Pkcs11Config } from "./providers/pkcs11.js";
 
 // ---------------------------------------------------------------------------
 // Factory — resolves provider from a string tag.
@@ -169,7 +160,7 @@ export function createProvider(
     case "softkms":
       return new SoftKmsProvider(config as SoftKmsConfig);
     case "pkcs11":
-      return new Pkcs11Provider(config);
+      return new Pkcs11Provider(config as Pkcs11Config);
     default: {
       const _exhaustive: never = tag;
       throw new Error(`Unknown KMS provider: ${String(_exhaustive)}`);

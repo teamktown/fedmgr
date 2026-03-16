@@ -32,12 +32,17 @@ import { SoftKmsProvider } from "@letsfederate/kms";
 import {
   signSubordinateStatement,
   SubordinateRegistry,
+  isIntermediate,
   type SubordinateEntry,
 } from "./federation/subordinate-statements.js";
 import {
   signEntityStatement,
   trustAnchorMetadata,
 } from "./federation/entity-statements.js";
+import {
+  TrustMarkStatusRegistry,
+  createTrustMarkStatusRouter,
+} from "./federation/trust-mark-status.js";
 import path from "node:path";
 
 // ---------------------------------------------------------------------------
@@ -69,10 +74,11 @@ const kms = new SoftKmsProvider({
 });
 
 // ---------------------------------------------------------------------------
-// Subordinate registry — populated at startup
+// Subordinate registry and trust-mark status registry — populated at startup
 // ---------------------------------------------------------------------------
 
 const registry = new SubordinateRegistry();
+const statusRegistry = new TrustMarkStatusRegistry();
 
 async function loadSubordinates(): Promise<void> {
   const raw = process.env["TA_SUBORDINATES"];
@@ -83,12 +89,12 @@ async function loadSubordinates(): Promise<void> {
     return;
   }
 
-  let specs: Array<{ entityId: string; jwksUrl: string }>;
+  let specs: Array<{ entityId: string; jwksUrl: string; fetchEndpoint?: string }>;
   try {
-    specs = JSON.parse(raw) as Array<{ entityId: string; jwksUrl: string }>;
+    specs = JSON.parse(raw) as Array<{ entityId: string; jwksUrl: string; fetchEndpoint?: string }>;
   } catch {
     throw new Error(
-      `TA_SUBORDINATES must be a JSON array of {entityId, jwksUrl} objects`
+      `TA_SUBORDINATES must be a JSON array of {entityId, jwksUrl, fetchEndpoint?} objects`
     );
   }
 
@@ -106,9 +112,20 @@ async function loadSubordinates(): Promise<void> {
     const entry: SubordinateEntry = {
       entityId: spec.entityId,
       jwks: jwks as SubordinateEntry["jwks"],
+      // If fetchEndpoint is provided, this is an intermediate entity
+      ...(spec.fetchEndpoint
+        ? {
+            metadata: {
+              federation_entity: {
+                federation_fetch_endpoint: spec.fetchEndpoint,
+              },
+            },
+          }
+        : {}),
     };
     registry.register(entry);
-    process.stdout.write(`[ta-server]   ✔ Registered ${spec.entityId}\n`);
+    const kind = isIntermediate(entry) ? "intermediate" : "leaf";
+    process.stdout.write(`[ta-server]   ✔ Registered ${spec.entityId} (${kind})\n`);
   }
 }
 
@@ -211,15 +228,23 @@ app.get(
 );
 
 // ---------------------------------------------------------------------------
-// GET /trust-mark-status — stub (Increment E)
+// GET /trust-mark-status — OIDF §12 trust mark status query
 // ---------------------------------------------------------------------------
 
-app.get("/trust-mark-status", (_req: Request, res: Response) => {
-  res.status(501).json({
-    error: "not_implemented",
-    error_description:
-      "Trust mark status endpoint is planned for Increment E.",
+app.use("/trust-mark-status", createTrustMarkStatusRouter(statusRegistry));
+
+// ---------------------------------------------------------------------------
+// GET /intermediates — management endpoint: list intermediate entity IDs
+// (Not part of OIDF core spec; management-plane convenience only)
+// ---------------------------------------------------------------------------
+
+app.get("/intermediates", (_req: Request, res: Response) => {
+  const all = registry.listEntityIds();
+  const intermediates = all.filter((id) => {
+    const entry = registry.get(id);
+    return entry ? isIntermediate(entry) : false;
   });
+  res.json(intermediates);
 });
 
 // ---------------------------------------------------------------------------

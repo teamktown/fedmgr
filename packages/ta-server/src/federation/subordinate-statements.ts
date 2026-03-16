@@ -68,6 +68,17 @@ export type SubordinateEntry = {
   metadata?: Record<string, unknown>;
 };
 
+/**
+ * Returns true if the subordinate entry represents an intermediate entity —
+ * i.e. an entity that itself has subordinates and exposes a
+ * federation_fetch_endpoint.
+ */
+export function isIntermediate(entry: SubordinateEntry): boolean {
+  const fe = (entry.metadata?.["federation_entity"] ?? {}) as Record<string, unknown>;
+  return typeof fe["federation_fetch_endpoint"] === "string" &&
+    (fe["federation_fetch_endpoint"] as string).length > 0;
+}
+
 export class SubordinateRegistry {
   private readonly entries = new Map<string, SubordinateEntry>();
 
