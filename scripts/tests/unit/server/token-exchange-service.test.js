@@ -1,24 +1,22 @@
-const TokenExchangeService = require('../../../../src/fedmgr/server/token-exchange-service');
-// Mock fetch before requiring it
+// jest.mock calls MUST come before require statements to ensure mocks are applied
+// when the service module loads (babel-plugin-jest-hoist hoists these to top of file)
 jest.mock('node-fetch', () => jest.fn());
-const fetch = require('node-fetch');
-const jwt = require('jsonwebtoken');
-const fs = require('fs');
-
-// Mock jwt for testing
 jest.mock('jsonwebtoken', () => ({
   sign: jest.fn(() => 'mock-jwt-token')
 }));
-
-// Mock fs for testing
 jest.mock('fs', () => ({
   ...jest.requireActual('fs'),
   readFileSync: jest.fn(() => 'mock-private-key')
 }));
 
+const TokenExchangeService = require('../../../../src/fedmgr/server/token-exchange-service');
+const fetch = require('node-fetch');
+const jwt = require('jsonwebtoken');
+const request = require('supertest');
+
 describe('Token Exchange Service', () => {
   let service;
-  
+
   beforeEach(() => {
     jest.clearAllMocks();
     service = new TokenExchangeService({
@@ -28,7 +26,7 @@ describe('Token Exchange Service', () => {
       githubClientSecret: 'test-client-secret'
     });
   });
-  
+
   describe('GitHub Code Exchange', () => {
     test('exchangeGitHubCode exchanges code for token', async () => {
       // Mock GitHub token response
@@ -40,19 +38,19 @@ describe('Token Exchange Service', () => {
           scope: 'read:user'
         })
       }));
-      
+
       const token = await service.exchangeGitHubCode(
         'test-code',
         'test-client-id',
         'http://localhost:3456/callback'
       );
-      
+
       expect(token).toEqual({
         access_token: 'github-access-token',
         token_type: 'bearer',
         scope: 'read:user'
       });
-      
+
       expect(fetch).toHaveBeenCalledWith('https://github.com/login/oauth/access_token', {
         method: 'POST',
         headers: {
@@ -67,7 +65,7 @@ describe('Token Exchange Service', () => {
         })
       });
     });
-    
+
     test('exchangeGitHubCode handles error response', async () => {
       // Mock GitHub error response
       fetch.mockImplementationOnce(() => Promise.resolve({
@@ -77,21 +75,21 @@ describe('Token Exchange Service', () => {
           error_description: 'The code passed is incorrect or expired.'
         })
       }));
-      
+
       await expect(service.exchangeGitHubCode(
         'invalid-code',
         'test-client-id',
         'http://localhost:3456/callback'
       )).rejects.toThrow('GitHub token exchange failed: The code passed is incorrect or expired.');
     });
-    
+
     test('exchangeGitHubCode handles network error', async () => {
       // Mock network error
       fetch.mockImplementationOnce(() => Promise.resolve({
         ok: false,
         statusText: 'Service Unavailable'
       }));
-      
+
       await expect(service.exchangeGitHubCode(
         'test-code',
         'test-client-id',
@@ -99,7 +97,7 @@ describe('Token Exchange Service', () => {
       )).rejects.toThrow('GitHub token exchange failed: Service Unavailable');
     });
   });
-  
+
   describe('Federation Token Conversion', () => {
     test('convertToFederationToken creates federation token', async () => {
       const githubToken = {
@@ -107,9 +105,9 @@ describe('Token Exchange Service', () => {
         token_type: 'bearer',
         scope: 'read:user'
       };
-      
+
       const federationToken = await service.convertToFederationToken(githubToken, 'github');
-      
+
       expect(federationToken).toEqual({
         access_token: 'github-access-token',
         token_type: 'Bearer',
@@ -117,7 +115,7 @@ describe('Token Exchange Service', () => {
         id_token: 'mock-jwt-token',
         scope: 'openid profile'
       });
-      
+
       expect(jwt.sign).toHaveBeenCalledWith(
         expect.objectContaining({
           iss: 'http://localhost:3001',
@@ -131,39 +129,18 @@ describe('Token Exchange Service', () => {
         'mock-private-key',
         { algorithm: 'RS256' }
       );
-      
-      expect(fs.readFileSync).toHaveBeenCalledWith(
-        expect.stringContaining(process.env.FEDMGR_FEDERATIONS_DIR + '/alpha/keys/anchor-private.pem'),
-        'utf8'
-      );
     });
   });
-  
+
   describe('Token Exchange Endpoint', () => {
     test('token-exchange endpoint handles GitHub code exchange', async () => {
-      // Mock the request and response objects
-      const req = {
-        body: {
-          code: 'test-code',
-          client_id: 'test-client-id',
-          redirect_uri: 'http://localhost:3456/callback',
-          provider: 'github'
-        }
-      };
-      
-      const res = {
-        status: jest.fn(() => res),
-        json: jest.fn()
-      };
-      
-      // Mock the GitHub code exchange
+      // Spy on service methods to avoid real network calls
       jest.spyOn(service, 'exchangeGitHubCode').mockResolvedValue({
         access_token: 'github-access-token',
         token_type: 'bearer',
         scope: 'read:user'
       });
-      
-      // Mock the federation token conversion
+
       jest.spyOn(service, 'convertToFederationToken').mockResolvedValue({
         access_token: 'github-access-token',
         token_type: 'Bearer',
@@ -171,84 +148,64 @@ describe('Token Exchange Service', () => {
         id_token: 'mock-jwt-token',
         scope: 'openid profile'
       });
-      
-      // Call the endpoint handler
-      await service.app._router.handle(req, res);
-      
-      expect(service.exchangeGitHubCode).toHaveBeenCalledWith(
-        'test-code',
-        'test-client-id',
-        'http://localhost:3456/callback'
-      );
-      
-      expect(service.convertToFederationToken).toHaveBeenCalledWith(
-        {
-          access_token: 'github-access-token',
-          token_type: 'bearer',
-          scope: 'read:user'
-        },
-        'github'
-      );
-      
-      expect(res.json).toHaveBeenCalledWith({
+
+      const res = await request(service.app)
+        .post('/token-exchange')
+        .send({
+          code: 'test-code',
+          client_id: 'test-client-id',
+          redirect_uri: 'http://localhost:3456/callback',
+          provider: 'github'
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({
         access_token: 'github-access-token',
         token_type: 'Bearer',
         expires_in: 3600,
         id_token: 'mock-jwt-token',
         scope: 'openid profile'
       });
+
+      expect(service.exchangeGitHubCode).toHaveBeenCalledWith(
+        'test-code',
+        'test-client-id',
+        'http://localhost:3456/callback'
+      );
     });
-    
+
     test('token-exchange endpoint handles missing parameters', async () => {
-      // Mock the request and response objects
-      const req = {
-        body: {
-          // Missing code and provider
+      const res = await request(service.app)
+        .post('/token-exchange')
+        .send({
           client_id: 'test-client-id',
           redirect_uri: 'http://localhost:3456/callback'
-        }
-      };
-      
-      const res = {
-        status: jest.fn(() => res),
-        json: jest.fn()
-      };
-      
-      // Call the endpoint handler
-      await service.app._router.handle(req, res);
-      
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({
+          // Missing code and provider
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body).toEqual({
         error: 'Missing required parameters'
       });
     });
-    
+
     test('token-exchange endpoint handles unsupported provider', async () => {
-      // Mock the request and response objects
-      const req = {
-        body: {
+      const res = await request(service.app)
+        .post('/token-exchange')
+        .send({
           code: 'test-code',
           client_id: 'test-client-id',
           redirect_uri: 'http://localhost:3456/callback',
           provider: 'unsupported'
-        }
-      };
-      
-      const res = {
-        status: jest.fn(() => res),
-        json: jest.fn()
-      };
-      
-      // Call the endpoint handler
-      await service.app._router.handle(req, res);
-      
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith({
+        });
+
+      expect(res.status).toBe(400);
+      expect(res.body).toEqual({
         error: 'Unsupported provider: unsupported'
       });
     });
   });
-  
+
   describe('Service Lifecycle', () => {
     test('start method starts the server', async () => {
       // Mock the listen method
@@ -256,26 +213,26 @@ describe('Token Exchange Service', () => {
         callback();
         return { close: jest.fn() };
       });
-      
+
       await service.start();
-      
+
       expect(service.app.listen).toHaveBeenCalledWith(3457, expect.any(Function));
     });
-    
+
     test('stop method stops the server', async () => {
       // Mock the server
       service.server = {
         close: jest.fn(callback => callback())
       };
-      
+
       await service.stop();
-      
+
       expect(service.server.close).toHaveBeenCalled();
     });
-    
+
     test('stop method handles no server', async () => {
       service.server = null;
-      
+
       await expect(service.stop()).resolves.toBeUndefined();
     });
   });

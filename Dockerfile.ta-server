@@ -1,0 +1,49 @@
+# syntax=docker/dockerfile:1
+# Trust Anchor Server — multi-stage build (mirrors Dockerfile.tmi-server)
+
+FROM node:20-slim AS builder
+
+WORKDIR /build
+
+COPY package.json package-lock.json tsconfig.base.json ./
+COPY packages/kms/package.json        packages/kms/
+COPY packages/ta-server/package.json  packages/ta-server/
+
+RUN npm ci --ignore-scripts
+
+COPY packages/kms/      packages/kms/
+COPY packages/ta-server/ packages/ta-server/
+
+RUN npm run build -w @letsfederate/kms
+RUN npm run build -w @letsfederate/ta-server
+
+RUN npm prune --production
+
+FROM node:20-slim AS runtime
+
+RUN addgroup --system ta && adduser --system --ingroup ta ta
+
+WORKDIR /app
+
+COPY --from=builder --chown=ta:ta /build/node_modules             ./node_modules
+COPY --from=builder --chown=ta:ta /build/packages/kms/dist        ./packages/kms/dist
+COPY --from=builder --chown=ta:ta /build/packages/ta-server/dist  ./packages/ta-server/dist
+COPY --from=builder --chown=ta:ta /build/packages/kms/package.json       ./packages/kms/package.json
+COPY --from=builder --chown=ta:ta /build/packages/ta-server/package.json ./packages/ta-server/package.json
+
+RUN mkdir -p /app/keys && chown ta:ta /app/keys
+
+USER ta
+
+ENV PORT=8090 \
+    TA_ENTITY_ID=http://localhost:8090 \
+    TA_JWKS_URL=http://localhost:8090/.well-known/jwks.json \
+    TA_PUBLIC_JWK=/app/keys/ta.pub.jwk \
+    TA_PRIVATE_JWK=/run/secrets/ta.priv.jwk
+
+EXPOSE 8090
+
+HEALTHCHECK --interval=15s --timeout=5s --start-period=15s \
+    CMD node -e "fetch('http://localhost:'+process.env.PORT+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+
+CMD ["node", "packages/ta-server/dist/index.js"]

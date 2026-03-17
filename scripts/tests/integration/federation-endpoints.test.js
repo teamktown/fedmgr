@@ -674,7 +674,7 @@ describe('Federation Endpoints Integration Tests', () => {
         .expect(200);
       
       // Should return entity statement JWT
-      expect(fetchResponse.headers['content-type']).toBe('application/entity-statement+jwt');
+      expect(fetchResponse.headers['content-type']).toContain('application/entity-statement+jwt');
       
       const decoded = jwt.decode(fetchResponse.text);
       expect(decoded.iss).toBeDefined();

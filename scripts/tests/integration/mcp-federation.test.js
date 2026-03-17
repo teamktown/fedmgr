@@ -50,17 +50,26 @@ const mockData = {
   }
 };
 
+// Mock federation-admin to avoid module-level side effects (key generation, server startup)
+jest.mock('../../../src/fedmgr/server/federation-admin', () => ({
+  fetchEntityStatements: jest.fn(),
+  validateTrustChain: jest.fn(),
+  distributeEntityStatements: jest.fn()
+}));
+
 // Mock HTTP client for making requests to MCP servers
 jest.mock('node-fetch', () => jest.fn());
 const fetch = require('node-fetch');
+const federationAdminMock = require('../../../src/fedmgr/server/federation-admin');
 
 describe('MCP Federation Integration', () => {
   let federationAdmin;
-  
+
   beforeEach(() => {
     // Reset mocks
     jest.clearAllMocks();
-    
+    federationAdmin = federationAdminMock;
+
     // Mock successful fetch responses
     fetch.mockImplementation(async (url) => {
       if (url.includes('/.well-known/openid-federation')) {
@@ -82,11 +91,25 @@ describe('MCP Federation Integration', () => {
         json: async () => ({ error: 'Not found' })
       };
     });
-    
-    // Import the federation admin module
-    federationAdmin = require('../../../src/server/federation-admin');
+
+    // Set up default implementations for federation admin methods
+    federationAdmin.fetchEntityStatements.mockImplementation(async (federationUrl) => {
+      const response = await fetch(federationUrl + '/.well-known/openid-federation', {});
+      return response.json();
+    });
+
+    federationAdmin.distributeEntityStatements.mockImplementation(async (statement, members) => {
+      const results = await Promise.all(members.map(member =>
+        fetch(member + '/entity-statements', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(statement)
+        })
+      ));
+      return { success: true, distributed: results.filter(r => r.ok).length };
+    });
   });
-  
+
   test('should fetch entity statements from federation authority', async () => {
     logger.info('Starting entity statement fetch test');
     

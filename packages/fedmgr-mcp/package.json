@@ -1,0 +1,33 @@
+{
+  "name": "@letsfederate/fedmgr-mcp",
+  "version": "0.0.1",
+  "description": "MCP server for fedmgr — interact with letsfederate trust infrastructure via AI assistants",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": { "fedmgr-mcp": "./dist/bin.js" },
+  "exports": { ".": { "import": "./dist/index.js" } },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsc -b",
+    "start": "node dist/bin.js",
+    "dev": "tsx src/bin.ts"
+  },
+  "dependencies": {
+    "@letsfederate/kms": "*",
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "commander": "^12.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.0"
+  },
+  "engines": { "node": ">=18.0.0" },
+  "publishConfig": { "access": "public", "provenance": true },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/teamktown/fedmgr.git",
+    "directory": "packages/fedmgr-mcp"
+  },
+  "license": "MIT"
+}

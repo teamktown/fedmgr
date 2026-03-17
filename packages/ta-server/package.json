@@ -1,0 +1,47 @@
+{
+  "name": "@letsfederate/ta-server",
+  "version": "0.0.1",
+  "description": "Trust Anchor server — OIDF entity configuration, federation_list, and federation_fetch endpoints",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b",
+    "start": "node dist/index.js",
+    "dev": "tsx src/index.ts",
+    "test": "node --test test/*.test.mjs",
+    "test:report": "node --test test/*.test.mjs --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=../../test-results/ta-server.junit.xml",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "dependencies": {
+    "@letsfederate/kms": "*",
+    "better-sqlite3": "^12.8.0",
+    "express": "^4.19.2",
+    "jose": "^5.2.4",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.10",
+    "@types/express": "^4.17.21",
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.0"
+  },
+  "files": [
+    "dist",
+    "CHANGELOG.md",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/teamktown/fedmgr.git",
+    "directory": "packages/ta-server"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MIT"
+}

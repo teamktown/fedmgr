@@ -1,0 +1,66 @@
+# syntax=docker/dockerfile:1
+# ---------------------------------------------------------------------------
+# Trustmark Issuer Server — multi-stage build
+#
+# Stage 1 (builder): compile TypeScript, prune devDependencies
+# Stage 2 (runtime): slim Node image — no tsc, no source maps, no devDeps
+#
+# KEY POLICY:
+#   - No private key material in any image layer.
+#   - Decrypted key is mounted at runtime via tmpfs (see examples/lab/).
+#   - TMI_PRIVATE_JWK must point to /run/secrets/tmi.priv.jwk (tmpfs mount).
+#   - TMI_PUBLIC_JWK must point to /app/keys/tmi.pub.jwk (bind-mount, read-only).
+# ---------------------------------------------------------------------------
+
+FROM node:20-slim AS builder
+
+WORKDIR /build
+
+# Install all deps (including devDeps for TypeScript)
+COPY package.json package-lock.json tsconfig.base.json ./
+COPY packages/kms/package.json         packages/kms/
+COPY packages/tmi-server/package.json  packages/tmi-server/
+
+RUN npm ci --ignore-scripts
+
+# Copy source and build
+COPY packages/kms/       packages/kms/
+COPY packages/tmi-server/ packages/tmi-server/
+
+RUN npm run build -w @letsfederate/kms
+RUN npm run build -w @letsfederate/tmi-server
+
+# Prune to production deps only
+RUN npm prune --production
+
+# ---------------------------------------------------------------------------
+FROM node:20-slim AS runtime
+
+RUN addgroup --system tmi && adduser --system --ingroup tmi tmi
+
+WORKDIR /app
+
+# Copy only production artifacts
+COPY --from=builder --chown=tmi:tmi /build/node_modules   ./node_modules
+COPY --from=builder --chown=tmi:tmi /build/packages/kms/dist          ./packages/kms/dist
+COPY --from=builder --chown=tmi:tmi /build/packages/tmi-server/dist   ./packages/tmi-server/dist
+COPY --from=builder --chown=tmi:tmi /build/packages/kms/package.json          ./packages/kms/package.json
+COPY --from=builder --chown=tmi:tmi /build/packages/tmi-server/package.json   ./packages/tmi-server/package.json
+
+# Keys directory — public JWK bind-mounted at runtime; private JWK on tmpfs.
+RUN mkdir -p /app/keys && chown tmi:tmi /app/keys
+
+USER tmi
+
+ENV PORT=8080 \
+    TMI_ISSUER=http://localhost:8080 \
+    TMI_JWKS_URL=http://localhost:8080/.well-known/jwks.json \
+    TMI_PUBLIC_JWK=/app/keys/tmi.pub.jwk \
+    TMI_PRIVATE_JWK=/run/secrets/tmi.priv.jwk
+
+EXPOSE 8080
+
+HEALTHCHECK --interval=15s --timeout=5s --start-period=10s \
+    CMD node -e "fetch('http://localhost:'+process.env.PORT+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+
+CMD ["node", "packages/tmi-server/dist/index.js"]

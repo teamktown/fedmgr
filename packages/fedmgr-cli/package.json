@@ -1,0 +1,47 @@
+{
+  "name": "@letsfederate/fedmgr-cli",
+  "version": "0.0.1",
+  "description": "CLI for fedmgr — key management, trustmark issuance, and OCI attestation",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "fedmgr": "./dist/bin.js"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": ["dist", "CHANGELOG.md", "README.md"],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/teamktown/fedmgr.git",
+    "directory": "packages/fedmgr-cli"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "dev": "tsx src/bin.ts",
+    "test": "node --test test/*.test.mjs",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "dependencies": {
+    "@letsfederate/kms": "*",
+    "commander": "^12.0.0",
+    "jose": "^5.2.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MIT"
+}

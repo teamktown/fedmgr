@@ -43,15 +43,15 @@ function deleteToken(provider) {
 
 async function localOidcLogin({username,password,opUrl=OIDC_PROVIDER_URL,clientId=OIDC_CLIENT_ID,clientSecret=OIDC_CLIENT_SECRET,federation='fed-alpha'}) {
   const discovery = await fetch(`${opUrl}/.well-known/openid-configuration`);
-  if (!discovery.ok) throw new Error('Failed OIDC discovery');
+  if (!discovery.ok) throw new Error(`Failed to discover OIDC configuration: ${discovery.statusText}`);
   const cfg = await discovery.json();
   if (!cfg.token_endpoint) throw new Error('Missing token_endpoint');
   const tokenRes = await fetch(cfg.token_endpoint, { method:'POST', headers:{
-    'Content-Type':'application/x-www-form-urlencoded','Accept':'application/json',
-    'Authorization':`Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`
+    'Content-Type':'application/x-www-form-urlencoded','Accept':'application/json'
   }, body:new URLSearchParams({grant_type:'password',username,password,scope:'openid profile'}).toString() });
   if (!tokenRes.ok) {
-    const err = await tokenRes.text(); throw new Error(`Auth failed: ${err}`);
+    const errData = await tokenRes.json();
+    throw new Error(`Authentication failed: ${errData.error_description || errData.error}`);
   }
   const token = await tokenRes.json(); token.federation=federation; token.provider='local-oidc-op'; token.timestamp=Date.now();
   return token;
@@ -154,5 +154,6 @@ module.exports = {
   getToken,
   saveToken,
   deleteToken,
-  getStoredTokens
+  getStoredTokens,
+  localOidcLogin
 };
