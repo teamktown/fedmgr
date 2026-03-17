@@ -175,7 +175,7 @@ jobs:
       #
       # If TMI_PRIV_JWE is not set, this step is skipped (trustmark not attached).
       - name: Setup fedmgr CLI
-        if: secrets.TMI_PRIV_JWE != ''
+        if: ${{ secrets.TMI_PRIV_JWE != '' }}
         run: npm ci && npm run build -w @letsfederate/fedmgr-cli
 
       - name: Decrypt TMI key to tmpfs

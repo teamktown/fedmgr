@@ -68,6 +68,15 @@ import { createManagementRouter } from "./management/index.js";
 import { createDashboardRouter } from "./dashboard/index.js";
 import path from "node:path";
 import type { JWK } from "jose";
+import { asyncHandler } from "./utils/async-handler.js";
+
+// Strip private key material from JWK (defense-in-depth for bootstrap JWKS)
+const PRIVATE_JWK_FIELDS = ["d", "p", "q", "dp", "dq", "qi", "oth", "k"];
+function stripJwkPrivateFields(jwk: JWK): JWK {
+  const pub = { ...jwk };
+  for (const f of PRIVATE_JWK_FIELDS) delete (pub as Record<string, unknown>)[f];
+  return pub;
+}
 
 // ---------------------------------------------------------------------------
 // Config
@@ -93,6 +102,16 @@ if (!ENTITY_ID.startsWith("http")) {
   process.stderr.write(
     `[ta-server] [TRUST:FAIL] TA_ENTITY_ID must be an HTTP(S) URL, got: "${ENTITY_ID}"\n` +
     "  Recommended: Set TA_ENTITY_ID=https://letsfederate.org (your domain)\n"
+  );
+  process.exit(78); // EX_CONFIG
+}
+
+try {
+  new URL(JWKS_URL);
+} catch {
+  process.stderr.write(
+    `[ta-server] [TRUST:FAIL] TA_JWKS_URL is not a valid URL: "${JWKS_URL}"\n` +
+    "  Recommended: Set TA_JWKS_URL=https://letsfederate.org/.well-known/jwks.json\n"
   );
   process.exit(78); // EX_CONFIG
 }
@@ -156,14 +175,24 @@ async function loadSubordinates(): Promise<void> {
     );
     let jwks: { keys: JWK[] };
     try {
-      const r = await fetch(spec.jwksUrl);
-      if (!r.ok) {
-        throw new Error(`HTTP ${r.status} ${r.statusText}`);
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000);
+      // Use 'unknown' typed variable to avoid collision with Express Response type
+      let fetchResponse: Awaited<ReturnType<typeof fetch>>;
+      try {
+        fetchResponse = await fetch(spec.jwksUrl, { signal: controller.signal });
+      } finally {
+        clearTimeout(timeout);
       }
-      jwks = (await r.json()) as { keys: JWK[] };
-      if (!Array.isArray(jwks.keys) || jwks.keys.length === 0) {
+      if (!fetchResponse.ok) {
+        throw new Error(`HTTP ${fetchResponse.status} ${fetchResponse.statusText}`);
+      }
+      const raw = (await fetchResponse.json()) as { keys: JWK[] };
+      if (!Array.isArray(raw.keys) || raw.keys.length === 0) {
         throw new Error("JWKS response has no keys");
       }
+      // Strip private key material — defense-in-depth in case the remote sends private fields
+      jwks = { keys: raw.keys.map(stripJwkPrivateFields) };
     } catch (err) {
       const msg =
         `[ta-server] [TRUST:FAIL] JWKS fetch failed for ${spec.entityId} ` +
@@ -222,11 +251,11 @@ app.use(express.json());
 // GET /.well-known/jwks.json
 // ---------------------------------------------------------------------------
 
-app.get("/.well-known/jwks.json", async (_req: Request, res: Response) => {
+app.get("/.well-known/jwks.json", asyncHandler(async (_req, res) => {
   const jwks = await kms.jwks();
   res.setHeader("Cache-Control", "public, max-age=3600");
   res.json(jwks);
-});
+}));
 
 // ---------------------------------------------------------------------------
 // GET /.well-known/openid-federation — TA self-signed entity statement
@@ -234,7 +263,7 @@ app.get("/.well-known/jwks.json", async (_req: Request, res: Response) => {
 
 app.get(
   "/.well-known/openid-federation",
-  async (_req: Request, res: Response): Promise<void> => {
+  asyncHandler(async (_req, res) => {
     const jws = await signEntityStatement(
       {
         entityId: ENTITY_ID,
@@ -252,7 +281,7 @@ app.get(
     res.setHeader("Content-Type", "application/entity-statement+jwt");
     res.setHeader("Cache-Control", "public, max-age=3600");
     res.send(jws);
-  }
+  })
 );
 
 // ---------------------------------------------------------------------------
@@ -303,7 +332,7 @@ app.get("/federation_list", (req: Request, res: Response) => {
 
 app.get(
   "/federation_fetch",
-  async (req: Request, res: Response): Promise<void> => {
+  asyncHandler(async (req, res) => {
     const sub = req.query["sub"] as string | undefined;
 
     if (!sub) {
@@ -380,7 +409,7 @@ app.get(
     res.setHeader("Content-Type", "application/entity-statement+jwt");
     res.setHeader("Cache-Control", "no-store");
     res.send(jws);
-  }
+  })
 );
 
 // ---------------------------------------------------------------------------

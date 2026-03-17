@@ -23,6 +23,7 @@ import {
   importJWK,
   type JWK,
 } from "jose";
+import { assertSafeUrl, UrlSafetyError } from "./validate-url.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -110,21 +111,24 @@ export async function validateTrustmark(
   }
 
   try {
-    jwksUrl = opts.jwksUrl ?? (header["jku"] as string);
-    if (!jwksUrl || typeof jwksUrl !== "string") {
+    const rawJkuUrl = opts.jwksUrl ?? (header["jku"] as string);
+    if (!rawJkuUrl || typeof rawJkuUrl !== "string") {
       throw new Error("No `jku` in JWS header and no --jwks override supplied");
     }
-    if (!jwksUrl.startsWith("https://") && !jwksUrl.startsWith("http://")) {
-      throw new Error(`jku is not a valid URL: ${jwksUrl}`);
-    }
+    // assertSafeUrl blocks SSRF via jku: private IPs, loopback, non-HTTPS
+    assertSafeUrl(rawJkuUrl, "jku");
+    jwksUrl = rawJkuUrl;
   } catch (err) {
+    const isSsrf = err instanceof UrlSafetyError;
     return {
       state: "INVALID",
       subject: "(unknown)",
-      message: `[TRUST:FAIL] Cannot determine JWKS URL: ${String(err)}`,
+      message: `[TRUST:FAIL] ${isSsrf ? "SSRF-unsafe jku URL" : "Cannot determine JWKS URL"}: ${String(err)}`,
       recommendedAction:
-        "The trustmark must contain a `jku` header claim pointing to the TMI JWKS. " +
-        "Verify the TMI server is serving GET /.well-known/jwks.json and re-issue.",
+        isSsrf
+          ? "The trustmark jku header must point to a public HTTPS URL. Re-issue from a publicly reachable TMI."
+          : "The trustmark must contain a `jku` header claim pointing to the TMI JWKS. " +
+            "Verify the TMI server is serving GET /.well-known/jwks.json and re-issue.",
     };
   }
 

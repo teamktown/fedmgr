@@ -35,6 +35,7 @@
  */
 
 import express, { type Request, type Response } from "express";
+import { asyncHandler } from "./utils/async-handler.js";
 import { z } from "zod";
 import {
   SoftKmsProvider,
@@ -78,6 +79,14 @@ const AUTHORITY_HINTS: string[] = (() => {
 })();
 const TRUST_POLICY = trustPolicyFromEnv();
 const SELF_TRUSTMARK_JWS = process.env["SELF_TRUSTMARK_JWS"];
+const TMI_ISSUE_TOKEN = process.env["TMI_ISSUE_TOKEN"];
+
+if (!TMI_ISSUE_TOKEN) {
+  process.stderr.write(
+    "[tmi-server] [TRUST:WARN] TMI_ISSUE_TOKEN not set — " +
+    "POST /trustmarks/issue is unprotected. Set TMI_ISSUE_TOKEN=<secret> in production.\n"
+  );
+}
 
 // ── Validate required configuration — fail fast before accepting requests ──
 if (!ISSUER.startsWith("http")) {
@@ -118,11 +127,11 @@ app.disable("x-powered-by");
 
 app.get(
   "/.well-known/jwks.json",
-  async (_req: Request, res: Response): Promise<void> => {
+  asyncHandler(async (_req, res) => {
     const jwks = await kms.jwks();
     res.setHeader("Cache-Control", "public, max-age=3600");
     res.json(jwks);
-  }
+  })
 );
 
 // ---------------------------------------------------------------------------
@@ -163,7 +172,20 @@ const IssueRequestSchema = z.object({
 
 app.post(
   "/trustmarks/issue",
-  async (req: Request, res: Response): Promise<void> => {
+  asyncHandler(async (req, res) => {
+    // Bearer token auth — required when TMI_ISSUE_TOKEN is set
+    if (TMI_ISSUE_TOKEN) {
+      const auth = req.headers["authorization"] ?? "";
+      if (auth !== `Bearer ${TMI_ISSUE_TOKEN}`) {
+        res.status(401).json({
+          error: "unauthorized",
+          message:
+            "[TRUST:FAIL] POST /trustmarks/issue requires Authorization: Bearer <TMI_ISSUE_TOKEN>.",
+        });
+        return;
+      }
+    }
+
     const parsed = IssueRequestSchema.safeParse(req.body);
     if (!parsed.success) {
       res.status(400).json({
@@ -206,7 +228,7 @@ app.post(
     const trustmark_jws = await kms.signJwt(payload, { jku: JWKS_URL });
 
     res.status(201).json({ trustmark_jws, payload });
-  }
+  })
 );
 
 // ---------------------------------------------------------------------------
@@ -218,7 +240,7 @@ app.post(
 
 app.get(
   "/.well-known/openid-federation",
-  async (_req: Request, res: Response): Promise<void> => {
+  asyncHandler(async (_req, res) => {
     const jws = await signEntityStatement(
       {
         entityId: ISSUER,
@@ -231,7 +253,7 @@ app.get(
     res.setHeader("Content-Type", "application/entity-statement+jwt");
     res.setHeader("Cache-Control", "public, max-age=3600");
     res.send(jws);
-  }
+  })
 );
 
 // ---------------------------------------------------------------------------

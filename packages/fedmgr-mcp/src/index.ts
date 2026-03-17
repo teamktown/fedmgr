@@ -48,16 +48,37 @@ const TOOL_NAMES = [
 // Helpers
 // ---------------------------------------------------------------------------
 
+const FETCH_TIMEOUT_MS = 10_000;
+const FETCH_MAX_BYTES = 1024 * 1024; // 1 MB
+
 /**
  * Perform a JSON fetch, returning the parsed body.
+ * Enforces a 10s timeout and 1MB response size cap to prevent DoS.
  * Throws with a descriptive message on HTTP errors or parse failures.
  */
 async function fetchJson(
   url: string,
   init?: RequestInit
 ): Promise<unknown> {
-  const res = await fetch(url, init);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  let res: Response;
+  try {
+    res = await fetch(url, { ...init, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+
+  // Size cap: check Content-Length header first, then body length
+  const contentLength = Number(res.headers.get("content-length") ?? 0);
+  if (contentLength > FETCH_MAX_BYTES) {
+    throw new Error(`Response too large (${contentLength} bytes, max ${FETCH_MAX_BYTES})`);
+  }
   const text = await res.text();
+  if (text.length > FETCH_MAX_BYTES) {
+    throw new Error(`Response too large (${text.length} bytes, max ${FETCH_MAX_BYTES})`);
+  }
+
   if (!res.ok) {
     throw new Error(`HTTP ${res.status} ${res.statusText}: ${text.slice(0, 200)}`);
   }
@@ -237,7 +258,7 @@ async function toolIssueTrustmark(args: Record<string, unknown>): Promise<string
 async function toolVerifyTrustmark(args: Record<string, unknown>): Promise<string> {
   const jws = String(args["jws"]);
   const jwksUrl = args["ta_url"]
-    ? `${String(args["ta_url"]).replace(/\/$/, "")}/.well-known/jwks.json`
+    ? `${requireSafeUrl(String(args["ta_url"]), "ta_url")}/.well-known/jwks.json`
     : undefined;
 
   const result = await validateTrustmark(jws, jwksUrl ? { jwksUrl } : {});

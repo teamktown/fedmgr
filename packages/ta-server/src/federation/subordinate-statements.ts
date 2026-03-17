@@ -30,6 +30,21 @@ export type SubordinateConfig = {
   ttlSeconds?: number;
 };
 
+/** Private JWK fields that must never appear in a signed subordinate statement. */
+const PRIVATE_JWK_FIELDS = ["d", "p", "q", "dp", "dq", "qi", "oth", "k"] as const;
+
+/**
+ * Strip private key material from a JWK before embedding it in a signed statement.
+ * Prevents accidental private key disclosure in published federation documents.
+ */
+function stripPrivateFields(jwk: JWK): JWK {
+  const pub = { ...jwk };
+  for (const field of PRIVATE_JWK_FIELDS) {
+    delete (pub as Record<string, unknown>)[field];
+  }
+  return pub;
+}
+
 /**
  * Signs a subordinate statement JWT.
  * `kms` must hold the TA's private key.
@@ -41,12 +56,17 @@ export async function signSubordinateStatement(
   const now = Math.floor(Date.now() / 1000);
   const ttl = config.ttlSeconds ?? 86400;
 
+  // Strip private key material — must never appear in a signed federation document
+  const publicJwks = {
+    keys: config.subjectJwks.keys.map(stripPrivateFields),
+  };
+
   const payload = {
     iss: config.issuerEntityId,
     sub: config.subjectEntityId,
     iat: now,
     exp: now + ttl,
-    jwks: config.subjectJwks,
+    jwks: publicJwks,
     ...(config.subjectMetadata ? { metadata: config.subjectMetadata } : {}),
   };
 

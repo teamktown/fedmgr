@@ -97,6 +97,24 @@ export function createEnrollmentRouter(
       throw err;
     }
 
+    // Entity binding: jwks_url must share the same origin as entity_id.
+    // This prevents an attacker from enrolling a victim entity (entity_id=victim)
+    // with their own JWKS (jwks_url=attacker), gaining a TA-signed statement for
+    // an entity they don't control.
+    {
+      const eid = new URL(entity_id);
+      const jwk = new URL(jwks_url);
+      if (eid.origin !== jwk.origin) {
+        res.status(400).json({
+          error: "origin_mismatch",
+          message:
+            `jwks_url origin (${jwk.origin}) must match entity_id origin (${eid.origin}). ` +
+            "Serve your JWKS from the same host as your entity_id to prove ownership.",
+        });
+        return;
+      }
+    }
+
     // Reject if already active
     const existing = store.getSubordinate(entity_id);
     if (existing?.status === "active") {

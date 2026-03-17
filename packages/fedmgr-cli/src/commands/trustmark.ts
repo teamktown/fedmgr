@@ -23,6 +23,8 @@ import {
   validateTrustChain,
   applyPolicy,
   formatTrustMessage,
+  assertSafeUrl,
+  UrlSafetyError,
   type TrustPolicy,
 } from "@letsfederate/kms";
 
@@ -56,10 +58,18 @@ export function registerTrustmarkCommands(program: Command): void {
       evidence?: string;
       json?: boolean;
     }) => {
+      const ttlParsed = parseInt(opts.ttl, 10);
+      if (isNaN(ttlParsed) || ttlParsed < 60 || ttlParsed > 86400) {
+        process.stderr.write(
+          `[trustmark issue] Invalid --ttl "${opts.ttl}": must be an integer between 60 and 86400 seconds.\n`
+        );
+        process.exit(1);
+      }
+
       const body: Record<string, unknown> = {
         sub: opts.sub,
         trustmark_id: opts.id,
-        ttl_s: parseInt(opts.ttl, 10),
+        ttl_s: ttlParsed,
       };
       if (opts.imageDigest) body["image_digest"] = opts.imageDigest;
       if (opts.repo)        body["repo"] = opts.repo;
@@ -110,10 +120,14 @@ export function registerTrustmarkCommands(program: Command): void {
       let jwksUrl: string;
       try {
         const header = decodeProtectedHeader(opts.jws);
-        jwksUrl = opts.jwks ?? (header["jku"] as string);
-        if (!jwksUrl) throw new Error("No jku in JWS header and --jwks not supplied");
+        const rawJkuUrl = opts.jwks ?? (header["jku"] as string);
+        if (!rawJkuUrl) throw new Error("No jku in JWS header and --jwks not supplied");
+        // SSRF protection: block private IPs, loopback, non-HTTPS URLs
+        assertSafeUrl(rawJkuUrl, "jku");
+        jwksUrl = rawJkuUrl;
       } catch (err) {
-        process.stderr.write(`[trustmark verify] Header decode failed: ${String(err)}\n`);
+        const label = err instanceof UrlSafetyError ? "[TRUST:FAIL] SSRF-unsafe URL" : "[trustmark verify] Header decode failed";
+        process.stderr.write(`${label}: ${String(err)}\n`);
         process.exit(1);
       }
 
