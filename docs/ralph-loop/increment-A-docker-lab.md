@@ -78,9 +78,9 @@ curl -s -X POST http://localhost:8080/trustmarks/issue \
 
 ## Dockerfile design notes
 
-- Multi-stage build: `builder` (Node 20 + tsc) → `runtime` (Node 20 slim, no devDeps, no source)
+- Multi-stage build: `builder` (Node 22 + tsc) → `runtime` (Node 22 slim, no devDeps, no source)
 - Runtime image runs as non-root user `tmi` (uid created in Dockerfile)
-- `HEALTHCHECK` uses Node's built-in `fetch` (Node 18+) — no curl dependency in image
+- `HEALTHCHECK` uses Node's built-in `fetch` (Node 22+) — no curl dependency in image
 - `TMI_PRIVATE_JWK` defaults to `/run/secrets/tmi.priv.jwk` — the tmpfs mount point
 
 ---

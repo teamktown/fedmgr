@@ -12,7 +12,7 @@ const fetch = require('node-fetch');
 const open = require('open');
 require('dotenv').config();
 
-// Use built-in fetch (Node.js 18+) or fallback to node-fetch
+// Use built-in fetch (Node.js 22, 24, or 26) or fallback to node-fetch
 //const fetch = globalThis.fetch || require('node-fetch');
 
 // OIDC and Federation defaults

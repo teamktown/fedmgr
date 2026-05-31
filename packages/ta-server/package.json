@@ -1,7 +1,7 @@
 {
   "name": "@letsfederate/ta-server",
   "version": "0.0.1",
-  "description": "Trust Anchor server \u2014 OIDF entity configuration, federation_list, and federation_fetch endpoints",
+  "description": "Trust Anchor server — OIDF entity configuration, federation_list, and federation_fetch endpoints",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -11,7 +11,8 @@
     "dev": "tsx src/index.ts",
     "test": "node --test test/*.test.mjs",
     "test:report": "node --test test/*.test.mjs --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=../../test-results/ta-server.junit.xml",
-    "prepublishOnly": "npm run build && npm test"
+    "prepublishOnly": "npm run build && npm test",
+    "pretest": "npm run build --silent"
   },
   "dependencies": {
     "@letsfederate/kms": "*",
@@ -41,7 +42,7 @@
     "directory": "packages/ta-server"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22.0.0 <27.0.0"
   },
   "license": "MIT",
   "exports": {

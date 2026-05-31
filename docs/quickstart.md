@@ -14,7 +14,7 @@ This guide will help you set up and run the Federation Manager (fedmgr) with the
 
 ## Prerequisites
 
-- Node.js 18+ 
+- Node.js 22, 24, or 26
 - npm or yarn
 - Docker and Docker Compose
 - OpenSSL (for key generation)
@@ -267,7 +267,7 @@ fedmgr/
    ```bash
    # Generate all required keys
    ./scripts/setup-keys.sh alpha
-   
+
    # Verify keys exist
    ls -la ./build/install/keys/
    ```
@@ -298,7 +298,7 @@ docker-compose restart
 # Fix key file permissions
 find ./build/install/keys -name "*.pem" -exec chmod 600 {} \;
 
-# Fix directory permissions  
+# Fix directory permissions
 chmod -R 755 ./build/install/
 ```
 

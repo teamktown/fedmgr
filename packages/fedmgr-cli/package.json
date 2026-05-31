@@ -14,7 +14,11 @@
       "types": "./dist/index.d.ts"
     }
   },
-  "files": ["dist", "CHANGELOG.md", "README.md"],
+  "files": [
+    "dist",
+    "CHANGELOG.md",
+    "README.md"
+  ],
   "publishConfig": {
     "access": "public",
     "provenance": true
@@ -28,7 +32,8 @@
     "build": "tsc -b",
     "dev": "tsx src/bin.ts",
     "test": "node --test test/*.test.mjs",
-    "prepublishOnly": "npm run build && npm test"
+    "prepublishOnly": "npm run build && npm test",
+    "pretest": "npm run build --silent"
   },
   "dependencies": {
     "@letsfederate/kms": "*",
@@ -36,12 +41,12 @@
     "jose": "^5.2.4"
   },
   "devDependencies": {
-    "@types/node": "^20.0.0",
+    "@types/node": "^22.0.0",
     "tsx": "^4.7.0",
     "typescript": "^5.4.0"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22.0.0 <27.0.0"
   },
   "license": "MIT"
 }

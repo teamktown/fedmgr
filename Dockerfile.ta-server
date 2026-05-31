@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 # Trust Anchor Server — multi-stage build (mirrors Dockerfile.tmi-server)
 
-FROM node:20-slim AS builder
+FROM node:22-slim AS builder
 
 WORKDIR /build
 
@@ -19,7 +19,7 @@ RUN npm run build -w @letsfederate/ta-server
 
 RUN npm prune --production
 
-FROM node:20-slim AS runtime
+FROM node:22-slim AS runtime
 
 RUN addgroup --system ta && adduser --system --ingroup ta ta
 

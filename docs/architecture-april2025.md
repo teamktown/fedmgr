@@ -122,7 +122,7 @@ The `Dockerfile.fedmgr` and `Dockerfile.mcp-core` demonstrate how the local NPM 
 
 The process involves:
 
-1.  Starting from a Node.js base image (`node:18-alpine`).
+1.  Starting from a Node.js base image (`node:22-alpine`).
 2.  Setting the working directory to `/app`.
 3.  Copying the packaged `.tgz` file of the respective NPM package (e.g., `fedmgr-*.tgz`, `mcp-core-*.tgz`) into the container's `/app` directory. This assumes the packages have been built and packaged locally before the Docker build.
 4.  Using `npm install ./package-name-*.tgz` to install the local package within the container. This makes the package's executables and libraries available inside the container.

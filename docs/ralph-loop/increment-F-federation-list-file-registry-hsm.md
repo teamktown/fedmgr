@@ -136,7 +136,7 @@ _initPkcs11():
 ### P.1 Docker overlayfs in devcontainer
 
 **Problem:** `docker compose up` fails with `mount source: "overlay", fstype: overlay, err: invalid argument`.
-All container launches fail — even trivial ones like `docker run node:20-slim echo test`.
+All container launches fail — even trivial ones like `docker run node:22-slim echo test`.
 
 **Root cause:** Docker uses overlayfs storage driver; the devcontainer host is already on overlayfs.
 Nested overlay mounts require `userxattr` kernel option or a different storage driver (`vfs`, `fuse-overlayfs`).
@@ -217,7 +217,7 @@ cat test-results/kms-hsm.log   # only when HSM run
 
 | Item | Notes |
 |---|---|
-| Increment F — CI/CD | GitHub Actions: test matrix (Node 18/20/22), semantic-release, npm publish |
+| Increment F — CI/CD | GitHub Actions: test matrix (Node 22/24/26), semantic-release, npm publish |
 | Intermediate entity support (full) | `federation_fetch_endpoint` propagation through chain |
 | Trust mark status revocation | `/trust-mark-status` revocation list management |
 | YubiKey PIV provider | `Pkcs11Provider` tested against real hardware |

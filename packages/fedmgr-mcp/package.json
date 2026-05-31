@@ -1,7 +1,7 @@
 {
   "name": "@letsfederate/fedmgr-mcp",
   "version": "0.0.1",
-  "description": "MCP server for fedmgr \u2014 interact with letsfederate trust infrastructure via AI assistants",
+  "description": "MCP server for fedmgr — interact with letsfederate trust infrastructure via AI assistants",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
@@ -21,7 +21,8 @@
     "start": "node dist/bin.js",
     "dev": "tsx src/bin.ts",
     "test": "node --test test/*.test.mjs",
-    "test:report": "node --test test/*.test.mjs --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=../../test-results/fedmgr-mcp.junit.xml"
+    "test:report": "node --test test/*.test.mjs --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=../../test-results/fedmgr-mcp.junit.xml",
+    "pretest": "npm run build --silent"
   },
   "dependencies": {
     "@letsfederate/kms": "*",
@@ -30,12 +31,12 @@
     "@letsfederate/ta-server": "*"
   },
   "devDependencies": {
-    "@types/node": "^20.0.0",
+    "@types/node": "^22.0.0",
     "tsx": "^4.7.0",
     "typescript": "^5.4.0"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22.0.0 <27.0.0"
   },
   "publishConfig": {
     "access": "public",

@@ -10,7 +10,8 @@
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
     "test": "node --test test/*.test.mjs",
-    "prepublishOnly": "npm run build && npm test"
+    "prepublishOnly": "npm run build && npm test",
+    "pretest": "npm run build --silent"
   },
   "dependencies": {
     "@letsfederate/kms": "*",
@@ -22,7 +23,11 @@
     "tsx": "^4.7.0",
     "typescript": "^5.4.0"
   },
-  "files": ["dist", "CHANGELOG.md", "README.md"],
+  "files": [
+    "dist",
+    "CHANGELOG.md",
+    "README.md"
+  ],
   "publishConfig": {
     "access": "public",
     "provenance": true
@@ -33,7 +38,7 @@
     "directory": "packages/tmi-server"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=22.0.0 <27.0.0"
   },
   "license": "MIT"
 }

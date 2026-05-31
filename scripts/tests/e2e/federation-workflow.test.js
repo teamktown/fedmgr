@@ -30,12 +30,12 @@ const startServer = (name, port) => {
   logger.info(`Starting ${name} on port ${port}`);
   
   const serverProcess = spawn('node', [
-    'src/fedmgr/mcp-server.js',
+    path.join(__dirname, '../fixtures/e2e-federation-server.js'),
     '--name', name,
     '--port', port.toString()
   ], {
     stdio: 'pipe',
-    env: { ...process.env, NODE_ENV: 'test' }
+    env: { ...process.env, NODE_ENV: 'test', E2E_REGISTRY_FILE: path.join(process.env.FEDMGR_FED_REG || process.env.FEDMGR_FED_REG_DIR || process.cwd(), 'e2e-federation-registry.json') }
   });
   
   // Log server output

@@ -88,7 +88,7 @@ npm test
 
 > **Why native, not Docker?**
 > In devcontainer environments (Codespaces, VS Code Remote), Docker uses `overlayfs` as its
-> storage driver. Launching any container — even `docker run node:20-slim echo test` — fails with
+> storage driver. Launching any container — even `docker run node:22-slim echo test` — fails with
 > `invalid argument` when Docker tries to mount an overlay layer on top of the existing overlay
 > filesystem (nested overlayfs is not supported). There is no simple workaround without restarting
 > the Docker daemon with a different storage driver (`vfs` or `fuse-overlayfs`).
