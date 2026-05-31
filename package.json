@@ -3,21 +3,37 @@
   "version": "1.0.0",
   "description": "`fedmgr` is a developer tool and orchestration engine for building, managing, and testing **identity federations** across **MCP servers**, **OIDC providers**, and **trust anchors**.",
   "main": "index.js",
+  "workspaces": [
+    "packages/*"
+  ],
   "directories": {
     "doc": "docs",
     "test": "test"
   },
   "scripts": {
+    "build": "npm run build -ws --if-present",
     "test": "scripts/run_tests.sh",
     "test:unit": "scripts/run_tests.sh --only-unit",
     "test:integration": "scripts/run_tests.sh --only-integration",
     "test:e2e": "scripts/run_tests.sh --only-e2e",
     "test:security": "scripts/run_tests.sh --only-security",
     "test:coverage": "scripts/run_tests.sh --with-coverage",
+    "test:packages": "npm run test -ws --if-present",
+    "test:convergence": "npm test -w @letsfederate/kms -- --runInBand && npm test -w @letsfederate/fedmgr-mcp -- --runInBand",
     "start": "node server.js",
     "dev": "nodemon server.js",
     "cli": "node src/fedmgr.js",
-    "version": "scripts/run-conformance.sh"
+    "version": "scripts/run-conformance.sh",
+    "tmi:keys:init": "bash scripts/tmi-keys-init.sh",
+    "tmi:decrypt": "source scripts/tmi-decrypt.sh",
+    "tmi:dev": "npm run dev -w @letsfederate/tmi-server",
+    "tmi:start": "bash scripts/tmi-decrypt.sh --start",
+    "ta:keys:init": "bash scripts/tmi-keys-init.sh packages/ta-server/keys",
+    "ta:dev": "npm run dev -w @letsfederate/ta-server",
+    "lab:up": "docker compose -f examples/lab/docker-compose.yml up --build",
+    "lab:down": "docker compose -f examples/lab/docker-compose.yml down",
+    "mcp:dev": "npm run dev -w @letsfederate/fedmgr-mcp",
+    "mcp:start": "npm run start -w @letsfederate/fedmgr-mcp"
   },
   "repository": {
     "type": "git",
@@ -26,14 +42,11 @@
   "keywords": [],
   "author": "Chris Phillips",
   "license": "ISC",
-  "type": "commonjs",
   "bugs": {
     "url": "https://github.com/teamktown/fedmgr/issues"
   },
   "homepage": "https://github.com/teamktown/fedmgr#readme",
   "dependencies": {
-    "@letsfederate/fedmgr": "file:build/npm/letsfederate-fedmgr-0.1.0.tgz",
-    "@letsfederate/mcp-core": "file:build/npm/letsfederate-mcp-core-0.1.0.tgz",
     "commander": "^11.1.0",
     "dotenv": "^16.5.0",
     "express": "^4.18.2",
@@ -50,11 +63,19 @@
     "mocha": "^10.2.0",
     "node-fetch": "^2.7.0",
     "nodemon": "^3.0.3",
+    "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/git": "^10.0.1",
+    "@semantic-release/github": "^10.3.5",
+    "@semantic-release/npm": "^12.0.1",
     "semantic-release": "^24.2.3",
+    "semantic-release-monorepo": "^8.0.2",
     "sinon": "^15.2.0",
     "supertest": "^6.3.3"
   },
+  "overrides": {
+    "serialize-javascript": "^7.0.4"
+  },
   "engines": {
-    "node": ">=14.0.0"
+    "node": ">=18.0.0"
   }
 }

@@ -2,6 +2,14 @@
 
 This project demonstrates a federated MCP (Model Context Protocol) system with GitHub OAuth integration and OpenID Federation (OIDCFed) trust chains.
 
+## Architecture direction
+
+FedMgr is evolving from a Docker Compose demo into an OpenID Federation trust backplane for MCP. The refined MVP keeps the local demo simple while extracting a small operations library for trust-anchor creation, MCP server registration, entity-statement issuance, trust-mark evaluation, and gateway/plugin enforcement. See [OpenID Federation Trust Backplane MVP](docs/specs/openid-federation-trust-backplane-mvp.md) for the critique, target architecture, and rollout milestones.
+
+### OpenID Federation + MCP trust backplane
+
+FedMgr now converges on the TypeScript workspace architecture for OpenID Federation: `@letsfederate/kms` owns signing providers including OpenBao/Vault Transit, `@letsfederate/ta-server` owns entity and subordinate statement semantics, and `@letsfederate/fedmgr-mcp` exposes MCP-native provisioning and validation tools for Claude Code or any MCP harness. See [the convergence walkthrough](docs/walkthroughs/openid-ops-mcp-mvp.md), then run `npm run test:convergence` to verify OpenBao-backed signing and MCP endpoint-audience trust checks.
+
 ## Features
 
 - 🔐 GitHub OAuth authentication

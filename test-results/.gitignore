@@ -1,0 +1,4 @@
+# test result files are gitignored — directory is tracked
+*.junit.xml
+*.tap
+*.log

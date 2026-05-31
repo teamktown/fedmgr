@@ -43,8 +43,8 @@ try {
     console.log(`🔧 Using corrected registry path: ${REGISTRY_PATH}`)
   }
 
-  const mcpInstancesDir = path.join(FEDMGR_HOME, 'build', 'install', 'mcp_instances');
-  const mcpProtocolServersDir = path.join(FEDMGR_HOME, 'build', 'install', 'mcp_protocol_servers');
+  const mcpInstancesDir = path.join(FEDMGR_HOME, 'mcp_instances');
+  const mcpProtocolServersDir = path.join(FEDMGR_HOME, 'mcp_protocol_servers');
   
   mcpInterface = new MCPInterface({
     registryPath: REGISTRY_PATH,

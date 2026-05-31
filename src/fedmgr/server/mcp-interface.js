@@ -24,15 +24,22 @@ class MCPInterface extends EventEmitter {
   constructor(options = {}) {
     super();
     
+    const defaultInstancesDir = process.env.FEDMGR_HOME
+      ? path.join(process.env.FEDMGR_HOME, 'mcp_instances')
+      : path.resolve(__dirname, '../../mcp_instances');
+    const defaultProtocolDir = process.env.FEDMGR_HOME
+      ? path.join(process.env.FEDMGR_HOME, 'mcp_protocol_servers')
+      : path.resolve(__dirname, '../../mcp_protocol_servers');
+
     // Handle backward compatibility - if first arg is string, treat as registryPath
     if (typeof options === 'string') {
       this.registryPath = options;
-      this.mcpInstancesDir = path.resolve(__dirname, '../../mcp_instances');
-      this.mcpProtocolServersDir = path.resolve(__dirname, '../../mcp_protocol_servers');
+      this.mcpInstancesDir = defaultInstancesDir;
+      this.mcpProtocolServersDir = defaultProtocolDir;
     } else {
       this.registryPath = options.registryPath || config.federations.registryPath;
-      this.mcpInstancesDir = options.mcpInstancesDir || path.resolve(__dirname, '../../mcp_instances');
-      this.mcpProtocolServersDir = options.mcpProtocolServersDir || path.resolve(__dirname, '../../mcp_protocol_servers');
+      this.mcpInstancesDir = options.mcpInstancesDir || defaultInstancesDir;
+      this.mcpProtocolServersDir = options.mcpProtocolServersDir || defaultProtocolDir;
     }
     
     this.portCounter = 3100;

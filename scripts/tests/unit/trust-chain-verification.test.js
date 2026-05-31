@@ -488,15 +488,15 @@ describe('Trust Chain Verification Tests', () => {
         intermediate1Entity,
         { metadata: { federation_entity: { organization_name: 'Intermediate 1' } } },
         intermediate2Keys.privateKey,
-        intermediate2Keys.publicKey
+        mockKeys.intermediate.publicKey // Use intermediate1's public key so verifier can verify leafStatement
       );
-      
+
       const intermediate2Statement = createEntityStatement(
         anchorEntity,
         intermediate2Entity,
         { metadata: { federation_entity: { organization_name: 'Intermediate 2' } } },
         mockKeys.anchor.privateKey,
-        mockKeys.anchor.publicKey
+        intermediate2Keys.publicKey // Use intermediate2's public key so verifier can verify intermediate1Statement
       );
       
       const result = await verifier.verifyTrustChain(leafEntity, [
