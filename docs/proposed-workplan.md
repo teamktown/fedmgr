@@ -1,6 +1,6 @@
 # Proposed Workplan — Trust-Fabric Fixes + MCP-Driven OpenID Federation Demonstration
 
-Status: Phases 0–5 complete (2026-06-11); Phase 6 (MCP demo) proposed
+Status: Phases 0–5 complete (2026-06-11); Phase 6 specced — decisions locked, not started
 Scope: the 10 review findings on branch
 `codex/refactor-docker-compose-for-trust-anchor-implementation`, plus a plan to
 **demonstrate and self-validate an MCP that participates in OpenID Federation** —
@@ -511,6 +511,132 @@ Defaults: TA `http://localhost:8090`, TMI `http://localhost:8080` (the
 fixes so the verdict and trustmark issuance are actually correct. After those, both
 the automated scenario test and a live Claude-driven walkthrough become a citable,
 rock-solid demonstration of cross-domain MCP trust via OpenID Federation.
+
+---
+
+## Phase 6 — expanded plan (decisions locked 2026-06-11)
+
+The section above is the *core mechanic*. This section is the agreed, decision-locked
+build plan: a user runs **their own** HSM-rooted trust ecosystem, **signs** their
+containers end-to-end through a local registry, **enrolls the MCPs they already use**,
+and has a **gateway** admit only attested MCPs — with revocation kill-switches and
+cross-org trust. Everything is TDD (red→green, plus negative tests). No silent caps.
+
+### Architecture decisions (locked)
+
+| Decision | Choice | Rationale |
+|---|---|---|
+| Root of trust | **HSM-rooted TA** (SoftHSM/PKCS#11 in compose) | Non-exfiltratable root key; the *same* HSM key also signs cosign images (`cosign --key pkcs11:…`) — one hardware root for statements + artifacts |
+| Container signing | **cosign signature + digest-bound trustmark (both)** | cosign = "real bits"; trustmark = "passed *our* policy" |
+| Evidence | **SBOM + build provenance**, stored in the local registry | Referenced from the trustmark `evidence`/`adopted_from_jws` fields (already exist) |
+| Registry | **Local OCI registry promoted into the demo compose** | 100% offline round trip (`examples/lab` already runs `registry:2` on `:5000`) |
+| cosign mode | **Key-based using the HSM key** (keyless/Fulcio noted as a connected variant) | Offline-first demo, no external CA |
+| Catalogue/inventory | **SQLite** as a compose resource (volume-backed) | `ta-server` already uses `better-sqlite3` (`sqlite-store.ts`); reuse the pattern for the MCP catalogue |
+| "Signed back" UX | Self-signed entity statement / PoP nonce | The "I signed something and can prove it" moment — already in enrollment (`proof_jws`) |
+| Keyless stdio MCPs | fedmgr **mints & holds keys on their behalf** | Matches `provisionMcpTrustCircle`'s `entityKmsFactory` pattern |
+
+### The gateway as Policy Enforcement Point (PEP)
+
+`federation-admin` (`:3001`) is already an OAuth broker: GitHub sign-in → `/token-exchange`
+→ a federation JWT with `aud: ['mcp-demo','mcp-server']` (`token-exchange-service.js`,
+`oauth-handler.js`). The enhancement: **before** minting a per-MCP audience, the gateway
+resolves that MCP's trust chain to an accepted anchor and checks its trustmark. Only
+attested MCPs land in the token `aud`. This unifies **human identity (GitHub SSO)** with
+**machine trust (OIDF chain + trustmark)** in one admission decision; `validate_mcp_invocation`
+at the MCP boundary is then defense-in-depth.
+- *TDD:* token-exchange issues `aud` only for MCPs that pass trust validation; a
+  revoked/untrusted MCP is excluded from `aud` (and later denied by the validator too).
+
+### How MCP extensions plug in (retrofit story)
+
+MCP extensions are negotiated at the `initialize` handshake via `capabilities.extensions`
+(`{vendor}/{name}` + a settings object; opt-in, graceful degradation). Two tiers:
+
+- **Tier 1 — extension-aware (in-band).** Define `org.letsfederate/oidf-trust`: at
+  `initialize` the MCP server advertises `{ entityId, federationConfigUrl, trustMarks?,
+  trustChainHint? }`; the client/gateway resolves the chain to an accepted anchor and
+  checks the marks before trusting the server. **Our E1 example MCP is the reference
+  implementation** ("our example MCPs are the example"). Maps onto the official
+  `io.modelcontextprotocol/oauth-client-credentials` (the gateway is the M2M auth server)
+  and **Enterprise-Managed Authorization** (central governance → the intermediate model
+  in E5b).
+- **Tier 2 — legacy (out-of-band).** MCPs that don't speak the extension (most stdio
+  servers) are wrapped: the **walker (E9)** discovers and enrolls them, fedmgr holds
+  their keys, and trust is asserted *about* them in the catalogue + enforced at the
+  gateway boundary. Graceful degradation, no MCP code changes required.
+
+### Demonstration set, ordered (lowest-effort first)
+
+| Step | Demo | Proves | Effort | Deps |
+|---|---|---|---|---|
+| **6.0** | `validate_mcp_invocation` MCP tool | admission is observable over MCP | Low | Phases 1–2 ✅ |
+| **6.1** | **E1 enriched** | HSM TA bootstrap → discovery → PoP self-sign → push→cosign→SBOM→digest-bound trustmark→verify→admit (offline round trip); example MCP = `oidf-trust` extension reference impl | Med | 6.0, lab compose |
+| **6.2** | **E8 rogue gauntlet** | forged / expired / wrong-anchor / swapped-JWKS / wrong-digest / missing-mark / wrong-aud → each **denied** with the exact failing check | Low–Med | 6.1 |
+| **6.3** | **E9 walker + SQLite catalogue** | walk Claude Code `.mcp.json` → inventory in SQLite → enroll into circle → **drift detection** (signed baseline diff) | Med | 6.0 |
+| **6.4** | **Gateway PEP** | GitHub SSO + trust admission unified; token `aud` scoped to attested MCPs | Med | 6.0 |
+| **6.5** | **E5b large-org intermediates** | root TA delegates to department intermediates (delegated capability, central governance); revoke a department at the root → all its leaves go INVALID | Med | 6.1 |
+| **6.6** | **E5a vendor accepted-anchor** | accept a vendor's sovereign TA so its signed images/MCPs are permitted; drop the anchor → instant distrust | Med | 6.1 |
+
+Recommended order: **6.0 → 6.1 → 6.2** (the low-effort headline block) → **6.3** (your
+inventory/hardening tool) → **6.4** (gateway) → **6.5 / 6.6** (cross-org trust).
+
+### TDD outcomes per step (what "done" asserts)
+
+- **6.0** — tool appears in `ListTools`; `CallTool` returns the verdict JSON; gates on
+  `access.payload.trust_marks`. Red: tool absent.
+- **6.1** — `init_local_ca` on the HSM provider publishes entity config + JWKS (no private
+  `d`); MCP discovers + fetches the TA; PoP/self-sign verifies against its own JWKS
+  ("I signed something and can prove it"); round-trip integration script: image pushed to
+  `:5000`, cosign sign+verify (HSM key), SBOM attached, TMI issues a **digest-bound**
+  trustmark (evidence → SBOM ref), verify ⇒ admit. *(Unit tests where pure; a scripted
+  compose-e2e for the cosign/registry leg, clearly labelled — no pretending a mock is the
+  round trip.)*
+- **6.2** — each attack returns `trusted:false` with the specific failed check (reuses the
+  Phase 1 negatives + adds wrong-digest and cosign-signature-invalid cases).
+- **6.3** — parser enumerates servers from a sample `.mcp.json`; enroll creates catalogue
+  rows + trustmarks; **drift**: add/remove/modify a server → diff reports it against the
+  *signed* baseline; unchanged re-scan → no drift; discovery is read-only, enroll explicit.
+- **6.4** — token-exchange includes a per-MCP `aud` only when trust validation passes;
+  revoked MCP excluded.
+- **6.5** — chain leaf→dept→root resolves VALID; revoke dept at root → leaf chain INVALID.
+- **6.6** — vendor mark accepted iff vendor TA is in the accepted-anchor list; remove it →
+  previously-allowed image now denied. New: a small **accepted-anchor policy** module
+  (unit-tested) — the one genuinely new mechanism.
+
+### `/examples` layout + per-example doc template
+
+```
+examples/
+  lab/                      # existing TA+TMI+OCI(:5000) substrate (+ SoftHSM, +catalogue.db volume)
+  01-trust-circle/          E1   06-vendor-accepted-anchor/  E5a
+  02-rogue-gauntlet/        E8   07-gateway-pep/             6.4
+  03-mcp-inventory/         E9   (extension ref impl lives with 01)
+  05-org-intermediates/     E5b
+```
+Each folder = a **succinct README** with five headings: **Why** (rationale) · **What it
+proves** · **Run it** (`docker compose … up` + the tool-call sequence) · **What to look
+for** (expected verdicts) · **The failure case** (the deny). Plus a compose overlay on
+`examples/lab` and one scenario test.
+
+### Outcomes / pragmatic leverage
+
+A regular user can: run **their own** HSM-rooted trust ecosystem; **sign** what they ship
+(cosign + trustmark + SBOM, fully local); **enroll the MCPs they already use** and get
+alerted on config drift; have a **gateway** admit only attested MCPs after they sign in;
+**revoke** trust instantly; and **accept a vendor's** or **delegate to a department's** TA
+under explicit policy. The `org.letsfederate/oidf-trust` extension + the example MCPs give
+third parties a concrete retrofit path; the legacy walker covers everything that can't be
+changed.
+
+### Risks / notes
+
+- **`pkcs11js` native build** must be baked into the HSM demo image (it fails under
+  `--ignore-scripts`); `examples/lab/Dockerfile.softhsm-test` is the place.
+- **cosign offline** ⇒ key-based with the HSM key (keyless needs Fulcio/internet).
+- **MCP config locations** vary by client; target Claude Code `.mcp.json` first, Desktop
+  config (`claude_desktop_config.json`) as a follow-on.
+- **SQLite as a compose "resource"** = a persistent volume holding `catalogue.db`, owned by
+  the catalogue/TA service (SQLite is embedded, not a server).
 
 ---
 
