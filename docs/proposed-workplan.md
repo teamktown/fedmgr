@@ -1,6 +1,6 @@
 # Proposed Workplan — Trust-Fabric Fixes + MCP-Driven OpenID Federation Demonstration
 
-Status: proposed (no code yet)
+Status: Phase 0 complete (2026-06-11); Phases 1–6 proposed
 Scope: the 10 review findings on branch
 `codex/refactor-docker-compose-for-trust-anchor-implementation`, plus a plan to
 **demonstrate and self-validate an MCP that participates in OpenID Federation** —
@@ -85,6 +85,43 @@ signs ES256. Fix the test substrate before the code.
 
 **Definition of done:** a single import gives any test a coherent, ES256-signed
 trust fabric.
+
+### ✅ Done — 2026-06-11
+
+**Environment:** this dev container shipped without a Node toolchain (the
+`00-bootstrap.sh` script provisions only the Claude CLI). Installed Node 22.22.3
++ npm 10.9.8 (NodeSource) and ran `npm install --ignore-scripts` — `--ignore-scripts`
+because the optional `pkcs11js` native HSM dep fails `node-gyp` without build
+headers and is irrelevant to Phases 0–1. *Follow-up:* consider adding Node + a
+guarded `pkcs11js` build to the devcontainer bootstrap.
+
+**Delivered:**
+- `packages/fedmgr-mcp/test/fixtures/federation-fixtures.mjs` — `Es256MemoryProvider`
+  (an in-memory, ephemeral analogue of `SoftKmsProvider`: same EC P-256 / ES256
+  contract, same `KeyProvider` surface `kid/jwks/signJwt`), plus `makeEs256Provider`,
+  `makeEs256ProviderFactory` (for `entityKmsFactory`), and `protectedHeaderAlg`.
+  Commented with the `INVARIANT / SECURITY / WHY / AI-NOTE` vocabulary.
+- `packages/fedmgr-mcp/test/federation-fixtures.test.mjs` — 5 invariant tests
+  (alg is ES256; JWKS is EC P-256 and never leaks `d`; signed header is ES256 +
+  round-trips; distinct/stable kids; factory wiring).
+
+**Design choice:** the fixture is **decoupled from `dist/`** (pure `jose`) so Phase 0
+verifies without a full TS build. The convenience of building a whole circle is left
+to Phase 1 tests, which call the real `provisionMcpTrustCircle` with the fixture's
+provider factory.
+
+**Verification (all green):**
+- `node --test test/federation-fixtures.test.mjs` → 5/5 pass.
+- Built `@letsfederate/kms` and `@letsfederate/fedmgr-mcp` (`tsc -b`, exit 0).
+- Compose smoke test: `provisionMcpTrustCircle` driven by the ES256 fixture emits a
+  **subordinate statement and invocation token both signed ES256** (vs the RS256 the
+  in-memory OpenBao path produces) — exactly the real-TA/TMI condition Phase 1 needs.
+- Full `fedmgr-mcp` suite (existing 2 + new 5) → 7/7 pass.
+
+**Confirmed Phase 1 red condition:** calling `validateMcpInvocation` against this
+ES256 circle will throw at `importJWK(opts.trustAnchorJwks.keys[0], "RS256")`
+(openid-ops.ts:182) — the latent interop bug (Finding #5) the fixture now makes
+testable.
 
 ---
 
