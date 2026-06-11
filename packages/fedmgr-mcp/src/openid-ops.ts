@@ -171,6 +171,50 @@ export async function provisionMcpTrustCircle(opts: {
   return { trustAnchor: opts.trustAnchorEntityId, registrations, invocationToken, audiences };
 }
 
+/**
+ * Derive the JWS verification algorithm from a public JWK.
+ *
+ * AI-NOTE: the alg MUST match the key type. The real Trust Anchor / Trust Mark
+ * Issuer sign ES256 (EC P-256, via SoftKmsProvider); the in-memory OpenBao
+ * transit path signs RS256. Hardcoding either one silently breaks verification
+ * of the other — this was review Finding #5. Prefer the JWK's own `alg`, then
+ * fall back to a kty/crv-based inference.
+ */
+function jwsAlgForJwk(jwk: JWK): string {
+  if (jwk.alg) return jwk.alg;
+  switch (jwk.kty) {
+    case "EC":
+      return jwk.crv === "P-384" ? "ES384" : jwk.crv === "P-521" ? "ES512" : "ES256";
+    case "RSA":
+      return "RS256";
+    case "OKP":
+      return "EdDSA";
+    default:
+      throw new Error(`cannot infer JWS algorithm for kty=${String(jwk.kty)}`);
+  }
+}
+
+/** Import a public JWK for signature verification with the correct algorithm. */
+async function importVerifyKey(jwk: JWK) {
+  return importJWK(jwk, jwsAlgForJwk(jwk));
+}
+
+/**
+ * Validate that an MCP invocation is admissible against the trust fabric.
+ *
+ * INVARIANT: returns a verdict for every well-formed input; only programmer
+ * error throws. Malformed / invalid / tampered input ⇒
+ * `{ trusted:false, checks, error }` — the validator must never propagate a
+ * thrown exception to its caller (review Finding #8).
+ *
+ * `trusted` is the conjunction of five INDEPENDENT checks, each surfaced in
+ * `checks` for diagnostics:
+ *   1. subordinateSignatureValid  — the TA actually signed the subordinate stmt
+ *   2. entitySelfStatementValid   — the subject signed its own entity config
+ *   3. invocationSignatureValid   — the TA/issuer signed the invocation token
+ *   4. invocationAudienceValid    — the target endpoint is in the token's `aud`
+ *   5. requiredTrustMarkPresent   — the required mark is in the token (see #1)
+ */
 export async function validateMcpInvocation(opts: {
   trustAnchorJwks: { keys: JWK[] };
   subordinateStatement: string;
@@ -178,38 +222,94 @@ export async function validateMcpInvocation(opts: {
   invocationToken: string;
   endpoint: string;
   requiredTrustMark?: string;
-}): Promise<{ trusted: boolean; entityId: string; endpoint: string; checks: Record<string, boolean> }> {
-  const taKey = await importJWK(opts.trustAnchorJwks.keys[0], "RS256");
-  const subordinate = await jwtVerify(opts.subordinateStatement, taKey, {
-    audience: opts.endpoint,
-  }).catch(async () => jwtVerify(opts.subordinateStatement, taKey));
-
-  const subjectJwk = ((subordinate.payload.jwks as { keys: JWK[] }).keys)[0];
-  const subjectKey = await importJWK(subjectJwk, subjectJwk.alg === "RS256" ? "RS256" : "ES256");
-  const entity = await jwtVerify(opts.entityStatement, subjectKey, {
-    issuer: subordinate.payload.sub as string,
-    subject: subordinate.payload.sub as string,
-  });
-  const access = await jwtVerify(opts.invocationToken, taKey, {
-    issuer: subordinate.payload.iss as string,
-    audience: opts.endpoint,
-  });
-  const metadata = subordinate.payload.metadata as { federation_entity?: { trust_marks?: string[] } } | undefined;
-  const trustMarks = metadata?.federation_entity?.trust_marks ?? [];
+}): Promise<{
+  trusted: boolean;
+  entityId: string | null;
+  endpoint: string;
+  checks: Record<string, boolean>;
+  error?: string;
+}> {
   const required = opts.requiredTrustMark ?? MCP_TRUST_MARK_ID;
-  return {
-    trusted: trustMarks.includes(required),
-    entityId: entity.payload.sub as string,
-    endpoint: opts.endpoint,
-    checks: {
-      subordinateSignatureValid: true,
-      entitySelfStatementValid: true,
-      invocationAudienceValid: Array.isArray(access.payload.aud)
-        ? access.payload.aud.includes(opts.endpoint)
-        : access.payload.aud === opts.endpoint,
-      requiredTrustMarkPresent: trustMarks.includes(required),
-    },
+  const checks: Record<string, boolean> = {
+    subordinateSignatureValid: false,
+    entitySelfStatementValid: false,
+    invocationSignatureValid: false,
+    invocationAudienceValid: false,
+    requiredTrustMarkPresent: false,
   };
+  let entityId: string | null = null;
+
+  try {
+    // 1. Trust Anchor key. SECURITY (#8): guard the array access rather than
+    //    dereferencing keys[0] on a possibly-empty/absent array.
+    const taJwk = opts.trustAnchorJwks?.keys?.[0];
+    if (!taJwk) throw new Error("trust anchor JWKS has no keys");
+    const taKey = await importVerifyKey(taJwk); // (#5) alg derived from the JWK
+
+    // 2. Subordinate statement: the TA vouches for the subject's keys + metadata.
+    //    SPEC: OIDF Subordinate Statements — these carry no `aud`. Audience
+    //    binding is enforced on the invocation token below, NOT here. The prior
+    //    `audience`-then-`.catch(retry)` pattern was a no-op that masked intent
+    //    (review Finding #4).
+    const subordinate = await jwtVerify(opts.subordinateStatement, taKey);
+    checks.subordinateSignatureValid = true;
+
+    // 3. Subject key from the subordinate (#8 guard before dereference).
+    const subjectJwk = (subordinate.payload["jwks"] as { keys?: JWK[] } | undefined)
+      ?.keys?.[0];
+    if (!subjectJwk) throw new Error("subordinate statement has no subject jwks");
+    const subjectKey = await importVerifyKey(subjectJwk);
+
+    // 4. Entity self-statement: the subject signs its own configuration
+    //    (iss === sub === the subject entity id).
+    const subjectEntityId = subordinate.payload.sub as string;
+    const entity = await jwtVerify(opts.entityStatement, subjectKey, {
+      issuer: subjectEntityId,
+      subject: subjectEntityId,
+    });
+    checks.entitySelfStatementValid = true;
+    entityId = (entity.payload.sub as string | undefined) ?? null;
+
+    // 5. Invocation token: issued by the TA/issuer. Verify signature + issuer
+    //    here; evaluate audience as a CHECK (not a hard `audience:` assertion)
+    //    so a mismatch yields a verdict instead of a thrown error (#4, #8).
+    const access = await jwtVerify(opts.invocationToken, taKey, {
+      issuer: subordinate.payload.iss as string,
+    });
+    checks.invocationSignatureValid = true;
+    const aud = access.payload.aud;
+    checks.invocationAudienceValid = Array.isArray(aud)
+      ? aud.includes(opts.endpoint)
+      : aud === opts.endpoint;
+
+    // 6. SECURITY (#1): the required trust mark must be present in the ISSUED
+    //    invocation JWT — the token the relying party is actually presented —
+    //    not merely asserted in the TA's subordinate metadata. Gating on
+    //    subordinate metadata let a token with no marks pass.
+    //    SPEC: OIDF Trust Marks.
+    const marks = access.payload["trust_marks"];
+    const invocationMarks = Array.isArray(marks) ? marks.map((m) => String(m)) : [];
+    checks.requiredTrustMarkPresent = invocationMarks.includes(required);
+
+    const trusted =
+      checks.subordinateSignatureValid &&
+      checks.entitySelfStatementValid &&
+      checks.invocationSignatureValid &&
+      checks.invocationAudienceValid &&
+      checks.requiredTrustMarkPresent;
+
+    return { trusted, entityId, endpoint: opts.endpoint, checks };
+  } catch (err) {
+    // INVARIANT: fail closed — any verification error is a denial, surfaced via
+    // `error` for diagnostics, never propagated as a throw.
+    return {
+      trusted: false,
+      entityId,
+      endpoint: opts.endpoint,
+      checks,
+      error: err instanceof Error ? err.message : String(err),
+    };
+  }
 }
 
 export function mcpKeyName(mcpId: string): string {

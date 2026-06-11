@@ -1,6 +1,6 @@
 # Proposed Workplan — Trust-Fabric Fixes + MCP-Driven OpenID Federation Demonstration
 
-Status: Phase 0 complete (2026-06-11); Phases 1–6 proposed
+Status: Phases 0–1 complete (2026-06-11); Phases 2–6 proposed
 Scope: the 10 review findings on branch
 `codex/refactor-docker-compose-for-trust-anchor-implementation`, plus a plan to
 **demonstrate and self-validate an MCP that participates in OpenID Federation** —
@@ -166,6 +166,48 @@ coordinated, test-driven rewrite of that function's verification spine.
   throw.
   `// INVARIANT: validateMcpInvocation returns a verdict for all well-formed inputs;
   only programmer error throws.`
+
+### ✅ Done — 2026-06-11
+
+**Tests first (`packages/fedmgr-mcp/test/validate-mcp-invocation.test.mjs`, 7 cases).**
+Run against the *unfixed* build first to confirm red for the right reasons:
+- `#5` ES256 happy path → threw on `importJWK(taKey, "RS256")`.
+- `#1` no mark / wrong mark in the invocation JWT → old code returned `trusted:true`
+  (it read the mark from subordinate metadata).
+- `#4/#8` endpoint absent from `aud` → threw `unexpected "aud" claim value`.
+- `#8` empty TA JWKS → `TypeError` on `keys[0]`.
+- `#8` tampered invocation token → threw.
+- RS256 OpenBao regression guard → already green (must stay green).
+Result before fix: 1/7 pass (only the regression guard).
+
+**Fix (`packages/fedmgr-mcp/src/openid-ops.ts`).** Rewrote `validateMcpInvocation`
+and added two helpers:
+- `jwsAlgForJwk()` / `importVerifyKey()` — derive the verify alg from the JWK
+  (`alg` then kty/crv inference). **#5**: works for ES256 (real TA/TMI) *and*
+  RS256 (OpenBao), no hardcode.
+- **#1**: `requiredTrustMarkPresent` now reads `access.payload.trust_marks` from the
+  **issued invocation JWT**, not subordinate metadata. This is the empirical proof
+  of the "mark must be in the JWT we issued" rule.
+- **#4**: dropped the bogus `audience:`-on-subordinate + `.catch(retry)` (subordinate
+  statements have no `aud`); audience is enforced solely on the invocation token as a
+  *check*, not a hard throw.
+- **#8**: guarded every array deref (`keys?.[0]`), wrapped the whole body in
+  try/catch → returns `{ trusted:false, checks, error }` for any
+  well-formed-but-invalid input. `trusted` is now the conjunction of five
+  independently-reported checks. Return type widened: `entityId: string | null`,
+  added `error?: string`.
+
+**Contract change:** updated the existing `openid-ops.test.mjs` "denies an MCP
+endpoint absent from the aud claim" test from `assert.rejects(...)` to asserting the
+fail-closed verdict (`trusted:false`, `invocationAudienceValid:false`).
+
+**Verification (all green):**
+- `tsc -b` across `@letsfederate/kms`, `fedmgr-mcp`, and the whole workspace `npm run
+  build` → exit 0.
+- `node --test test/*.test.mjs` (fedmgr-mcp) → **14/14 pass** (5 fixture + 2 existing
+  openid-ops + 7 new Phase 1).
+- Confirmed no other caller depends on the old throw-based contract (grep: the only
+  reference is the definition; not yet exposed as an MCP tool — that's Phase 6).
 
 ---
 

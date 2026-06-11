@@ -56,7 +56,10 @@ test("provisions 1 TA and 2 MCP entities with OIDF statements and endpoint audie
   assert.equal(result.checks.invocationAudienceValid, true);
 });
 
-test("rejects an MCP endpoint absent from the invocation JWT aud claim", async () => {
+test("denies an MCP endpoint absent from the invocation JWT aud claim", async () => {
+  // CONTRACT (review Finding #8): validateMcpInvocation returns a fail-closed
+  // verdict for well-formed-but-unauthorized input; it must NOT throw. (Before
+  // the Phase 1 fix this rejected with jose's `unexpected "aud" claim value`.)
   const ta = makeProvider("https://ta.local", "ta-test-deny-key");
   const circle = await provisionMcpTrustCircle({
     trustAnchorEntityId: "https://ta.local",
@@ -68,14 +71,13 @@ test("rejects an MCP endpoint absent from the invocation JWT aud claim", async (
     entityKmsFactory: (mcpId) => makeProvider(`https://fedmgr.local/mcp/${mcpId}`, mcpKeyName(mcpId)),
   });
   const { keys } = await ta.jwks();
-  await assert.rejects(
-    () => validateMcpInvocation({
-      trustAnchorJwks: { keys },
-      subordinateStatement: circle.registrations[0].subordinateStatement,
-      entityStatement: circle.registrations[0].entityStatement,
-      invocationToken: circle.invocationToken,
-      endpoint: "https://mcp.local/not-authorized",
-    }),
-    /unexpected "aud" claim value/
-  );
+  const result = await validateMcpInvocation({
+    trustAnchorJwks: { keys },
+    subordinateStatement: circle.registrations[0].subordinateStatement,
+    entityStatement: circle.registrations[0].entityStatement,
+    invocationToken: circle.invocationToken,
+    endpoint: "https://mcp.local/not-authorized",
+  });
+  assert.equal(result.trusted, false);
+  assert.equal(result.checks.invocationAudienceValid, false);
 });
