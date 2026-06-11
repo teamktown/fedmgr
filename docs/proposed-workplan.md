@@ -1,6 +1,6 @@
 # Proposed Workplan — Trust-Fabric Fixes + MCP-Driven OpenID Federation Demonstration
 
-Status: Phases 0–1 complete (2026-06-11); Phases 2–6 proposed
+Status: Phases 0–2 complete (2026-06-11); Phases 3–6 proposed
 Scope: the 10 review findings on branch
 `codex/refactor-docker-compose-for-trust-anchor-implementation`, plus a plan to
 **demonstrate and self-validate an MCP that participates in OpenID Federation** —
@@ -236,6 +236,40 @@ silently because nothing tests them together.
 - **#7** Resolve trustmark JWKS from the TMI (or trust the JWS `jku` after the SSRF
   check), not the TA.
   `// SPEC: trust marks are signed by the Trust Mark Issuer, not the Trust Anchor.`
+
+### ✅ Done — 2026-06-11
+
+**Structural fix (single source of truth).** Extracted the TMI request schema into
+`packages/tmi-server/src/schemas.ts` (`IssueRequestSchema` + `IssueRequest` type) —
+its own side-effect-free module, because `tmi-server/index.ts` self-starts an HTTP
+server on import and so cannot be imported just to reuse a schema. `index.ts` now
+imports the schema from there. The fedmgr-mcp contract test imports the **same**
+schema, so any field drift is a test failure, not a silent 400.
+
+**fedmgr-mcp (`src/index.ts`).** Extracted two exported, pure, unit-testable helpers
+from the tool handlers (the handlers themselves still do the network I/O):
+- `buildIssueTrustmarkBody(args)` — **#2**: emits `ttl_s` (not `ttl`) and
+  `trustmark_id` (not `id`), matching `IssueRequestSchema`. Before the fix Zod
+  silently stripped `ttl`/`id` and applied defaults, so the caller's TTL and
+  trustmark type were dropped.
+- `resolveTrustmarkVerifyJwksUrl(args)` — **#7**: any JWKS override now targets the
+  **TMI** (`tmi_url`), not the TA; default is `undefined` so `validateTrustmark`
+  uses the trustmark's own (SSRF-checked) `jku`. Renamed the `verify_trustmark`
+  tool input `ta_url` → `tmi_url` with an updated description.
+
+**Wiring.** Added `@letsfederate/tmi-server` as a fedmgr-mcp devDependency and a
+build-only tsconfig project reference, so `tsc -b` (and `pretest`) always produce
+`tmi-server/dist/schemas.js` for the contract test.
+
+**Tests first (`test/issue-trustmark-contract.test.mjs`, 4 cases).** Verified red on
+the buggy build (3/4 failing: `ttl_s` defaulted to 3600 not 7200, `trustmark_id`
+dropped, verify override returned `undefined` for `tmi_url`), then green after the
+fix.
+
+**Verification (all green):**
+- Whole-workspace `npm run build` (`tsc -b` ×5) → exit 0.
+- fedmgr-mcp suite → **18/18** (added 4 contract cases).
+- tmi-server suite → **10/10** (schema extraction is behaviour-preserving).
 
 ---
 

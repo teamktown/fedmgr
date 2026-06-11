@@ -235,19 +235,38 @@ async function toolCompleteEnrollment(args: Record<string, unknown>): Promise<st
   return `Enrollment ${enrollmentId} completed.\n\nResponse:\n${JSON.stringify(data, null, 2)}`;
 }
 
-async function toolIssueTrustmark(args: Record<string, unknown>): Promise<string> {
-  const tmiUrl     = requireSafeUrl(String(args["tmi_url"]     ?? DEFAULT_TMI_URL), "tmi_url");
-  const subjectUrl = requireSafeUrl(String(args["subject_url"]),                    "subject_url");
+/**
+ * Build the POST body for the TMI `/trustmarks/issue` endpoint from MCP tool args.
+ *
+ * AI-NOTE: the field names here MUST match `IssueRequestSchema` in
+ * @letsfederate/tmi-server/src/schemas.ts. A mismatch does not error loudly —
+ * Zod's non-strict object silently strips unknown keys and applies defaults, so
+ * a wrong name means the caller's value is dropped (review Finding #2). The
+ * contract test in test/issue-trustmark-contract.test.mjs validates this body
+ * against that exact schema to catch drift.
+ */
+export function buildIssueTrustmarkBody(
+  args: Record<string, unknown>
+): Record<string, unknown> {
+  const subjectUrl = requireSafeUrl(String(args["subject_url"]), "subject_url");
   const ttlSeconds = Number(args["ttl_seconds"] ?? 3600);
 
+  // SPEC: field names must match @letsfederate/tmi-server IssueRequestSchema —
+  // `ttl_s` (not `ttl`) and `trustmark_id` (not `id`). The contract test pins this.
   const body: Record<string, unknown> = {
     sub: subjectUrl,
-    ttl: ttlSeconds,
+    ttl_s: ttlSeconds,
   };
 
-  if (args["trustmark_id"]) body["id"] = String(args["trustmark_id"]);
+  if (args["trustmark_id"]) body["trustmark_id"] = String(args["trustmark_id"]);
   if (args["image_digest"]) body["image_digest"] = String(args["image_digest"]);
   if (args["repo"]) body["repo"] = String(args["repo"]);
+  return body;
+}
+
+async function toolIssueTrustmark(args: Record<string, unknown>): Promise<string> {
+  const tmiUrl = requireSafeUrl(String(args["tmi_url"] ?? DEFAULT_TMI_URL), "tmi_url");
+  const body = buildIssueTrustmarkBody(args);
 
   const data = await fetchJson(`${tmiUrl}/trustmarks/issue`, {
     method: "POST",
@@ -255,14 +274,29 @@ async function toolIssueTrustmark(args: Record<string, unknown>): Promise<string
     body: JSON.stringify(body),
   });
 
-  return `Trustmark issued for ${subjectUrl}.\n\nResponse:\n${JSON.stringify(data, null, 2)}`;
+  return `Trustmark issued for ${String(body["sub"])}.\n\nResponse:\n${JSON.stringify(data, null, 2)}`;
+}
+
+/**
+ * Resolve the optional JWKS-override URL for trustmark verification.
+ *
+ * AI-NOTE: trustmarks are signed by the Trust Mark Issuer, so any JWKS override
+ * MUST point at the TMI, never the Trust Anchor (review Finding #7 — overriding
+ * with the TA JWKS makes every verification fail, since the TA lacks the TMI
+ * signing key). Returns undefined by default: the trustmark's own `jku` header
+ * (SSRF-checked inside validateTrustmark) already points to the TMI JWKS.
+ */
+export function resolveTrustmarkVerifyJwksUrl(
+  args: Record<string, unknown>
+): string | undefined {
+  return args["tmi_url"]
+    ? `${requireSafeUrl(String(args["tmi_url"]), "tmi_url")}/.well-known/jwks.json`
+    : undefined;
 }
 
 async function toolVerifyTrustmark(args: Record<string, unknown>): Promise<string> {
   const jws = String(args["jws"]);
-  const jwksUrl = args["ta_url"]
-    ? `${requireSafeUrl(String(args["ta_url"]), "ta_url")}/.well-known/jwks.json`
-    : undefined;
+  const jwksUrl = resolveTrustmarkVerifyJwksUrl(args);
 
   const result = await validateTrustmark(jws, jwksUrl ? { jwksUrl } : {});
   const formatted = formatTrustMessage(result);
@@ -592,10 +626,11 @@ export async function startMcpServer(): Promise<void> {
               type: "string",
               description: "Compact JWS trustmark token to verify",
             },
-            ta_url: {
+            tmi_url: {
               type: "string",
               description:
-                "Optional Trust Anchor URL; its JWKS will be used to override the jku header",
+                "Optional Trust Mark Issuer URL whose JWKS overrides the trustmark's jku header. " +
+                "Normally unnecessary — the trustmark's jku already points to the issuing TMI.",
             },
           },
           required: ["jws"],

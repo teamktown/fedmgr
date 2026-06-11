@@ -36,7 +36,7 @@
 
 import express, { type Request, type Response } from "express";
 import { asyncHandler } from "./utils/async-handler.js";
-import { z } from "zod";
+import { IssueRequestSchema } from "./schemas.js";
 import {
   SoftKmsProvider,
   validateTrustmark,
@@ -138,37 +138,9 @@ app.get(
 // POST /trustmarks/issue
 // ---------------------------------------------------------------------------
 
-const IssueRequestSchema = z.object({
-  /** Entity ID of the subject receiving the trustmark. */
-  sub: z.string().url("sub must be a URL (entity ID)"),
-  /** Trustmark type identifier URI. */
-  trustmark_id: z
-    .string()
-    .url("trustmark_id must be a URL")
-    .default(
-      "https://letsfederate.org/trustmarks/AssessedAndPasses_minQuality_v1"
-    ),
-  /** OCI image digest (optional, for container attestations). */
-  image_digest: z
-    .string()
-    .regex(/^sha256:[a-f0-9]{64}$/, "image_digest must be sha256:<hex64>")
-    .optional(),
-  /** Source repository URL (optional). */
-  repo: z.string().url().optional(),
-  /** Evidence URL (optional — link to audit report, scan results, etc.). */
-  evidence: z.string().url().optional(),
-  /** Token validity in seconds (60s–24h). */
-  ttl_s: z.number().int().min(60).max(86400).default(3600),
-  /** Adoption: entity ID of the original trustmark issuer. */
-  adopted_from_iss: z.string().url().optional(),
-  /** Adoption: trustmark type URI from the original trustmark. */
-  adopted_from_id: z.string().url().optional(),
-  /**
-   * Adoption: the original trustmark JWS (embedded as evidence).
-   * Stored verbatim in the issued trustmark so verifiers can check the chain.
-   */
-  adopted_from_jws: z.string().optional(),
-});
+// IssueRequestSchema is defined in ./schemas.ts so the fedmgr-mcp client and
+// contract tests can import the exact same definition this server validates
+// against (single source of truth — review Finding #2).
 
 app.post(
   "/trustmarks/issue",
