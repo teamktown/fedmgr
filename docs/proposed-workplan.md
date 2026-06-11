@@ -1,6 +1,6 @@
 # Proposed Workplan — Trust-Fabric Fixes + MCP-Driven OpenID Federation Demonstration
 
-Status: Phases 0–2 complete (2026-06-11); Phases 3–6 proposed
+Status: Phases 0–3 complete (2026-06-11); Phases 4–6 proposed
 Scope: the 10 review findings on branch
 `codex/refactor-docker-compose-for-trust-anchor-implementation`, plus a plan to
 **demonstrate and self-validate an MCP that participates in OpenID Federation** —
@@ -293,6 +293,26 @@ fix.
 - **#9** Read the body once as text, attempt `JSON.parse` in a try/catch, fall back
   to raw text + status.
   `// SECURITY/UX: never let error-body parsing hide the underlying HTTP failure.`
+
+### ✅ Done — 2026-06-11
+
+**Fix (`src/fedmgr/auth-commands.js`, `localOidcLogin`).**
+- **#3** Restore the HTTP Basic header, **gated on a client secret**: confidential
+  clients authenticate; public clients (empty secret) omit it. (`clientCredentialsLogin`
+  already sent it unconditionally and was left untouched — correct for that grant.)
+- **#9** New `describeTokenError(res)` helper reads the error body once as text,
+  tries `JSON.parse`, and falls back to `HTTP <status>: <raw text>` — a plain-text
+  502 no longer throws a JSON parse error that masks the real failure.
+
+**Tests first (`scripts/tests/unit/cli/auth-commands.test.js`, Jest).** Updated the
+two tests that encoded the bug (happy path now asserts the `Authorization: Basic`
+header; the token-error mock now exposes `.text()` like a real response) and added
+two cases: public-client omits the header, and a non-JSON error body surfaces
+`502 … upstream is down`. Verified red on the unfixed code (3 failing), green after.
+
+**Verification:** `auth-commands.test.js` 10/10 (+1 pre-existing skip); full
+`scripts/tests/unit/cli` suite 18/18. Only other `localOidcLogin` caller is the
+internal login dispatcher (awaits the token) — unaffected.
 
 ---
 

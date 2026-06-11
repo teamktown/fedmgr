@@ -138,9 +138,11 @@ describe('Auth Commands', () => {
         username: 'test',
         password: 'test',
         opUrl: 'http://localhost:3000',
+        clientId: 'fedmgr-cli',
+        clientSecret: 'top-secret',
         federation: 'fed-alpha'
       });
-      
+
       expect(token).toEqual({
         access_token: 'test-access-token',
         id_token: 'test-id-token',
@@ -150,17 +152,44 @@ describe('Auth Commands', () => {
         provider: 'local-oidc-op',
         timestamp: expect.any(Number)
       });
-      
+
+      // #3: a confidential client MUST authenticate to the token endpoint via
+      // HTTP Basic. Dropping this header yields 401 invalid_client.
+      const expectedAuth = 'Basic ' + Buffer.from('fedmgr-cli:top-secret').toString('base64');
       expect(fetch).toHaveBeenCalledTimes(2);
       expect(fetch).toHaveBeenNthCalledWith(1, 'http://localhost:3000/.well-known/openid-configuration');
       expect(fetch).toHaveBeenNthCalledWith(2, 'http://localhost:3000/token', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
-          'Accept': 'application/json'
+          'Accept': 'application/json',
+          'Authorization': expectedAuth
         },
         body: expect.stringContaining('grant_type=password')
       });
+    });
+
+    test('localOidcLogin omits client auth for a public client (no secret)', async () => {
+      fetch.mockImplementationOnce(() => Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ token_endpoint: 'http://localhost:3000/token' })
+      }));
+      fetch.mockImplementationOnce(() => Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ access_token: 'a', token_type: 'Bearer' })
+      }));
+
+      await localOidcLogin({
+        username: 'test',
+        password: 'test',
+        opUrl: 'http://localhost:3000',
+        clientId: 'public-client',
+        clientSecret: ''
+      });
+
+      // #3: public clients have no secret and must NOT send an Authorization header.
+      const tokenCallHeaders = fetch.mock.calls[1][1].headers;
+      expect(tokenCallHeaders).not.toHaveProperty('Authorization');
     });
     
     test('localOidcLogin handles discovery error', async () => {
@@ -184,19 +213,44 @@ describe('Auth Commands', () => {
         })
       }));
       
-      // Mock token error response
+      // Mock token error response — body delivered as text (real responses
+      // expose .text(); the error path must not assume JSON, see #9).
       fetch.mockImplementationOnce(() => Promise.resolve({
         ok: false,
-        json: () => Promise.resolve({
+        status: 400,
+        statusText: 'Bad Request',
+        text: () => Promise.resolve(JSON.stringify({
           error: 'invalid_grant',
           error_description: 'Invalid username or password'
-        })
+        }))
       }));
-      
+
       await expect(localOidcLogin({
         username: 'test',
         password: 'wrong'
       })).rejects.toThrow('Authentication failed: Invalid username or password');
+    });
+
+    test('localOidcLogin surfaces a non-JSON error body instead of masking it', async () => {
+      fetch.mockImplementationOnce(() => Promise.resolve({
+        ok: true,
+        json: () => Promise.resolve({ token_endpoint: 'http://localhost:3000/token' })
+      }));
+      // #9: a plain-text error body (e.g. a 502 from a proxy). Parsing it as JSON
+      // would throw and hide the real failure; the message must carry the status
+      // and the body text.
+      fetch.mockImplementationOnce(() => Promise.resolve({
+        ok: false,
+        status: 502,
+        statusText: 'Bad Gateway',
+        text: () => Promise.resolve('upstream is down')
+      }));
+
+      await expect(localOidcLogin({
+        username: 'test',
+        password: 'test',
+        opUrl: 'http://localhost:3000'
+      })).rejects.toThrow(/502.*upstream is down/);
     });
   });
   

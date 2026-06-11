@@ -41,17 +41,50 @@ function deleteToken(provider) {
   fs.writeFileSync(TOKEN_STORE_PATH, JSON.stringify(tokens, null,2));
 }
 
+/**
+ * Describe a failed token-endpoint response without assuming the body is JSON.
+ *
+ * SECURITY/UX (Finding #9): a non-JSON error body (e.g. a plain-text 502 from a
+ * proxy) must not make error handling throw and hide the real failure. Read the
+ * body once as text, try to parse OAuth error JSON, and otherwise fall back to
+ * the HTTP status plus the raw text.
+ */
+async function describeTokenError(res) {
+  const raw = await res.text().catch(() => '');
+  let parsed;
+  try { parsed = raw ? JSON.parse(raw) : undefined; }
+  catch { parsed = undefined; }
+  if (parsed && (parsed.error_description || parsed.error)) {
+    return parsed.error_description || parsed.error;
+  }
+  const status = res.status ? `HTTP ${res.status}` : (res.statusText || 'request failed');
+  return raw ? `${status}: ${raw}` : status;
+}
+
 async function localOidcLogin({username,password,opUrl=OIDC_PROVIDER_URL,clientId=OIDC_CLIENT_ID,clientSecret=OIDC_CLIENT_SECRET,federation='fed-alpha'}) {
   const discovery = await fetch(`${opUrl}/.well-known/openid-configuration`);
   if (!discovery.ok) throw new Error(`Failed to discover OIDC configuration: ${discovery.statusText}`);
   const cfg = await discovery.json();
   if (!cfg.token_endpoint) throw new Error('Missing token_endpoint');
-  const tokenRes = await fetch(cfg.token_endpoint, { method:'POST', headers:{
-    'Content-Type':'application/x-www-form-urlencoded','Accept':'application/json'
-  }, body:new URLSearchParams({grant_type:'password',username,password,scope:'openid profile'}).toString() });
+
+  const headers = {
+    'Content-Type':'application/x-www-form-urlencoded',
+    'Accept':'application/json'
+  };
+  // WHY (Finding #3): confidential clients must authenticate to the token
+  // endpoint via HTTP Basic; a public client has no secret and must omit it.
+  // Sending no client auth for a confidential client yields 401 invalid_client.
+  if (clientSecret) {
+    headers['Authorization'] = `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`;
+  }
+
+  const tokenRes = await fetch(cfg.token_endpoint, {
+    method:'POST',
+    headers,
+    body:new URLSearchParams({grant_type:'password',username,password,scope:'openid profile'}).toString()
+  });
   if (!tokenRes.ok) {
-    const errData = await tokenRes.json();
-    throw new Error(`Authentication failed: ${errData.error_description || errData.error}`);
+    throw new Error(`Authentication failed: ${await describeTokenError(tokenRes)}`);
   }
   const token = await tokenRes.json(); token.federation=federation; token.provider='local-oidc-op'; token.timestamp=Date.now();
   return token;
