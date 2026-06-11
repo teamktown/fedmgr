@@ -1,8 +1,14 @@
 /**
- * URL Safety Validator for the kms/trust-validator
+ * URL Safety Validator — the SINGLE source of truth for SSRF protection.
  *
- * Rejects SSRF-prone URLs: non-HTTP(S) schemes, private IP ranges,
- * loopback, link-local. Allows localhost only in development mode.
+ * AI-NOTE: this module is re-exported from @letsfederate/kms and imported by
+ * kms, fedmgr-mcp, ta-server and fedmgr-cli. There used to be three divergent
+ * copies (review Finding #10); do NOT re-inline it. Any DNS-rebinding / IP-range
+ * fix must land here, once. Guard test: packages/kms/test/validate-url.test.mjs.
+ *
+ * Rejects SSRF-prone URLs: non-HTTP(S) schemes, private IP ranges, loopback,
+ * link-local. Allows localhost / http: / 127.0.0.1 only in development mode
+ * (NODE_ENV=development). Callers own any presentation prefix (e.g. [TRUST:FAIL]).
  */
 
 const PRIVATE_IPV4 = [
@@ -12,6 +18,10 @@ const PRIVATE_IPV4 = [
   /^192\.168\./,
   /^169\.254\./,
 ];
+
+// Loopback hostnames blocked outside development. Includes the trailing-dot FQDN
+// form (`localhost.`) and the IPv6 loopback literal.
+const LOOPBACK_HOSTNAMES = new Set(["localhost", "localhost.", "[::1]", "::1"]);
 
 export class UrlSafetyError extends Error {
   constructor(message: string) {
@@ -41,7 +51,7 @@ export function assertSafeUrl(rawUrl: string, fieldName = "url"): URL {
   }
 
   const hostname = parsed.hostname.toLowerCase();
-  if ((hostname === "localhost" || hostname === "[::1]" || hostname === "::1") && !isDev) {
+  if (LOOPBACK_HOSTNAMES.has(hostname) && !isDev) {
     throw new UrlSafetyError(`${fieldName} targets loopback. Use a routable HTTPS URL.`);
   }
 

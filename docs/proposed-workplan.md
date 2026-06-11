@@ -1,6 +1,6 @@
 # Proposed Workplan — Trust-Fabric Fixes + MCP-Driven OpenID Federation Demonstration
 
-Status: Phases 0–4 complete (2026-06-11); Phases 5–6 proposed
+Status: Phases 0–5 complete (2026-06-11); Phase 6 (MCP demo) proposed
 Scope: the 10 review findings on branch
 `codex/refactor-docker-compose-for-trust-anchor-implementation`, plus a plan to
 **demonstrate and self-validate an MCP that participates in OpenID Federation** —
@@ -375,6 +375,30 @@ shared module; add cases for the ta-server-only behaviours (loopback hostname se
 `// SECURITY: single source of truth for SSRF protection — DNS-rebinding / IP-range
 fixes must land in exactly one place.`
 `// AI-NOTE: do not re-inline this; three copies previously drifted.`
+
+### ✅ Done — 2026-06-11
+
+**Canonical home.** `@letsfederate/kms` already re-exported `assertSafeUrl`/
+`UrlSafetyError`, so it was the natural single source of truth. Enhanced
+`packages/kms/src/validate-url.ts` to the **superset** of the three copies' behaviour
+(added the trailing-dot loopback form `localhost.` that only ta-server blocked — a
+strict increase in protection, never a decrease) and documented it as the one place
+SSRF fixes land.
+
+**Deleted the two duplicates** (`packages/fedmgr-mcp/src/validate-url.ts`,
+`packages/ta-server/src/utils/validate-url.ts`) and repointed their imports to
+`@letsfederate/kms`. fedmgr-cli already imported from kms. Preserved ta-server's
+client-facing `[TRUST:FAIL]` enrollment-error signal by prefixing at its response
+boundary (the shared validator stays prefix-free — presentation is the caller's job).
+
+**Tests first (`packages/kms/test/validate-url.test.mjs`, 7 cases):** pin the union
+of behaviours (scheme, http-in-prod-vs-dev, loopback incl. `localhost.`, private
+IPv4 ranges, 127.x dev-only, IPv6 link-local, public allow). `localhost.` was red
+against the pre-merge kms validator, green after.
+
+**Verification:** whole-workspace `tsc -b` clean; kms guard 7/7; regressions all
+green — kms (0 fail), fedmgr-mcp 18/18, ta-server 59/59, fedmgr-cli 8/8. No dangling
+references to the deleted copies remain.
 
 ---
 

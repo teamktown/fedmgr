@@ -22,7 +22,8 @@ import {
   formatTrustMessage,
   type TrustResult,
 } from "@letsfederate/kms";
-import { assertSafeUrl, UrlSafetyError } from "./validate-url.js";
+// SSRF guard — single source of truth lives in @letsfederate/kms (Finding #10).
+import { assertSafeUrl, UrlSafetyError } from "@letsfederate/kms";
 import { MemoryOpenBaoTransitClient, OpenBaoTransitProvider } from "@letsfederate/kms";
 import { provisionMcpTrustCircle, mcpKeyName } from "./openid-ops.js";
 

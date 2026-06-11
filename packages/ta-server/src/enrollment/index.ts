@@ -39,7 +39,8 @@ import type { KeyProvider } from "@letsfederate/kms";
 import {
   signSubordinateStatement,
 } from "../federation/subordinate-statements.js";
-import { assertSafeUrl, UrlSafetyError } from "../utils/validate-url.js";
+// SSRF guard — single source of truth lives in @letsfederate/kms (Finding #10).
+import { assertSafeUrl, UrlSafetyError } from "@letsfederate/kms";
 
 // Maximum JWKS response body size (64 KB) to prevent memory exhaustion
 const JWKS_MAX_BYTES = 64 * 1024;
@@ -91,7 +92,9 @@ export function createEnrollmentRouter(
       assertSafeUrl(entity_id, "entity_id");
     } catch (err) {
       if (err instanceof UrlSafetyError) {
-        res.status(400).json({ error: "invalid_request", message: err.message });
+        // Preserve the [TRUST:FAIL] signal in the client response; the shared
+        // validator keeps messages prefix-free (presentation is the caller's job).
+        res.status(400).json({ error: "invalid_request", message: `[TRUST:FAIL] ${err.message}` });
         return;
       }
       throw err;
