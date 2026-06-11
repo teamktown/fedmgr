@@ -1,6 +1,6 @@
 # Proposed Workplan — Trust-Fabric Fixes + MCP-Driven OpenID Federation Demonstration
 
-Status: Phases 0–3 complete (2026-06-11); Phases 4–6 proposed
+Status: Phases 0–4 complete (2026-06-11); Phases 5–6 proposed
 Scope: the 10 review findings on branch
 `codex/refactor-docker-compose-for-trust-anchor-implementation`, plus a plan to
 **demonstrate and self-validate an MCP that participates in OpenID Federation** —
@@ -334,6 +334,31 @@ the permissive dev path explicit and loud.
 unauthenticated access in production is a trust-fabric compromise.`
 `// INVARIANT: in strict mode, no admin route is reachable without a valid bearer
 token.`
+
+### ✅ Done — 2026-06-11
+
+**Policy decision (altitude).** Chose **surgical fail-closed** over fail-at-startup:
+when admin auth is required but `ADMIN_TOKEN` is unset, the admin plane is sealed
+(every management route → `503 admin_disabled`) while the rest of the TA keeps
+serving federation. An admin-plane misconfig must not become a full federation
+outage. "Required" = `NODE_ENV=production` **or** `TA_REQUIRE_ADMIN_AUTH` truthy.
+
+**Fix (`packages/ta-server/src/management/index.ts`).**
+- Added `adminAuthRequired()` (exported) + `isTruthy()` env helpers.
+- Reworked `adminAuth({ adminToken, authRequired })`: token set → 401 without a
+  valid bearer; no token + required → **503** (sealed); no token + not required →
+  allow (dev). Factory now logs three states (`enabled` / `[TRUST:FAIL]` sealed /
+  `[TRUST:WARN]` open-dev).
+
+**Tests first (`packages/ta-server/test/management-auth.test.mjs`, supertest, 5 cases):**
+production-no-token → 503 (GET + revoke), `TA_REQUIRE_ADMIN_AUTH`-no-token → 503,
+token set → 401/401/200, dev → 200, and `adminAuthRequired()` env matrix. Verified
+red via a throwaway probe against the stashed old source (returned 200 where the
+test demands 503), green after restoring the fix.
+
+**Verification:** ta-server suite **59/59** (54 existing + 5 new); whole-workspace
+`tsc -b` clean. Added `supertest` to ta-server devDependencies (one-line lockfile
+change).
 
 ---
 

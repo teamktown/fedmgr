@@ -42,20 +42,61 @@ const TrustmarkRevokeSchema = z.object({
 });
 
 // ---------------------------------------------------------------------------
-// Auth middleware (optional — enabled by ADMIN_TOKEN env var)
+// Auth middleware
+//
+// Enabled by ADMIN_TOKEN. When no token is set, behaviour depends on whether
+// admin auth is *required* (production / strict mode):
+//   - required + no token → fail closed: every admin route returns 503. The
+//     admin plane is sealed, but the rest of the TA (federation_list/fetch/etc.)
+//     keeps serving — an admin-plane misconfig must not become a full outage.
+//   - not required + no token → dev/test: unprotected but allowed (the factory
+//     emits a loud [TRUST:WARN]).
 // ---------------------------------------------------------------------------
 
-function adminAuth(adminToken: string | undefined) {
+function isTruthy(v: string | undefined): boolean {
+  return v !== undefined && v !== "" && v !== "0" && v.toLowerCase() !== "false";
+}
+
+/**
+ * Whether the management API must be authenticated. True in production
+ * (NODE_ENV=production) or when TA_REQUIRE_ADMIN_AUTH is explicitly set.
+ */
+export function adminAuthRequired(): boolean {
+  return (
+    process.env["NODE_ENV"] === "production" ||
+    isTruthy(process.env["TA_REQUIRE_ADMIN_AUTH"])
+  );
+}
+
+function adminAuth(opts: { adminToken: string | undefined; authRequired: boolean }) {
+  const { adminToken, authRequired } = opts;
   return (req: Request, res: Response, next: NextFunction): void => {
-    if (!adminToken) return next(); // auth disabled
-    const auth = req.headers["authorization"] ?? "";
-    if (auth === `Bearer ${adminToken}`) return next();
-    res.status(401).json({
-      error: "unauthorized",
-      message:
-        "[TRUST:FAIL] Admin authentication required. " +
-        "Set Authorization: Bearer <ADMIN_TOKEN> header.",
-    });
+    if (adminToken) {
+      const auth = req.headers["authorization"] ?? "";
+      if (auth === `Bearer ${adminToken}`) return next();
+      res.status(401).json({
+        error: "unauthorized",
+        message:
+          "[TRUST:FAIL] Admin authentication required. " +
+          "Set Authorization: Bearer <ADMIN_TOKEN> header.",
+      });
+      return;
+    }
+    // No token configured.
+    if (authRequired) {
+      // SECURITY (#6): fail closed. Revoke/restore endpoints mutate trust;
+      // never serve them unprotected in production / strict mode.
+      res.status(503).json({
+        error: "admin_disabled",
+        message:
+          "[TRUST:FAIL] Management API is disabled: ADMIN_TOKEN is not set but " +
+          "admin auth is required (NODE_ENV=production or TA_REQUIRE_ADMIN_AUTH). " +
+          "Set ADMIN_TOKEN=<secret> to enable the admin plane.",
+      });
+      return;
+    }
+    // Dev/test: unprotected but allowed (loud warning emitted by the factory).
+    return next();
   };
 }
 
@@ -66,11 +107,19 @@ function adminAuth(adminToken: string | undefined) {
 export function createManagementRouter(store: FederationStore): Router {
   const router = Router();
   const adminToken = process.env["ADMIN_TOKEN"];
-  const auth = adminAuth(adminToken);
+  const authRequired = adminAuthRequired();
+  const auth = adminAuth({ adminToken, authRequired });
 
   if (adminToken) {
     process.stderr.write(
       "[ta-server] Management API: ADMIN_TOKEN is set — auth enabled.\n"
+    );
+  } else if (authRequired) {
+    // SECURITY (#6): unprotected admin plane is not allowed in prod/strict — seal it.
+    process.stderr.write(
+      "[ta-server] [TRUST:FAIL] Management API: ADMIN_TOKEN not set but admin auth " +
+      "is required (NODE_ENV=production or TA_REQUIRE_ADMIN_AUTH). Admin endpoints " +
+      "are DISABLED (503) until ADMIN_TOKEN is set.\n"
     );
   } else {
     process.stderr.write(
