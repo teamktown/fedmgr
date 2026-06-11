@@ -1,6 +1,6 @@
 # Proposed Workplan — Trust-Fabric Fixes + MCP-Driven OpenID Federation Demonstration
 
-Status: Phases 0–5 complete (2026-06-11); Phase 6 specced — decisions locked, not started
+Status: Phases 0–5 complete (2026-06-11); Phase 6 specced (decisions locked); Phase 7 (productization / patient-zero) specced — not started
 Scope: the 10 review findings on branch
 `codex/refactor-docker-compose-for-trust-anchor-implementation`, plus a plan to
 **demonstrate and self-validate an MCP that participates in OpenID Federation** —
@@ -637,6 +637,81 @@ changed.
   config (`claude_desktop_config.json`) as a follow-on.
 - **SQLite as a compose "resource"** = a persistent volume holding `catalogue.db`, owned by
   the catalogue/TA service (SQLite is embedded, not a server).
+
+---
+
+## Phase 7 — Productization & self-attestation ("patient zero")
+
+> Thesis: the MCP ecosystem needs strong code pedigree, and fedmgr should be **patient
+> zero** — the first OIDF-signed MCP, validatable by the very trust fabric it ships.
+> "fedmgr signs fedmgr."
+
+### What we already have (build on, don't rebuild)
+
+- **Semantic versioning + install:** semantic-release per package (`.releaserc.json` ×5),
+  npm publish with **provenance** (`id-token: write`, OIDC) — so `npx @letsfederate/fedmgr-mcp`
+  works once published. The install story is largely done.
+- **Supply-chain signing in CI:** `containers.yml` already builds to **GHCR**, signs with
+  **cosign keyless (Sigstore OIDC)**, and generates an **SBOM (syft)** + attestations on
+  version tags from semantic-release.
+- **Key abstraction:** the `KeyProvider` interface (SoftKms / OpenBao / pkcs11) is the seam
+  to swap key custody without code churn.
+
+### The gap: wrap our own releases in our own OIDF trust
+
+After build + cosign + SBOM, add a release step where the **letsfederate TMI issues a
+digest-bound trustmark** for each published artifact (npm tarball + OCI image), evidence →
+the SBOM/provenance, signed by the **public letsfederate TA**. Two complementary
+attestations, kept together: **cosign** (public transparency log, "real bits") +
+**trustmark** (letsfederate policy, "passed our pedigree gate"). Result: a consumer
+validates `@letsfederate/fedmgr-mcp` with `verify_trustmark` / `validate_mcp_invocation`
+against the public TA — the **first OIDF-signed MCP**.
+
+### Key custody / HSM strategy (you can defer the commitment)
+
+The root TA key is the crown jewel; the abstraction lets you choose custody later.
+Ladder: **SoftHSM** (local/dev) → **OpenBao** (self-host) → **Cloud KMS asymmetric signing**
+(AWS/GCP/Azure — cheapest production, API-based; write a `CloudKmsProvider` against the
+existing interface) → **Managed HSM** (FIPS 140-2/3 L3, single-tenant) at GA → PKCS#11
+services (Fortanix / Securosys / Thales) via the existing `pkcs11` provider.
+- **Recommendation:** do *not* sign a commercial HSM contract yet. Ship the public root on
+  **Cloud KMS** (non-exportable asymmetric key, ~low monthly + per-signature), reserve a
+  managed HSM for the production root once revenue justifies it. Document a witnessed
+  **root-key generation/backup ceremony**. The strategic point: the abstraction makes HSM
+  choice a config change, not a rewrite — so decide late.
+
+### Domains & hosting (org / com / net)
+
+OIDF entity IDs *are* public HTTPS URLs (jku must be reachable) — so these are permanent
+identity; choose deliberately.
+- **`.org`** — canonical public trust root + OSS: `trust.letsfederate.org` (TA),
+  `trustmarks.letsfederate.org` (TMI), public JWKS, status/transparency page. Community framing.
+- **`.com`** — commercial **SaaS**: hosted TA/TMI/gateway-as-a-service so customers run their
+  own circles.
+- **`.net`** — infrastructure/redundancy: mirror anchors, JWKS CDN, transparency log.
+
+### Cross-cutting track — UI & GitHub sign-in modernization
+
+Two UIs exist today: the newer **ta-server dashboard** (dark slate / Inter, hand-rolled
+HTML + CSS tokens, server-rendered) and the older **federation-admin** (`:3001`) GitHub
+sign-in (`ui-server.js`, Express). **Converge them** into one app with one design system.
+- Extract the dashboard's existing CSS variables into a shared design system; keep it
+  **framework-light** (htmx/Alpine or a tiny Vite SPA — no heavy build).
+- Modern flow: **GitHub sign-in (gateway)** → a dashboard showing your TA, your **circle of
+  trust** (the E9 SQLite catalogue), trustmark/health status, **drift alerts**, and one-click
+  signing actions. This is the human face of 6.3 (catalogue) + 6.4 (gateway PEP) and becomes
+  the **showcase UI** for the whole fabric.
+
+### Where it slots
+
+Phase 7 runs **after** the 6.x demos prove the mechanics (you need a working TA/TMI +
+trustmark issuance + the validate tool before you can self-sign releases). The UI track can
+run in parallel once 6.3/6.4 land (it visualizes them). Sequence: **6.0–6.2** (mechanics) →
+**6.3/6.4** (catalogue + gateway) → **7** (public TA + self-signed releases) + **UI** track.
+
+**Outcome:** fedmgr ships as the reference OIDF-signed MCP — installable
+(`npx @letsfederate/fedmgr-mcp`), **cosign- and trustmark-verifiable** against the public
+letsfederate TA — embodying "strong code pedigree, and we're patient zero."
 
 ---
 
