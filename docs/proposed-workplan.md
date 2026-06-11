@@ -1,0 +1,346 @@
+# Proposed Workplan — Trust-Fabric Fixes + MCP-Driven OpenID Federation Demonstration
+
+Status: proposed (no code yet)
+Scope: the 10 review findings on branch
+`codex/refactor-docker-compose-for-trust-anchor-implementation`, plus a plan to
+**demonstrate and self-validate an MCP that participates in OpenID Federation** —
+"the fedmgr CLI experience, but driven over MCP."
+
+This document is written to be read by both humans and AI coding agents. It uses a
+small, greppable comment/intent vocabulary (see *Working principles*) so the *why*
+behind each change survives future refactors.
+
+---
+
+## Working principles (apply to every item)
+
+**TDD loop (red → green → refactor):**
+1. Write the test(s) first and run them — confirm they fail *for the reason stated*,
+   not a setup error.
+2. Implement the minimal defensive fix.
+3. Re-run; confirm green. Then refactor with tests still green.
+4. Every security finding gets at least one **negative test** (the attack / invalid
+   input must be *rejected*), not just a happy-path test.
+
+**Defensive-coding standard:**
+- Trust decisions **fail closed**: unknown / missing / malformed input ⇒
+  `trusted:false` or a thrown `TrustError`, never a silent pass or default-allow.
+- No `as` type assertion without a runtime guard immediately before it
+  (the root of findings #1 and #8).
+- Validators return a verdict object; they must not throw on
+  *invalid-but-well-formed* input. Reserve throws for programmer error /
+  unreachable states.
+
+**Comment convention (human + AI readable).** Adopt a small, greppable tag
+vocabulary so both people and models can navigate intent:
+- `// INVARIANT:` — a condition that must always hold here (state it, don't assume).
+- `// SECURITY:` — why this guard exists and what breaks if removed.
+- `// SPEC: OIDF <section name>` — link the line to the OpenID Federation 1.1
+  clause it implements (e.g. *Trust Marks*, *Subordinate Statements*,
+  *Resolving Trust Chains*). Spec: https://openid.net/specs/openid-federation-1_1.html
+- `// WHY:` — rationale for a non-obvious choice (so nobody "simplifies" it back
+  into a bug).
+- `// AI-NOTE:` — a hint to future automated readers about a cross-file contract
+  (e.g. "field names must match `IssueRequestSchema` in tmi-server").
+
+---
+
+## Findings index
+
+| # | Severity | Location | One-line |
+|---|----------|----------|----------|
+| 1 | High | `fedmgr-mcp/src/openid-ops.ts` | Required trustmark read from subordinate metadata, never from the issued invocation JWT |
+| 2 | High | `fedmgr-mcp/src/index.ts` | `issue_trustmark` sends `ttl`/`id`; TMI expects `ttl_s`/`trustmark_id` (silently dropped) |
+| 3 | High | `src/fedmgr/auth-commands.js` | Password-grant request dropped its client (Basic) authentication |
+| 4 | Med-High | `fedmgr-mcp/src/openid-ops.ts` | Subordinate-statement audience check silently bypassed by catch-retry |
+| 5 | Med-High | `fedmgr-mcp/src/openid-ops.ts` | Hardcoded RS256 while the whole stack signs ES256 |
+| 6 | Med | `ta-server/src/management/index.ts` | Management API unauthenticated by default |
+| 7 | Med | `fedmgr-mcp/src/index.ts` | `verify_trustmark` fetches JWKS from the TA, but trustmarks are TMI-signed |
+| 8 | Med-Low | `fedmgr-mcp/src/openid-ops.ts` | Unguarded deref + unhandled verify rejections crash the validator |
+| 9 | Low | `src/fedmgr/auth-commands.js` | Error path re-parses a possibly non-JSON body and masks the real failure |
+| 10 | Low | `validate-url.ts` ×3 | SSRF guard triplicated and already drifting |
+
+**Refuted during verification (not bugs):** `chain-verifier.ts` `clockTolerance:"60s"`
+(jose accepts the string form); `importFirstKey` hardcoded ES256 (matches SoftKMS
+signing alg, correct in current scope); permissive-policy-passes-INVALID (documented
+intended behaviour of `trust-validator`, not a defect — revisit as a design choice).
+
+---
+
+## Phase 0 — Shared test scaffolding (do first; everything depends on it)
+
+The biggest latent bug (#5) exists because tests used RS256 keys while production
+signs ES256. Fix the test substrate before the code.
+
+- **New shared fixture helper** (e.g. `packages/*/test/fixtures/federation-fixtures.mjs`
+  or a small internal `@letsfederate/test-fixtures`): mints a realistic
+  mini-federation using **the same SoftKMS ES256 path production uses** — a TA key,
+  a TMI key, one MCP leaf key, and helpers to produce a signed entity statement,
+  subordinate statement, trustmark JWS, and invocation token.
+- Assert in the fixture itself that the generated JWS header `alg === "ES256"` — an
+  `// INVARIANT:` that pins tests to production reality and prevents silent drift
+  back to RS256.
+- This fixture becomes the backbone for the `validateMcpInvocation`, trustmark, and
+  chain tests below, and for the Phase 6 demonstration.
+
+**Definition of done:** a single import gives any test a coherent, ES256-signed
+trust fabric.
+
+---
+
+## Phase 1 — Core trust-verdict correctness (`openid-ops.ts`)
+
+Findings **#1, #4, #5, #8** all live in `validateMcpInvocation`. Treat as one
+coordinated, test-driven rewrite of that function's verification spine.
+
+**Tests to write first** (all using the Phase 0 ES256 fixture):
+- ✅ valid invocation with required trustmark in the **invocation JWT** ⇒ `trusted:true`.
+- ❌ **#1** invocation JWT missing `trust_marks` (even though subordinate metadata
+  lists the mark) ⇒ `trusted:false`, `checks.requiredTrustMarkPresent:false`.
+- ❌ **#4** subordinate `aud` does not include the endpoint ⇒ rejected (no silent
+  retry-without-audience).
+- ❌ **#5** TA/TMI keys are ES256 (the real path) ⇒ verification succeeds
+  (this test fails today, proving the RS256 hardcode).
+- ❌ **#8** `subordinate.payload.jwks` absent / `keys: []` ⇒ returns `trusted:false`,
+  not a `TypeError`.
+- ❌ **#8** tampered subordinate signature / expired invocation token ⇒ returns a
+  `trusted:false` verdict, not an uncaught throw.
+
+**Fix:**
+- **#1** Read required trust marks from the **invocation token payload**
+  (`access.payload.trust_marks`) — the authoritative source per OIDF *Trust Marks*
+  (the `trust_marks` claim the issuer stamps). Keep the subordinate-metadata check
+  only as a secondary "issuer is *entitled* to assert this mark" signal if desired,
+  but the gating decision is the JWT claim.
+  Comments: `// SPEC: OIDF Trust Marks — the relying party enforces the mark present
+  in the presented token` and `// SECURITY: gating on subordinate metadata instead
+  of the invocation JWT lets a token with no marks pass.`
+- **#4** Remove the `.catch(() => verify-without-audience)` fallback. Audience is a
+  hard constraint; if it fails, the verdict is `false`. Replace the hardcoded
+  `subordinateSignatureValid:true` with the actual result.
+  `// SECURITY: audience binding must not be downgraded on failure.`
+- **#5** Replace `importJWK(key, "RS256")` with an algorithm derived from the JWK
+  (reuse the `key.alg ?? infer-from-kty` logic already present at line 188; better,
+  extract a tiny `importVerifyKey(jwk)` helper and use it for *all three* keys).
+  `// AI-NOTE: signing alg is ES256 across the stack (SoftKMS); do not hardcode RS256.`
+- **#8** Add runtime guards before every `as` cast: assert `jwks?.keys?.length`
+  before indexing; wrap the `entity`/`access` verifications so a verification failure
+  becomes `trusted:false` with a populated `checks` map and an `error` field, not a
+  throw.
+  `// INVARIANT: validateMcpInvocation returns a verdict for all well-formed inputs;
+  only programmer error throws.`
+
+---
+
+## Phase 2 — MCP ↔ TMI/TA contract drift (`fedmgr-mcp/src/index.ts`)
+
+**Findings #2 and #7.** Root cause: the MCP client and the server schemas drift
+silently because nothing tests them together.
+
+**Tests first:**
+- **#2** A contract test asserting the body `toolIssueTrustmark` builds
+  **schema-validates against the actual `IssueRequestSchema`** imported from
+  tmi-server (or a shared schema module). Cases: `ttl_seconds` actually shapes
+  `ttl_s`; `trustmark_id` actually shapes `trustmark_id`. Fails today because
+  `ttl`/`id` get stripped.
+- **#7** `verify_trustmark` with a TMI-signed trustmark resolves the **TMI** JWKS and
+  verifies; a test that points it at the TA must *fail to verify* (proving we target
+  the right issuer).
+
+**Fix:**
+- **#2** Rename the emitted fields to `ttl_s` and `trustmark_id`. Best structural fix
+  (altitude): **extract `IssueRequestSchema` into a shared module** both tmi-server
+  and fedmgr-mcp import, so the client builds the request *through the schema* and
+  drift becomes a compile/test failure forever after.
+  `// AI-NOTE: this body is validated by IssueRequestSchema in tmi-server; keep field
+  names in lockstep — prefer importing the schema.`
+- **#7** Resolve trustmark JWKS from the TMI (or trust the JWS `jku` after the SSRF
+  check), not the TA.
+  `// SPEC: trust marks are signed by the Trust Mark Issuer, not the Trust Anchor.`
+
+---
+
+## Phase 3 — OIDC client auth regression (`src/fedmgr/auth-commands.js`)
+
+**Findings #3 and #9.**
+
+**Tests first** (mock the token endpoint):
+- **#3** With `OIDC_CLIENT_SECRET` set and an OP that requires client auth, the token
+  request must carry `Authorization: Basic …`. Assert the header is present. Add a
+  complementary case for a public client where it's legitimately absent, so the fix
+  is conditional, not blanket.
+- **#9** A non-JSON error body (e.g. `502 text/plain`) on the failure path must still
+  produce an informative error, not a JSON-parse throw that masks the HTTP status.
+
+**Fix:**
+- **#3** Restore the Basic auth header, gated on a client secret being present.
+  Don't unconditionally send it — that's the defensive version.
+  `// WHY: confidential clients must authenticate to the token endpoint; public
+  clients omit this.`
+- **#9** Read the body once as text, attempt `JSON.parse` in a try/catch, fall back
+  to raw text + status.
+  `// SECURITY/UX: never let error-body parsing hide the underlying HTTP failure.`
+
+---
+
+## Phase 4 — Fail-closed management API (`ta-server/src/management/index.ts`)
+
+**Finding #6.**
+
+**Tests first:**
+- Unset `ADMIN_TOKEN` + a "production" signal (e.g. `NODE_ENV=production` or an
+  explicit `TA_REQUIRE_ADMIN_AUTH`): server startup **refuses** (throws/exits
+  `EX_CONFIG`), or every management route returns `401`.
+- Token set + correct Bearer ⇒ `200`; wrong/absent Bearer ⇒ `401`.
+- Dev/test mode with no token ⇒ allowed **but emits the existing `[TRUST:WARN]`**
+  (preserve local DX).
+
+**Fix:** Make the middleware fail-closed when a production/strict flag is set; keep
+the permissive dev path explicit and loud.
+`// SECURITY: management endpoints mutate trust (revoke subordinates/trustmarks);
+unauthenticated access in production is a trust-fabric compromise.`
+`// INVARIANT: in strict mode, no admin route is reachable without a valid bearer
+token.`
+
+---
+
+## Phase 5 — Consolidate the SSRF guard (`validate-url.ts` ×3)
+
+**Finding #10** (cleanup, but security-sensitive).
+
+**Tests first:** move/centralize the existing URL-safety tests against the single
+shared module; add cases for the ta-server-only behaviours (loopback hostname set,
+`[TRUST:FAIL]` prefix) so consolidation can't regress them.
+
+**Fix:** Promote one canonical `assertSafeUrl`/`UrlSafetyError` into a shared package
+(`@letsfederate/kms` is the natural home), delete the two copies, re-export.
+`// SECURITY: single source of truth for SSRF protection — DNS-rebinding / IP-range
+fixes must land in exactly one place.`
+`// AI-NOTE: do not re-inline this; three copies previously drifted.`
+
+---
+
+## Sequencing & rationale
+
+| Phase | Findings | Why this order |
+|------|----------|----------------|
+| 0 | — | ES256 fixture unblocks correct tests for #1/#4/#5 |
+| 1 | #1 #4 #5 #8 | Core verdict; highest impact, one file |
+| 2 | #2 #7 | Contract drift; independent of Phase 1 |
+| 3 | #3 #9 | Isolated, legacy JS path |
+| 4 | #6 | Isolated server middleware |
+| 5 | #10 | Pure refactor; do last to avoid churn under the others |
+| 6 | demo | Depends on Phases 1–2 landing (see below) |
+
+Phases 1–4 are independent and can be parallelized once Phase 0 lands. Phase 5 goes
+last so consolidation doesn't collide with edits in the other files.
+
+---
+
+## Phase 6 — Demonstrate & self-validate an MCP participating in OpenID Federation
+
+> Goal: "the fedmgr CLI experience, but over MCP" — stand up the trust fabric, have
+> an MCP server **enroll into it, receive a trustmark, and be admitted**, then have
+> the verdict checked end-to-end. This is the headline demo of cross-domain MCP trust.
+
+### What already exists (the building blocks)
+
+`packages/fedmgr-mcp` is a **stdio MCP server** (`StdioServerTransport`) that already
+exposes the trust-fabric operations as MCP tools — effectively the CLI-but-MCP:
+
+| MCP tool | Maps to OIDF / fedmgr concept |
+|----------|-------------------------------|
+| `initialize_local_ca` | Stand up the local Trust Anchor / circle of trust |
+| `enroll_server` | Begin enrollment of an MCP entity under the TA |
+| `complete_enrollment` | Proof-of-key, nonce, activation → subordinate becomes active |
+| `federation_status` | TA / TMI health + posture |
+| `list_subordinates` | `federation_list` — who is in the circle |
+| `check_trust_chain` | Resolve leaf → (intermediate) → TA |
+| `issue_trustmark` | TMI issues a signed trustmark JWS |
+| `verify_trustmark` | Verify a trustmark's signature/expiry |
+| `provision_mcp_trust_circle` | Build the in-memory MCP circle + invocation token |
+| `get_signed_config` | Signed entity configuration for an MCP |
+| `revoke_subordinate` | Tear down a trust relationship |
+
+Defaults: TA `http://localhost:8090`, TMI `http://localhost:8080` (the
+`examples/lab/docker-compose.yml` lab), matching the earlier endpoint discussion.
+
+### The gap that blocks the demo
+
+- **No `validate_mcp_invocation` MCP tool exists.** `validateMcpInvocation()` lives in
+  `openid-ops.ts` but is **not wired into the tool switch** (`provision_mcp_trust_circle`
+  is exposed; the *verdict* is not). So an MCP can be provisioned, but admission
+  cannot be exercised/observed over MCP.
+- The verdict it would produce is currently wrong (Finding #1) and can't read real
+  ES256 keys (Finding #5), and `issue_trustmark` can't actually set the mark type
+  (Finding #2). **So the demo depends on Phases 1–2 landing first.**
+
+### Plan
+
+1. **Expose the verdict as a tool — `validate_mcp_invocation`** (new tool in
+   `fedmgr-mcp/src/index.ts`). Inputs: the MCP's invocation token, the target
+   endpoint, and the TA reference; output: the `{ trusted, entityId, endpoint, checks }`
+   verdict from the (now-fixed) `validateMcpInvocation`. This is the piece that makes
+   admission *observable* over MCP.
+   `// AI-NOTE: this tool is the empirical proof of the "trustmark must be present in
+   the issued JWT" rule — keep it gating on access.payload.trust_marks.`
+
+2. **Scenario test — the happy path, driven through the MCP CallTool path**
+   (`packages/fedmgr-mcp/test/mcp-demo-scenario.test.mjs`, TDD, ES256 fixture):
+   `initialize_local_ca` → `enroll_server` → `complete_enrollment` →
+   `issue_trustmark` → `check_trust_chain` (leaf → TA) → `verify_trustmark` →
+   `validate_mcp_invocation` ⇒ `trusted:true`. Each step asserts the OIDF artefact it
+   produced (signed statement, active subordinate, signed trustmark, resolved chain).
+
+3. **Negative scenarios (the proof it's "rock solid"), same harness:**
+   - invocation JWT **missing the required trustmark** ⇒ `trusted:false`
+     (proves Finding #1's rule).
+   - endpoint **absent from `aud`** ⇒ `trusted:false` (proves Finding #4).
+   - trustmark **revoked** via `/trust-mark-status` ⇒ `trusted:false`.
+   - MCP enrolled under a **different/unaccepted TA** ⇒ `trusted:false`.
+
+4. **Cross-domain capstone (separate follow-on):** two TAs / two circles; an MCP
+   trusted in circle A is **denied** in circle B unless B explicitly accepts A's
+   anchor. This is the cross-domain MCP-trust illustration the earlier assessment
+   called for.
+
+5. **Walkthrough doc** (`docs/walkthroughs/mcp-openid-federation-demo.md`): the
+   `docker compose up` lab + the exact MCP tool-call sequence and expected verdicts,
+   so a human or an agent can reproduce it.
+
+### Can Claude validate this directly (CLI-but-MCP)?
+
+**Yes — two complementary ways:**
+
+- **As a scenario/CallTool test (always available, CI-friendly).** The harness in
+  step 2 drives the real MCP request handlers and asserts verdicts. This is the
+  authoritative, repeatable proof and runs without a live model in the loop.
+
+- **As an interactive MCP client (Claude in the loop).** Because `fedmgr-mcp` speaks
+  stdio MCP, it can be registered as an MCP server in a Claude Code / agent session.
+  Claude then calls `initialize_local_ca`, `enroll_server`, …, `validate_mcp_invocation`
+  as tools and narrates/validates each step — literally "the fedmgr CLI experience,
+  but over MCP." This requires the server to be added to the session's MCP config and
+  the lab (TA/TMI) to be running; it is a live demo, with the scenario test as its
+  deterministic backstop.
+
+**Bottom line:** the MCP surface to do this already exists; what's missing is (a) the
+`validate_mcp_invocation` tool to make admission observable, and (b) the Phase 1–2
+fixes so the verdict and trustmark issuance are actually correct. After those, both
+the automated scenario test and a live Claude-driven walkthrough become a citable,
+rock-solid demonstration of cross-domain MCP trust via OpenID Federation.
+
+---
+
+## Definition of done (whole effort)
+
+- Every finding has a red test that now passes green, **plus** a negative/attack test
+  that stays red→reject.
+- `validateMcpInvocation` enforces the trustmark from the invocation JWT — the
+  empirical proof of the "MCP must present the mark in the JWT we issued" requirement,
+  now a citable test.
+- A `validate_mcp_invocation` MCP tool exists and is exercised by the Phase 6 scenario.
+- No `as` cast in the trust path without a preceding runtime guard.
+- All three duplicated SSRF guards collapsed to one.
+- New comments use the `INVARIANT / SECURITY / SPEC / WHY / AI-NOTE` vocabulary so the
+  next reader (human or model) inherits the intent.
