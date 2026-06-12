@@ -30,8 +30,13 @@ import {
   provisionMcpTrustCircle,
   mcpKeyName,
   validateMcpInvocation,
+  MCP_TRUST_MARK_ID,
 } from "./openid-ops.js";
 import { log, withSpan } from "./telemetry.js";
+import {
+  OIDF_TRUST_EXTENSION_ID,
+  buildOidfTrustExtension,
+} from "./oidf-trust-extension.js";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -46,6 +51,11 @@ import { log, withSpan } from "./telemetry.js";
 const DEFAULT_TA_URL = "http://localhost:8090";
 const DEFAULT_TMI_URL = "http://localhost:8080";
 const DEFAULT_TRUST_ANCHOR_ID = "https://trust.letsfederate.org";
+// fedmgr-mcp's own entity identity under the canonical anchor (patient zero: the
+// tool that issues trust also advertises its own trust). FEDMGR_MCP_ENTITY_ID may
+// be overridden for self-hosted deployments.
+const FEDMGR_MCP_ENTITY_ID =
+  process.env["FEDMGR_MCP_ENTITY_ID"] ?? `${DEFAULT_TRUST_ANCHOR_ID}/mcp/fedmgr-mcp`;
 
 const TOOL_NAMES = [
   "federation_status",
@@ -358,6 +368,29 @@ async function toolCheckTrustChain(args: Record<string, unknown>): Promise<strin
 }
 
 /**
+ * The MCP server capabilities. Advertises the `org.letsfederate/oidf-trust`
+ * extension in-band at the `initialize` handshake so clients learn fedmgr-mcp's
+ * OIDF identity + anchor + marks (patient zero). Exported so the advertisement is
+ * directly testable. SPEC: https://modelcontextprotocol.io/extensions/overview
+ */
+export function buildServerCapabilities(): Record<string, unknown> {
+  return {
+    tools: {},
+    resources: {},
+    extensions: {
+      [OIDF_TRUST_EXTENSION_ID]: buildOidfTrustExtension({
+        entityId: FEDMGR_MCP_ENTITY_ID,
+        trustAnchor: DEFAULT_TRUST_ANCHOR_ID,
+        trustMarks: [MCP_TRUST_MARK_ID],
+        ...(process.env["FEDMGR_MCP_IMAGE_DIGEST"]
+          ? { imageDigest: process.env["FEDMGR_MCP_IMAGE_DIGEST"] }
+          : {}),
+      }),
+    },
+  };
+}
+
+/**
  * Defensively read a required non-empty string argument. MCP tool args are
  * untyped JSON, so we validate at the boundary rather than trusting the shape.
  */
@@ -594,12 +627,7 @@ async function toolInitializeLocalCa(): Promise<string> {
 export async function startMcpServer(): Promise<void> {
   const server = new Server(
     { name: "fedmgr-mcp", version: "0.0.1" },
-    {
-      capabilities: {
-        tools: {},
-        resources: {},
-      },
-    }
+    { capabilities: buildServerCapabilities() as Record<string, unknown> }
   );
 
   // ── List tools ────────────────────────────────────────────────────────────
