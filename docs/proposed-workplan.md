@@ -1,6 +1,6 @@
 # Proposed Workplan — Trust-Fabric Fixes + MCP-Driven OpenID Federation Demonstration
 
-Status: Phases 0–5 complete (2026-06-11); Phase 6 specced (decisions locked); Phase 7 (productization / patient-zero) specced — not started
+Status: Phases 0–5 complete (2026-06-11); Phase 6 in progress (6.0 done 2026-06-12); Phase 7 specced — not started
 Scope: the 10 review findings on branch
 `codex/refactor-docker-compose-for-trust-anchor-implementation`, plus a plan to
 **demonstrate and self-validate an MCP that participates in OpenID Federation** —
@@ -22,7 +22,7 @@ behind each change survives future refactors.
 | 3 | OIDC client auth + robust token errors (#3 #9) | ✅ complete |
 | 4 | Fail-closed management API (#6) | ✅ complete |
 | 5 | Consolidate SSRF guard into kms (#10) | ✅ complete |
-| 6 | MCP demonstrations (E1/E8/E9, gateway PEP, E5a/E5b) | 📝 specced, decisions locked — not started |
+| 6 | MCP demonstrations (E1/E8/E9, gateway PEP, E5a/E5b) | 🚧 **6.0 done** (`validate_mcp_invocation` tool + OTel telemetry + canonical TA `trust.letsfederate.org`); E1/E8 next |
 | 7 | Productization / patient-zero self-attestation + UI/HSM/domains | 📝 specced — not started |
 
 Findings #1–#10 from the code review are all **resolved** (Phases 1–5, each TDD'd

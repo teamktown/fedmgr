@@ -25,14 +25,27 @@ import {
 // SSRF guard — single source of truth lives in @letsfederate/kms (Finding #10).
 import { assertSafeUrl, UrlSafetyError } from "@letsfederate/kms";
 import { MemoryOpenBaoTransitClient, OpenBaoTransitProvider } from "@letsfederate/kms";
-import { provisionMcpTrustCircle, mcpKeyName } from "./openid-ops.js";
+import type { JWK } from "jose";
+import {
+  provisionMcpTrustCircle,
+  mcpKeyName,
+  validateMcpInvocation,
+} from "./openid-ops.js";
+import { log, withSpan } from "./telemetry.js";
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
+// DEFAULT_TA_URL is the *network location* used to reach the Trust Anchor in the
+// local lab. DEFAULT_TRUST_ANCHOR_ID is the canonical *entity identity* (the OIDF
+// issuer / `iss`). In OpenID Federation an entity_id is a stable HTTPS URL that
+// also serves discovery — but identity and reachable location are distinct, so a
+// local lab can resolve the canonical id to localhost. SPEC: OIDF §"Entity
+// Identifiers". (https://openid.net/specs/openid-federation-1_1.html)
 const DEFAULT_TA_URL = "http://localhost:8090";
 const DEFAULT_TMI_URL = "http://localhost:8080";
+const DEFAULT_TRUST_ANCHOR_ID = "https://trust.letsfederate.org";
 
 const TOOL_NAMES = [
   "federation_status",
@@ -42,6 +55,7 @@ const TOOL_NAMES = [
   "issue_trustmark",
   "verify_trustmark",
   "check_trust_chain",
+  "validate_mcp_invocation",
   "provision_mcp_trust_circle",
   "revoke_subordinate",
   "get_signed_config",
@@ -343,12 +357,104 @@ async function toolCheckTrustChain(args: Record<string, unknown>): Promise<strin
   return lines.join("\n");
 }
 
+/**
+ * Defensively read a required non-empty string argument. MCP tool args are
+ * untyped JSON, so we validate at the boundary rather than trusting the shape.
+ */
+function requireString(args: Record<string, unknown>, key: string): string {
+  const v = args[key];
+  if (typeof v !== "string" || v.length === 0) {
+    throw new Error(`[TRUST:FAIL] missing required string argument "${key}"`);
+  }
+  return v;
+}
+
+/**
+ * validate_mcp_invocation — the admission verdict, exposed over MCP.
+ *
+ * For the newcomer, the four inputs are signed JWTs (JWS, RFC 7515) that together
+ * answer "should this MCP call be allowed?":
+ *   - subordinate_statement : the Trust Anchor vouching for the MCP's keys/metadata
+ *                             (OIDF "Subordinate Statement").
+ *   - entity_statement      : the MCP's own self-signed configuration.
+ *   - invocation_token      : the runtime authorization JWT whose `aud` lists the
+ *                             permitted endpoints and whose `trust_marks` claim
+ *                             must carry the required mark.
+ *   - endpoint              : the MCP endpoint actually being invoked.
+ * The trust anchor's public keys (JWKS) verify the signatures — supplied inline
+ * via `trust_anchor_jwks`, or fetched from `${ta_url}/.well-known/jwks.json`
+ * (SSRF-checked). Returns a fail-closed verdict: any problem ⇒ DENIED.
+ * SPEC: OIDF §"Trust Marks" + §"Resolving a Trust Chain".
+ */
+export async function toolValidateMcpInvocation(args: Record<string, unknown>): Promise<string> {
+  return withSpan("tool.validate_mcp_invocation", async (span) => {
+    const subordinateStatement = requireString(args, "subordinate_statement");
+    const entityStatement = requireString(args, "entity_statement");
+    const invocationToken = requireString(args, "invocation_token");
+    const endpoint = requireString(args, "endpoint");
+    const requiredTrustMark = args["required_trust_mark"]
+      ? String(args["required_trust_mark"])
+      : undefined;
+    span.setAttribute("mcp.endpoint", endpoint);
+
+    // Resolve the Trust Anchor's public keys: inline JWKS, else the well-known
+    // JWKS at the (SSRF-checked) TA URL.
+    let trustAnchorJwks: { keys: JWK[] };
+    const inlineJwks = args["trust_anchor_jwks"];
+    if (inlineJwks && typeof inlineJwks === "object" && Array.isArray((inlineJwks as { keys?: unknown }).keys)) {
+      trustAnchorJwks = inlineJwks as { keys: JWK[] };
+      log.debug("using inline trust_anchor_jwks");
+    } else {
+      const taUrl = requireSafeUrl(String(args["ta_url"] ?? DEFAULT_TA_URL), "ta_url");
+      log.debug("fetching trust anchor JWKS", { taUrl });
+      trustAnchorJwks = (await fetchJson(`${taUrl}/.well-known/jwks.json`)) as { keys: JWK[] };
+    }
+
+    const verdict = await validateMcpInvocation({
+      trustAnchorJwks,
+      subordinateStatement,
+      entityStatement,
+      invocationToken,
+      endpoint,
+      ...(requiredTrustMark ? { requiredTrustMark } : {}),
+    });
+
+    span.setAttribute("mcp.trusted", verdict.trusted);
+    // INVARIANT: a denial is a WARN, not an ERROR — denying a bad caller is the
+    // system working correctly, not a fault.
+    log[verdict.trusted ? "info" : "warn"]("mcp invocation verdict", {
+      endpoint,
+      entityId: verdict.entityId,
+      trusted: verdict.trusted,
+      checks: verdict.checks,
+      ...(verdict.error ? { error: verdict.error } : {}),
+    });
+
+    const prefix = verdict.trusted ? "[TRUST:VALID]" : "[TRUST:FAIL]";
+    const checkLines = Object.entries(verdict.checks)
+      .map(([k, v]) => `  ${v ? "✓" : "✗"} ${k}`)
+      .join("\n");
+    return [
+      `${prefix} MCP invocation ${verdict.trusted ? "ALLOWED" : "DENIED"} for endpoint ${endpoint}`,
+      verdict.entityId ? `Entity: ${verdict.entityId}` : "",
+      "Checks:",
+      checkLines,
+      verdict.error ? `Error: ${verdict.error}` : "",
+      "",
+      "Full verdict:",
+      JSON.stringify(verdict, null, 2),
+    ]
+      .filter((line) => line !== "")
+      .join("\n");
+  }, { "mcp.tool": "validate_mcp_invocation" });
+}
+
 async function toolProvisionMcpTrustCircle(args: Record<string, unknown>): Promise<string> {
   const count = Number(args["mcp_count"] ?? 2);
   const issuerBase = String(args["issuer_base"] ?? "https://fedmgr.local");
   const endpointBase = String(args["endpoint_base"] ?? "https://mcp.local");
   const subject = String(args["subject"] ?? "claude-code");
-  const trustAnchorEntityId = String(args["trust_anchor_entity_id"] ?? DEFAULT_TA_URL);
+  const trustAnchorEntityId = String(args["trust_anchor_entity_id"] ?? DEFAULT_TRUST_ANCHOR_ID);
   const ta = new OpenBaoTransitProvider({
     issuer: trustAnchorEntityId,
     keyName: "fedmgr-mcp-local-ta",
@@ -657,6 +763,48 @@ export async function startMcpServer(): Promise<void> {
         },
       },
       {
+        name: "validate_mcp_invocation",
+        description:
+          "Decide whether an MCP invocation is admissible: verifies the subordinate " +
+          "statement, the MCP's entity self-statement, and the invocation token " +
+          "(signature, audience, and required trust mark present in the JWT). " +
+          "Fail-closed — any problem returns DENIED.",
+        inputSchema: {
+          type: "object" as const,
+          properties: {
+            subordinate_statement: {
+              type: "string",
+              description: "Compact JWS: the Trust Anchor's subordinate statement about the MCP",
+            },
+            entity_statement: {
+              type: "string",
+              description: "Compact JWS: the MCP's self-signed entity configuration",
+            },
+            invocation_token: {
+              type: "string",
+              description: "Compact JWS: the runtime authorization token (aud + trust_marks)",
+            },
+            endpoint: {
+              type: "string",
+              description: "The MCP endpoint being invoked (must appear in the token's aud)",
+            },
+            ta_url: {
+              type: "string",
+              description: `Trust Anchor URL whose JWKS verifies the statements (default: ${DEFAULT_TA_URL}). Ignored if trust_anchor_jwks is supplied.`,
+            },
+            trust_anchor_jwks: {
+              type: "object",
+              description: "Inline Trust Anchor JWKS ({ keys: [...] }); overrides ta_url fetch",
+            },
+            required_trust_mark: {
+              type: "string",
+              description: "Trust mark URI that MUST be present in the invocation token (defaults to the MCP trust mark)",
+            },
+          },
+          required: ["subordinate_statement", "entity_statement", "invocation_token", "endpoint"],
+        },
+      },
+      {
         name: "provision_mcp_trust_circle",
         description:
           "Provision an MCP trust circle with OIDF entity/subordinate statements and endpoint-scoped invocation token audiences.",
@@ -776,6 +924,9 @@ export async function startMcpServer(): Promise<void> {
     const { name, arguments: args = {} } = req.params;
     const a = args as Record<string, unknown>;
 
+    // One span per tool call; logs within inherit its trace/span ids.
+    return withSpan(`mcp.tool.${name}`, async () => {
+    log.debug("tool call", { tool: name });
     try {
       let text: string;
 
@@ -801,6 +952,9 @@ export async function startMcpServer(): Promise<void> {
         case "check_trust_chain":
           text = await toolCheckTrustChain(a);
           break;
+        case "validate_mcp_invocation":
+          text = await toolValidateMcpInvocation(a);
+          break;
         case "provision_mcp_trust_circle":
           text = await toolProvisionMcpTrustCircle(a);
           break;
@@ -823,6 +977,9 @@ export async function startMcpServer(): Promise<void> {
         err instanceof Error
           ? `${err.name}: ${err.message}`
           : String(err);
+      // ERROR here = the tool threw unexpectedly. Note a DENIED trust verdict is
+      // NOT an error — validate_mcp_invocation returns it as normal content.
+      log.error("tool call failed", { tool: name, error: message });
       return {
         content: [
           {
@@ -833,6 +990,7 @@ export async function startMcpServer(): Promise<void> {
         isError: true,
       };
     }
+    });
   });
 
   // ── Start transport ───────────────────────────────────────────────────────
