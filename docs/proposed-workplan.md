@@ -22,7 +22,7 @@ behind each change survives future refactors.
 | 3 | OIDC client auth + robust token errors (#3 #9) | ✅ complete |
 | 4 | Fail-closed management API (#6) | ✅ complete |
 | 5 | Consolidate SSRF guard into kms (#10) | ✅ complete |
-| 6 | MCP demonstrations (E1/E8/E9, gateway PEP, E5a/E5b) | 🚧 **6.0 + 6.1 done, lab fully up**. Tool + OTel + `oidf-trust` extension/accepted-anchor/digest binding (patient zero). **Full TA+TMI+registry compose runs in the VM; `round-trip.sh` is end-to-end (exit 0)** — cosign sign/verify, syft SBOM, **live TMI digest-bound trustmark** verified against its JWKS, TA has TMI as subordinate (`docs/evidence/phase-6.1-lab-end-to-end.md`). cosign-PKCS#11 caveat noted. E8 next |
+| 6 | MCP demonstrations (E1/E8/E9, **6.4 Waypoint multiplexer**, E5a/E5b) | 🚧 **6.0, 6.1, 6.4 done**. 6.0 tool + OTel; 6.1 `oidf-trust` extension + accepted-anchor + digest binding + **full lab + round-trip end-to-end in the VM** (`docs/evidence/phase-6.1-lab-end-to-end.md`). **6.4 = `@letsfederate/waypoint`**: a trust-enforcing MCP multiplexer — client points at one server, it gates downstream MCPs by accepted-anchor policy and exposes only trusted tools (namespaced); proven against the real fedmgr-mcp, allow→12 tools / deny→0 (`docs/evidence/phase-6.4-waypoint-test-evidence.md`). E8 next |
 | 7 | Productization / patient-zero self-attestation + UI/HSM/domains | 📝 specced — not started |
 
 Findings #1–#10 from the code review are all **resolved** (Phases 1–5, each TDD'd

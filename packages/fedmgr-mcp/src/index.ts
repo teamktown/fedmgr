@@ -38,6 +38,20 @@ import {
   buildOidfTrustExtension,
 } from "./oidf-trust-extension.js";
 
+// Re-export the trust primitives so downstream packages (e.g. @letsfederate/waypoint,
+// the trust multiplexer) can consume them — this package's exports map is restricted
+// to "." so deep imports are blocked.
+export {
+  OIDF_TRUST_EXTENSION_ID,
+  buildOidfTrustExtension,
+  evaluateOidfTrust,
+} from "./oidf-trust-extension.js";
+export type {
+  OidfTrustExtension,
+  OidfTrustPolicy,
+  OidfTrustDecision,
+} from "./oidf-trust-extension.js";
+
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------

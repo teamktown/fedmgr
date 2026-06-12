@@ -1,0 +1,38 @@
+{
+  "name": "@letsfederate/waypoint",
+  "version": "0.0.1",
+  "description": "Waypoint — a trust-enforcing MCP multiplexer. One MCP server the client points at; it gates downstream MCP servers by OpenID Federation accepted-anchor policy and only forwards tools from the ones that pass.",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "waypoint": "./dist/bin.js"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "start": "node dist/bin.js",
+    "test": "node --test test/*.test.mjs",
+    "pretest": "npm run build --silent"
+  },
+  "dependencies": {
+    "@letsfederate/fedmgr-mcp": "*",
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@opentelemetry/api": "^1.9.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.4.0"
+  },
+  "engines": {
+    "node": ">=22.0.0 <27.0.0"
+  },
+  "license": "MIT"
+}
