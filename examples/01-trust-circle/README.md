@@ -30,16 +30,25 @@ node --test packages/fedmgr-mcp/test/oidf-trust-extension.test.mjs \
             packages/fedmgr-mcp/test/validate-mcp-invocation-tool.test.mjs
 ```
 
-## Run it (full container round trip — LAB-GATED)
+## Run it (full container round trip)
 
 `./round-trip.sh` performs the 100% loop: build → push to the local OCI registry →
-**cosign sign** (HSM key) → **syft SBOM** → TMI issues a **digest-bound trustmark**
-(evidence → SBOM) → pull → cosign verify + trustmark verify → admit.
+**cosign sign** → **syft SBOM** → TMI issues a **digest-bound trustmark** → pull →
+cosign verify + trustmark digest binding → admit. It **preflights** docker/cosign/
+syft/jq and aborts (exit 69) rather than fake a result.
 
-> ⚠️ Requires `docker`, `cosign`, `syft`, and SoftHSM. The script **preflights**
-> these and exits with install instructions if any are missing — it never pretends
-> to have signed something it didn't. As of this commit it was **not executed in
-> the build sandbox** (cosign/syft/softhsm were absent there); run it in the lab.
+> ✅ **Executed in the project VM on 2026-06-12** — see
+> `docs/evidence/phase-6.1-lab-roundtrip.md` for raw output: a real SoftHSM EC P-256
+> key, image pushed to a local registry, **cosign verified**, a 15-package SPDX SBOM,
+> and a digest-bound trustmark whose `image_digest` equals the pushed digest (a
+> rebuilt image's digest is denied).
+>
+> ⚠️ **cosign + HSM caveat:** the official cosign *release binary* lacks PKCS#11
+> (`unimplemented`), so signing the image *directly* with the SoftHSM key needs a
+> cosign built with the `pkcs11key` tag, or a cloud-KMS key URI. The run above used
+> a key-based cosign signature; the SoftHSM key is real and the OIDF trustmark uses
+> our ES256 signing (the `KeyProvider`/HSM seam). The TMI-issued trustmark step needs
+> the lab's TA/TMI running; the evidence used our in-process ES256 issuance.
 
 ## What to look for
 

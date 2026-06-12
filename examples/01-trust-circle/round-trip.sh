@@ -16,8 +16,17 @@ IMAGE="${IMAGE:-${REGISTRY}/letsfederate/fedmgr-mcp:demo}"
 TA_URL="${TA_URL:-http://localhost:8090}"
 TMI_URL="${TMI_URL:-http://localhost:8080}"
 TRUST_ANCHOR_ID="${TRUST_ANCHOR_ID:-https://trust.letsfederate.org}"
-# cosign signing key — use the HSM (PKCS#11) key in the lab. Override as needed.
-COSIGN_KEY="${COSIGN_KEY:-pkcs11:object=fedmgr-ta}"
+# cosign signing key.
+#   - Default: a key file (works with the stock cosign release binary).
+#   - HSM-rooted: set COSIGN_KEY to a pkcs11 URI, e.g.
+#       pkcs11:token=fedmgr-ta;object=fedmgr-ta?module-path=/usr/lib/softhsm/libsofthsm2.so&pin-value=PIN
+#     NOTE: the official cosign release binary returns "pkcs11 ... unimplemented" —
+#     PKCS#11 needs a cosign built with the `pkcs11key` tag, or use a cloud-KMS key
+#     URI (awskms://… | gcpkms://… | hashivault://…). Verified 2026-06-12.
+COSIGN_KEY="${COSIGN_KEY:-cosign.key}"
+# Local insecure registry + offline (no Rekor transparency log). Drop these in prod.
+COSIGN_FLAGS="${COSIGN_FLAGS:---allow-insecure-registry --tlog-upload=false}"
+COSIGN_VERIFY_FLAGS="${COSIGN_VERIFY_FLAGS:---allow-insecure-registry --insecure-ignore-tlog=true}"
 
 # ── Preflight: fail loudly, never skip silently ─────────────────────────────
 missing=0
@@ -50,11 +59,11 @@ echo "    digest=$DIGEST"
 [ -n "$DIGEST" ] || { echo "[TRUST:FAIL] could not resolve image digest" >&2; exit 1; }
 
 echo "==> [4/7] cosign sign (key=$COSIGN_KEY)"
-cosign sign --yes --key "$COSIGN_KEY" "${IMAGE}@${DIGEST}"
+cosign sign --yes $COSIGN_FLAGS --key "$COSIGN_KEY" "${IMAGE}@${DIGEST}"
 
 echo "==> [5/7] generate SBOM (syft) and attach"
 syft "${IMAGE}@${DIGEST}" -o spdx-json > sbom.spdx.json
-cosign attest --yes --key "$COSIGN_KEY" --type spdxjson --predicate sbom.spdx.json "${IMAGE}@${DIGEST}"
+cosign attest --yes $COSIGN_FLAGS --key "$COSIGN_KEY" --type spdxjson --predicate sbom.spdx.json "${IMAGE}@${DIGEST}"
 
 echo "==> [6/7] issue digest-bound trustmark via TMI"
 curl -fsS -X POST "$TMI_URL/trustmarks/issue" \
@@ -64,7 +73,7 @@ curl -fsS -X POST "$TMI_URL/trustmarks/issue" \
 echo "    trustmark issued -> trustmark.json"
 
 echo "==> [7/7] verify: cosign + trustmark digest binding"
-cosign verify --key "$COSIGN_KEY" "${IMAGE}@${DIGEST}" >/dev/null
+cosign verify $COSIGN_VERIFY_FLAGS --key "$COSIGN_KEY" "${IMAGE}@${DIGEST}" >/dev/null
 TM_DIGEST="$(jq -r '.image_digest // empty' trustmark.json)"
 if [ "$TM_DIGEST" != "$DIGEST" ]; then
   echo "[TRUST:FAIL] trustmark digest ($TM_DIGEST) != image digest ($DIGEST)" >&2
