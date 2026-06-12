@@ -81,6 +81,21 @@ test("patient zero: fedmgr-mcp advertises the extension and a matching policy ad
   assert.equal(d.admit, true);
 });
 
+test("http entity/anchor is denied by default but allowed in NODE_ENV=development (lab)", () => {
+  const httpExt = buildOidfTrustExtension({ entityId: "http://localhost:8080", trustAnchor: "http://localhost:8090", trustMarks: [] });
+  const httpPolicy = { acceptedAnchors: ["http://localhost:8090"] };
+  const saved = process.env["NODE_ENV"];
+  try {
+    delete process.env["NODE_ENV"];
+    assert.equal(evaluateOidfTrust(httpExt, httpPolicy).admit, false, "http must be denied outside dev");
+    process.env["NODE_ENV"] = "development";
+    assert.equal(evaluateOidfTrust(httpExt, httpPolicy).admit, true, "http permitted in dev/lab");
+  } finally {
+    if (saved === undefined) delete process.env["NODE_ENV"];
+    else process.env["NODE_ENV"] = saved;
+  }
+});
+
 test("fail-closed on malformed or missing extension", () => {
   for (const bad of [undefined, null, {}, { entityId: "not-a-url", trustAnchor: ANCHOR, trustMarks: [] }, { entityId: ENTITY, trustAnchor: "http://insecure", trustMarks: [] }]) {
     const d = evaluateOidfTrust(bad, { acceptedAnchors: [ANCHOR] });

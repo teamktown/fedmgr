@@ -20,8 +20,14 @@ export interface DownstreamConfig {
   args?: string[];
   /** The downstream's OIDF entity id (HTTPS URL). */
   entityId: string;
-  /** The trust anchor this downstream chains to (HTTPS URL). */
+  /** The trust anchor this downstream chains to (entity id, HTTPS URL). */
   trustAnchor: string;
+  /**
+   * Reachable URL of the trust anchor for cryptographic chain resolution (used
+   * when policy.requireValidChain is set). In the lab this equals the anchor
+   * entity id (e.g. http://localhost:8090).
+   */
+  trustAnchorUrl?: string;
   /** Trust marks the downstream is asserted to hold. */
   trustMarks?: string[];
 }
@@ -32,6 +38,12 @@ export interface WaypointPolicy {
   acceptedAnchors: string[];
   /** A trust mark every admitted downstream must carry. */
   requiredTrustMark?: string;
+  /**
+   * When true, in addition to the accepted-anchor config check, each downstream's
+   * trust chain must cryptographically resolve to its trustAnchorUrl as VALID.
+   * Fail-closed: WARN/INVALID/unreachable/no-validator ⇒ denied.
+   */
+  requireValidChain?: boolean;
 }
 
 export interface WaypointConfig {

@@ -81,3 +81,54 @@ test("a downstream that fails to connect is skipped; others still work", async (
   assert.deepEqual(wp.listTools().map((t) => t.name), ["good__a"]);
   assert.equal(wp.admissions().find((a) => a.name === "boom").admit, false);
 });
+
+// ── Cryptographic admission (requireValidChain) ──────────────────────────────
+
+function fakeValidator(byEntity) {
+  return {
+    validateChain: async (entityId) => {
+      const v = byEntity[entityId];
+      if (v instanceof Error) throw v;
+      return v ?? { valid: false, state: "INVALID", message: "unknown entity" };
+    },
+  };
+}
+const dsc = (name) => ({ ...ds(name), trustAnchorUrl: "http://localhost:8090" });
+const cryptoPolicy = { acceptedAnchors: [ANCHOR], requireValidChain: true };
+
+test("crypto admission: VALID chain admits and records chainState", async () => {
+  const f = fakeConnector({ good: ["a"] });
+  const validator = fakeValidator({ "https://trust.letsfederate.org/mcp/good": { valid: true, state: "VALID", message: "ok" } });
+  const wp = new Waypoint({ downstreams: [dsc("good")], policy: cryptoPolicy }, f.connector, { trustValidator: validator });
+  await wp.start();
+  assert.deepEqual(wp.listTools().map((t) => t.name), ["good__a"]);
+  assert.equal(wp.admissions().find((a) => a.name === "good").chainState, "VALID");
+});
+
+test("crypto admission: WARN/INVALID chain DENIES (fail-closed) even if policy accepts the anchor", async () => {
+  const f = fakeConnector({ bad: ["a"] });
+  const validator = fakeValidator({ "https://trust.letsfederate.org/mcp/bad": { valid: false, state: "WARN", message: "no authority_hints" } });
+  const wp = new Waypoint({ downstreams: [dsc("bad")], policy: cryptoPolicy }, f.connector, { trustValidator: validator });
+  await wp.start();
+  assert.equal(wp.listTools().length, 0);
+  const a = wp.admissions().find((x) => x.name === "bad");
+  assert.equal(a.admit, false);
+  assert.equal(a.chainState, "WARN");
+});
+
+test("crypto admission: validator THROWS → denied (fail-closed), never connected", async () => {
+  const f = fakeConnector({ err: ["a"] });
+  const validator = fakeValidator({ "https://trust.letsfederate.org/mcp/err": new Error("TA unreachable") });
+  const wp = new Waypoint({ downstreams: [dsc("err")], policy: cryptoPolicy }, f.connector, { trustValidator: validator });
+  await wp.start();
+  assert.equal(wp.listTools().length, 0);
+  assert.match(wp.admissions().find((x) => x.name === "err").reasons.join(" "), /validation error/);
+});
+
+test("crypto admission: requireValidChain but no validator → denied", async () => {
+  const f = fakeConnector({ good: ["a"] });
+  const wp = new Waypoint({ downstreams: [dsc("good")], policy: cryptoPolicy }, f.connector); // no validator
+  await wp.start();
+  assert.equal(wp.listTools().length, 0);
+  assert.match(wp.admissions()[0].reasons.join(" "), /no trust validator/);
+});

@@ -22,6 +22,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import { Waypoint } from "./mux.js";
 import { sdkConnector } from "./connector.js";
+import { kmsTrustValidator } from "./trust-validator.js";
 import { log, initTelemetrySdk } from "./telemetry.js";
 import type { WaypointConfig } from "./types.js";
 
@@ -39,7 +40,7 @@ async function loadConfig(): Promise<WaypointConfig> {
 
 async function main(): Promise<void> {
   await initTelemetrySdk();
-  const waypoint = new Waypoint(await loadConfig(), sdkConnector);
+  const waypoint = new Waypoint(await loadConfig(), sdkConnector, { trustValidator: kmsTrustValidator });
   await waypoint.start();
 
   const admitted = waypoint.admissions().filter((a) => a.admit).map((a) => a.name);

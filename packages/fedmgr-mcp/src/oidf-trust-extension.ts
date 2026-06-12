@@ -73,7 +73,11 @@ export function buildOidfTrustExtension(opts: {
 function isHttpsUrl(s: unknown): boolean {
   if (typeof s !== "string" || s.length === 0) return false;
   try {
-    return new URL(s).protocol === "https:";
+    const proto = new URL(s).protocol;
+    if (proto === "https:") return true;
+    // http is permitted ONLY in development/lab (NODE_ENV=development), mirroring
+    // the SSRF guard's policy — production entity ids must be https.
+    return proto === "http:" && process.env["NODE_ENV"] === "development";
   } catch {
     return false;
   }

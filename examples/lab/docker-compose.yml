@@ -178,6 +178,9 @@ services:
       TMI_JWKS_URL: "${TMI_ISSUER:-http://localhost:8080}/.well-known/jwks.json"
       TMI_PUBLIC_JWK: "/app/keys/tmi.pub.jwk"
       TMI_PRIVATE_JWK: "/run/secrets/tmi.priv.jwk"
+      # Declare the TA as this TMI's authority so a verifier can resolve the chain
+      # TMI -> TA (required for cryptographic trust-chain validation).
+      TMI_AUTHORITY_HINTS: '["${TA_ENTITY_ID:-http://localhost:8090}"]'
     depends_on:
       tmi-decrypt:
         condition: service_completed_successfully
