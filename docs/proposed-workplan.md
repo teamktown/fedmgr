@@ -22,7 +22,7 @@ behind each change survives future refactors.
 | 3 | OIDC client auth + robust token errors (#3 #9) | ✅ complete |
 | 4 | Fail-closed management API (#6) | ✅ complete |
 | 5 | Consolidate SSRF guard into kms (#10) | ✅ complete |
-| 6 | MCP demonstrations (E1/E8/E9, gateway PEP, E5a/E5b) | 🚧 **6.0 + 6.1 done** (`validate_mcp_invocation` tool + OTel; `org.letsfederate/oidf-trust` extension + accepted-anchor + digest binding; patient zero). **Container round trip executed in the VM** (real SoftHSM key, cosign verify, syft SBOM, digest-bound trustmark — `docs/evidence/phase-6.1-lab-roundtrip.md`; cosign-PKCS#11 caveat noted). E8 next |
+| 6 | MCP demonstrations (E1/E8/E9, gateway PEP, E5a/E5b) | 🚧 **6.0 + 6.1 done, lab fully up**. Tool + OTel + `oidf-trust` extension/accepted-anchor/digest binding (patient zero). **Full TA+TMI+registry compose runs in the VM; `round-trip.sh` is end-to-end (exit 0)** — cosign sign/verify, syft SBOM, **live TMI digest-bound trustmark** verified against its JWKS, TA has TMI as subordinate (`docs/evidence/phase-6.1-lab-end-to-end.md`). cosign-PKCS#11 caveat noted. E8 next |
 | 7 | Productization / patient-zero self-attestation + UI/HSM/domains | 📝 specced — not started |
 
 Findings #1–#10 from the code review are all **resolved** (Phases 1–5, each TDD'd

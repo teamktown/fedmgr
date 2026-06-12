@@ -26,20 +26,13 @@ networks:
     driver: bridge
 
 volumes:
-  # tmpfs volumes — exist only in RAM, never touch disk
+  # LAB NOTE: regular shared volumes (NOT tmpfs). A Docker `local` tmpfs volume is
+  # not shared between containers — each gets its own empty RAM instance — so the
+  # decrypt-sidecar → server key hand-off silently produced an empty /run/secrets.
+  # For a local lab, the decrypted key sitting in a docker volume is acceptable; in
+  # production use a real shared-secret channel (host tmpfs bind, or a KMS).
   tmi-secrets:
-    driver: local
-    driver_opts:
-      type: tmpfs
-      device: tmpfs
-      o: "size=1m,mode=0700"
-
   ta-secrets:
-    driver: local
-    driver_opts:
-      type: tmpfs
-      device: tmpfs
-      o: "size=1m,mode=0700"
 
   registry-data:
 
@@ -66,21 +59,22 @@ services:
   ta-decrypt:
     image: smallstep/step-cli:latest
     container_name: trust-lab-ta-decrypt
+    user: "0:0"
     volumes:
       - type: bind
         source: ../../packages/ta-server/keys
         target: /keys
         read_only: true
       - ta-secrets:/run/secrets
-    command: >
-      sh -c "
-        step crypto jwk decrypt
-          --in /keys/ta.priv.jwe
-          --out /run/secrets/ta.priv.jwk
-          --password-file /keys/.pass &&
-        chmod 600 /run/secrets/ta.priv.jwk &&
+    # step-cli image has no entrypoint; run our script under sh. Decrypt the
+    # PBES2-encrypted JWK (a JWE) to plaintext on tmpfs. `step crypto jwe decrypt`
+    # reads the JWE on stdin and writes the JWK to stdout.
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        step crypto jwe decrypt --password-file /keys/.pass < /keys/ta.priv.jwe > /run/secrets/ta.priv.jwk &&
+        chmod 644 /run/secrets/ta.priv.jwk &&
         echo '[ta-decrypt] TA key decrypted to tmpfs.'
-      "
     networks:
       - trust-lab
 
@@ -102,15 +96,21 @@ services:
       - ta-secrets:/run/secrets:ro
     environment:
       PORT: "8090"
+      # /app is not writable by the non-root `ta` user; put the SQLite DB in /tmp
+      # (ephemeral, fine for a lab). Override TA_DB_PATH + a writable volume in prod.
+      TA_DB_PATH: "/tmp/ta.db"
       TA_ENTITY_ID: "${TA_ENTITY_ID:-http://localhost:8090}"
       TA_JWKS_URL: "${TA_ENTITY_ID:-http://localhost:8090}/.well-known/jwks.json"
       TA_PUBLIC_JWK: "/app/keys/ta.pub.jwk"
       TA_PRIVATE_JWK: "/run/secrets/ta.priv.jwk"
       TA_ORG_NAME: "letsfederate Trust Anchor (local lab)"
-      # Register TMI as a subordinate — fetched at startup
+      # Register TMI as a subordinate — fetched at startup.
+      # entityId = the TMI's public IDENTITY (localhost, as seen from the host);
+      # jwksUrl  = the in-network LOCATION (docker service DNS) so the TA can
+      # actually reach it from inside the compose network. Identity != location.
       TA_SUBORDINATES: >
         [{"entityId":"${TMI_ISSUER:-http://localhost:8080}",
-          "jwksUrl":"${TMI_ISSUER:-http://localhost:8080}/.well-known/jwks.json"}]
+          "jwksUrl":"http://tmi-server:8080/.well-known/jwks.json"}]
     depends_on:
       ta-decrypt:
         condition: service_completed_successfully
@@ -133,21 +133,22 @@ services:
   tmi-decrypt:
     image: smallstep/step-cli:latest
     container_name: trust-lab-tmi-decrypt
+    user: "0:0"
     volumes:
       - type: bind
         source: ../../packages/tmi-server/keys
         target: /keys
         read_only: true
       - tmi-secrets:/run/secrets
-    command: >
-      sh -c "
-        step crypto jwk decrypt
-          --in /keys/tmi.priv.jwe
-          --out /run/secrets/tmi.priv.jwk
-          --password-file /keys/.pass &&
-        chmod 600 /run/secrets/tmi.priv.jwk &&
+    # step-cli image has no entrypoint; run our script under sh. Decrypt the
+    # PBES2-encrypted JWK (a JWE) to plaintext on tmpfs. `step crypto jwe decrypt`
+    # reads the JWE on stdin and writes the JWK to stdout.
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        step crypto jwe decrypt --password-file /keys/.pass < /keys/tmi.priv.jwe > /run/secrets/tmi.priv.jwk &&
+        chmod 644 /run/secrets/tmi.priv.jwk &&
         echo '[tmi-decrypt] TMI key decrypted to tmpfs.'
-      "
     networks:
       - trust-lab
 

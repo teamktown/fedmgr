@@ -24,6 +24,12 @@ TRUST_ANCHOR_ID="${TRUST_ANCHOR_ID:-https://trust.letsfederate.org}"
 #     PKCS#11 needs a cosign built with the `pkcs11key` tag, or use a cloud-KMS key
 #     URI (awskms://… | gcpkms://… | hashivault://…). Verified 2026-06-12.
 COSIGN_KEY="${COSIGN_KEY:-cosign.key}"
+# Verification key: the PUBLIC key for a key-pair file; for a pkcs11/KMS URI the
+# same ref verifies, so default to that.
+case "$COSIGN_KEY" in
+  *.key) COSIGN_PUB="${COSIGN_PUB:-${COSIGN_KEY%.key}.pub}" ;;
+  *)     COSIGN_PUB="${COSIGN_PUB:-$COSIGN_KEY}" ;;
+esac
 # Local insecure registry + offline (no Rekor transparency log). Drop these in prod.
 COSIGN_FLAGS="${COSIGN_FLAGS:---allow-insecure-registry --tlog-upload=false}"
 COSIGN_VERIFY_FLAGS="${COSIGN_VERIFY_FLAGS:---allow-insecure-registry --insecure-ignore-tlog=true}"
@@ -47,8 +53,10 @@ EOF
   exit 69  # EX_UNAVAILABLE
 fi
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
 echo "==> [1/7] build image"
-docker build -t "$IMAGE" -f Dockerfile.tmi-server ../.. || docker build -t "$IMAGE" ../..
+docker build -t "$IMAGE" "$SCRIPT_DIR"
 
 echo "==> [2/7] push to local registry $REGISTRY"
 docker push "$IMAGE"
@@ -73,8 +81,10 @@ curl -fsS -X POST "$TMI_URL/trustmarks/issue" \
 echo "    trustmark issued -> trustmark.json"
 
 echo "==> [7/7] verify: cosign + trustmark digest binding"
-cosign verify $COSIGN_VERIFY_FLAGS --key "$COSIGN_KEY" "${IMAGE}@${DIGEST}" >/dev/null
-TM_DIGEST="$(jq -r '.image_digest // empty' trustmark.json)"
+cosign verify $COSIGN_VERIFY_FLAGS --key "$COSIGN_PUB" "${IMAGE}@${DIGEST}" >/dev/null
+# The TMI wraps the signed trustmark as { payload, trustmark_jws }; the bound
+# digest lives in payload.image_digest.
+TM_DIGEST="$(jq -r '.payload.image_digest // .image_digest // empty' trustmark.json)"
 if [ "$TM_DIGEST" != "$DIGEST" ]; then
   echo "[TRUST:FAIL] trustmark digest ($TM_DIGEST) != image digest ($DIGEST)" >&2
   exit 1

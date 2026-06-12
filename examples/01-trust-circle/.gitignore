@@ -1,0 +1,6 @@
+# round-trip.sh run artifacts (regenerated each run)
+sbom.spdx.json
+trustmark.json
+*.sig
+cosign.key
+cosign.pub

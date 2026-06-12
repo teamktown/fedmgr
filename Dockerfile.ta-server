@@ -9,7 +9,14 @@ COPY package.json package-lock.json tsconfig.base.json ./
 COPY packages/kms/package.json        packages/kms/
 COPY packages/ta-server/package.json  packages/ta-server/
 
+# --ignore-scripts skips ALL native postinstall builds (avoids pkcs11js, which we
+# don't need here). better-sqlite3 IS needed by the TA, so we rebuild just that one
+# with a toolchain. WHY: without this the TA crashes at boot ("better_sqlite3.node
+# not found").
+RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ \
+    && rm -rf /var/lib/apt/lists/*
 RUN npm ci --ignore-scripts
+RUN npm rebuild better-sqlite3
 
 COPY packages/kms/      packages/kms/
 COPY packages/ta-server/ packages/ta-server/
@@ -17,6 +24,8 @@ COPY packages/ta-server/ packages/ta-server/
 RUN npm run build -w @letsfederate/kms
 RUN npm run build -w @letsfederate/ta-server
 
+# Keep production deps but DON'T re-run install scripts (would drop the rebuilt
+# better-sqlite3 binary on some npm versions); prune is safe for that.
 RUN npm prune --production
 
 FROM node:22-slim AS runtime
