@@ -758,6 +758,93 @@ letsfederate TA — embodying "strong code pedigree, and we're patient zero."
 
 ---
 
+## Phase 8 — Trust operations: heartbeat, audit ledger, governance & enforcement (candidates)
+
+Work candidates that turn waypoint from a trust *gate* into a trust *operations
+plane* — observable, auditable, and governable. Blue-team posture: detect/contain
+malicious or unsanctioned MCPs **proactively** (inoculation), not after exfiltration
+(the Langfuse-style after-the-fact model). Proposed, not committed.
+
+### 8.1 Trust heartbeat & self-check (blue-team)
+
+A periodic cycle (interval-configurable) that: runs `waypoint_selfcheck` (config valid,
+anchors reachable, own signing key healthy), **re-validates each downstream's chain +
+trust-mark status**, and **re-scans the local MCP inventory**. Emits a structured
+heartbeat: `ok` / `degraded` / `not-ok`, with detail dialed up on state change or anomaly.
+Feeds the live Trust Manifest + OTel metrics + emits a security event on any transition
+(downstream dropped, new/unpermitted MCP seen, mark revoked). Start simple: selfcheck
+logs ok/not-ok at interval; escalate detail on not-ok.
+
+### 8.2 Mutual attestation & TA adoption (a trust action is a first-class, audited event)
+
+Waypoint is a privileged chokepoint, so trust must flow both ways and every trust
+*decision* must be recorded.
+- **Native circle:** the operator runs their own TA, enrolls downstream MCPs → they carry
+  entity statements + trustmarks in the operator's TA; waypoint trusts them by chain-to-own-TA.
+- **Foreign-TA adoption:** a downstream chains to a *foreign* TA. Adopting it is a
+  deliberate action — "do I trust that TA enough to add it to my accepted anchors?" When
+  yes, the foreign TA is added (E5a accepted-anchor) **and an audit entry is written**.
+- **Mutual:** waypoint attests *itself* to downstreams and to the client (so neither talks
+  to an impostor gateway). **Trust actions** — `adopt-anchor`, `enroll-mcp`, `revoke`,
+  `quarantine`, `policy-change` — are first-class, audited events (see 8.3).
+
+### 8.3 Verifiable audit ledger (the missing piece — recommendation)
+
+A privileged trust component's audit log is itself a target: a plain text file (even with a
+per-line checksum) can be truncated, reordered, or rewritten. The right shape is a
+**tamper-evident, append-only transparency log — NOT a blockchain:**
+- **Each entry** = `{ ts, actor, action, subject, verdict, prev_hash }`, **hash-chained**
+  (each entry hashes the previous) and **signed by waypoint's key**. You can't alter or
+  delete an entry without breaking the chain, nor forge one without the key.
+- **Live store:** SQLite in waypoint's own container (it's already a container → durable
+  volume). 
+- **Off-box durability:** export entries to an append-only external sink (WORM/object-lock
+  bucket, syslog, an OTLP log pipeline, or a real transparency log like Rekor) so an
+  attacker who owns the container can't retro-edit the off-box copy.
+- **Anchoring (the "verifiable" capstone):** periodically publish the log head hash (a
+  signed checkpoint) to a wider witness — the org TA, or a public transparency log — so even
+  waypoint can't rewrite history undetected.
+- Answer to "is this a ledger component?": **yes — a lightweight, signed hash-chain
+  (transparency-log style)**, sized to the threat, not a distributed ledger.
+
+### 8.4 Central governance & unpermitted-MCP detection (inoculation)
+
+The TA defines the *permitted* MCP set (enrolled subordinates / issued trustmarks).
+Waypoint's heartbeat (8.1) compares **installed inventory vs centrally-permitted** and
+flags/quarantines anything unsanctioned — in near-real-time, before it acts.
+- **Phone-home (opt-in, governed):** the signal reaches a governance console. This **is**
+  surveillance — the honest tradeoff. Frame it as opt-in, policy-gated, and itself audited
+  (the watcher is watched, via 8.3). Desired in constrained/regulated corp environments; a
+  choice for individuals. Privacy/consent must be explicit.
+- Value vs Langfuse-style observability: **prevent/guardrail** rather than **forensic
+  after the fact**.
+
+### 8.5 Enforcement tiers — `observe → guardrail → enforce → ironhand`
+
+The same trust fabric supports a spectrum; the operator picks the level. Honest about the
+ceiling: waypoint is opt-in and **trivially bypassed by skipping it** until the *client*
+embeds the obligation.
+- **T0 Observe** *(today)* — report posture; bypassable.
+- **T1 Guardrail** — client config is pinned (MDM/policy) to use only waypoint; bypass means
+  changing managed config; unsanctioned MCPs flagged/quarantined.
+- **T2 Client-enforced** *(the ask to Anthropic / MCP clients)* — the client natively refuses
+  any MCP lacking a valid trustmark from an accepted anchor. The "absorb the capability" path.
+- **T3 Ironhand / Ironcurtain** — hard lockdown: nothing unattested installs or runs; users
+  live in a **self-governed** walled garden — they govern it via their own TA + trustmarks
+  ("you are allowed these endpoints/capabilities, enforced"). Pairs with **capability-scoped
+  trustmarks** (a mark grants a specific tool/endpoint subset). A feature some will choose
+  *because* they can govern it.
+
+### Suggested sequence
+
+Smallest-visible-first, each demoable: **8.1 heartbeat + Trust Manifest/self-check** →
+**continuous revocation re-check** (the kill-switch; also finishes E8) → **8.3 audit ledger**
+(hash-chain + SQLite, then external sink, then TA anchoring) → **8.4 governance/detection** →
+**8.2 mutual attestation + foreign-TA adoption** → **8.5 enforcement-tier config** + the
+inventory/peer-assessment on-ramp (E9). Each layer is also a strong illustrative demo.
+
+---
+
 ## Definition of done (whole effort)
 
 - Every finding has a red test that now passes green, **plus** a negative/attack test
