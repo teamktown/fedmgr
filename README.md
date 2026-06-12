@@ -2,6 +2,29 @@
 
 This project demonstrates a federated MCP (Model Context Protocol) system with GitHub OAuth integration and OpenID Federation (OIDCFed) trust chains.
 
+## Quick start — the trust lab (5 minutes)
+
+Stand up a local OpenID-Federation trust lab (Trust Anchor + Trust Mark Issuer +
+OCI registry), sign a container, bind a trustmark to it, and verify the chain:
+
+```bash
+./examples/lab/up.sh                       # registry:5000, TMI:8080, TA:8090 (Docker only)
+./examples/01-trust-circle/round-trip.sh   # sign + SBOM + digest-bound trustmark + verify
+./examples/lab/down.sh                      # stop & clean up
+```
+
+Then drive it from **Claude Code**:
+
+```bash
+npm ci && npm run build -w @letsfederate/fedmgr-mcp
+claude mcp add fedmgr -- node "$(pwd)/packages/fedmgr-mcp/dist/bin.js"
+# In Claude Code: /mcp  → fedmgr (12 tools, incl. validate_mcp_invocation)
+```
+
+👉 Full walkthrough, sample prompts, and how the `org.letsfederate/oidf-trust`
+MCP extension works: **[docs/walkthroughs/trust-lab-quickstart.md](docs/walkthroughs/trust-lab-quickstart.md)**.
+Plan & status: [docs/proposed-workplan.md](docs/proposed-workplan.md).
+
 ## Architecture direction
 
 FedMgr is evolving from a Docker Compose demo into an OpenID Federation trust backplane for MCP. The refined MVP keeps the local demo simple while extracting a small operations library for trust-anchor creation, MCP server registration, entity-statement issuance, trust-mark evaluation, and gateway/plugin enforcement. See [OpenID Federation Trust Backplane MVP](docs/specs/openid-federation-trust-backplane-mvp.md) for the critique, target architecture, and rollout milestones.

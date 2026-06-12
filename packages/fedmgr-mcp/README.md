@@ -1,6 +1,25 @@
 # @letsfederate/fedmgr-mcp
 
-An MCP (Model Context Protocol) server that exposes fedmgr trust infrastructure operations to AI assistants such as Claude Desktop. Connect it once and let your AI assistant manage federation enrollment, trustmark lifecycle, and chain validation without leaving the conversation.
+An MCP (Model Context Protocol) server that exposes fedmgr trust infrastructure operations to AI assistants such as **Claude Code** and Claude Desktop. Connect it once and let your AI assistant manage federation enrollment, trustmark lifecycle, and chain validation without leaving the conversation.
+
+> New here? The fastest path is [docs/walkthroughs/trust-lab-quickstart.md](../../docs/walkthroughs/trust-lab-quickstart.md): one command to start a local TA/TMI lab, then drive it from Claude Code.
+
+## Add to Claude Code
+
+```bash
+npm run build -w @letsfederate/fedmgr-mcp     # produces dist/bin.js
+claude mcp add fedmgr -- node "$(pwd)/packages/fedmgr-mcp/dist/bin.js"
+# once published:  claude mcp add fedmgr -- npx -y @letsfederate/fedmgr-mcp
+```
+
+Or commit a project `.mcp.json`:
+
+```json
+{ "mcpServers": { "fedmgr": { "command": "node", "args": ["packages/fedmgr-mcp/dist/bin.js"] } } }
+```
+
+Run `/mcp` in Claude Code to confirm **fedmgr** appears with its tools. The tools
+default to the lab URLs (`ta_url=http://localhost:8090`, `tmi_url=http://localhost:8080`).
 
 ## Add to Claude Desktop
 
@@ -43,9 +62,20 @@ Restart Claude Desktop after editing the config. You should see "fedmgr" appear 
 | `issue_trustmark` | Issue a signed trustmark for a subject entity via the TMI |
 | `verify_trustmark` | Verify a trustmark JWS — checks signature, expiry, and chain-of-trust |
 | `check_trust_chain` | Walk and validate the full OIDF trust chain from a subject to the trust anchor |
+| `validate_mcp_invocation` | The fail-closed admission **verdict**: verifies the subordinate + entity statements and the invocation token (signature, audience, required trust mark *in the JWT*) → ALLOWED/DENIED |
+| `provision_mcp_trust_circle` | Provision an MCP trust circle (entity/subordinate statements + endpoint-scoped invocation token) for demos/tests |
 | `revoke_subordinate` | Revoke and decommission a subordinate entity from the federation |
 | `get_signed_config` | Fetch and decode the signed entity configuration for any OIDF entity |
 | `initialize_local_ca` | Get setup instructions and key file status for a local CA lab environment |
+
+## OIDF trust extension
+
+At the `initialize` handshake this server advertises the `org.letsfederate/oidf-trust`
+MCP extension — its OIDF entity id, trust anchor, and trust marks (see
+`src/oidf-trust-extension.ts`). Trust-aware clients/gateways apply an **accepted-anchor
+policy** (`evaluateOidfTrust`) to admit/deny it *before* use; generic clients ignore the
+extension (graceful degradation) and instead drive trust via the tools above. Details:
+[trust-lab-quickstart.md §4](../../docs/walkthroughs/trust-lab-quickstart.md).
 
 ## Resources
 

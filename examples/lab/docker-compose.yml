@@ -10,16 +10,20 @@
 #   Keys are never written to the host filesystem or persisted to disk.
 #   Public JWKs are bind-mounted read-only from the host.
 #
-# Prerequisites:
-#   1. Generate TA keys:   npm run ta:keys:init
-#   2. Generate TMI keys:  npm run tmi:keys:init
-#   3. Start:              docker compose -f examples/lab/docker-compose.yml up --build
+# Easiest start (generates keys if missing, builds, waits for health):
+#   ./examples/lab/up.sh            # stop & clean: ./examples/lab/down.sh
+#
+# Manual start (keys must already exist — up.sh generates them via the step-cli
+# image, no host `step` CLI needed):
+#   docker compose -f examples/lab/docker-compose.yml up --build -d
 #
 # Environment variables (override via .env or shell):
 #   TA_ENTITY_ID   — public URL of the TA  (default http://localhost:8090)
 #   TMI_ISSUER     — public URL of the TMI (default http://localhost:8080)
-
-version: "3.9"
+#
+# NOTE: the secret volumes are regular shared volumes (not tmpfs) — a Docker local
+# tmpfs volume is not shared across containers, so the decrypt-sidecar hand-off
+# needs a real shared volume. Fine for a local lab; use a KMS / host tmpfs in prod.
 
 networks:
   trust-lab:

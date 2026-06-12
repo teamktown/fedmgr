@@ -32,7 +32,14 @@ node --test packages/fedmgr-mcp/test/oidf-trust-extension.test.mjs \
 
 ## Run it (full container round trip)
 
-`./round-trip.sh` performs the 100% loop: build → push to the local OCI registry →
+Start the lab first, then run the round trip:
+
+```bash
+./examples/lab/up.sh            # TA + TMI + registry (one command)
+./examples/01-trust-circle/round-trip.sh
+```
+
+`round-trip.sh` performs the 100% loop: build → push to the local OCI registry →
 **cosign sign** → **syft SBOM** → TMI issues a **digest-bound trustmark** → pull →
 cosign verify + trustmark digest binding → admit. It **preflights** docker/cosign/
 syft/jq and aborts (exit 69) rather than fake a result.
