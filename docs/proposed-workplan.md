@@ -12,6 +12,49 @@ behind each change survives future refactors.
 
 ---
 
+## Status at a glance (updated 2026-06-12)
+
+| Phase | What | Status |
+|---|---|---|
+| 0 | ES256 test fixture | ✅ complete |
+| 1 | Trust verdict from invocation JWT, fail-closed (#1 #4 #5 #8) | ✅ complete |
+| 2 | TMI contract drift — field names, TMI JWKS (#2 #7) | ✅ complete |
+| 3 | OIDC client auth + robust token errors (#3 #9) | ✅ complete |
+| 4 | Fail-closed management API (#6) | ✅ complete |
+| 5 | Consolidate SSRF guard into kms (#10) | ✅ complete |
+| 6 | MCP demonstrations (E1/E8/E9, gateway PEP, E5a/E5b) | 📝 specced, decisions locked — not started |
+| 7 | Productization / patient-zero self-attestation + UI/HSM/domains | 📝 specced — not started |
+
+Findings #1–#10 from the code review are all **resolved** (Phases 1–5, each TDD'd
+red→green, committed + pushed). Phases 6–7 are planned, not yet built.
+
+## Decisions locked (carry forward)
+
+- **Root of trust:** HSM-rooted TA (SoftHSM/PKCS#11 in compose); same HSM key signs
+  cosign images. Defer commercial HSM — `KeyProvider` abstraction makes it a config
+  change; ship the public root on **Cloud KMS** first.
+- **Container signing:** cosign **and** digest-bound trustmark (both); **SBOM + provenance**
+  as evidence; **key-based cosign** with the HSM key (offline-first; keyless = connected
+  variant).
+- **Local OCI registry** promoted into the demo compose for a 100% offline round trip.
+- **Catalogue/inventory:** SQLite (volume-backed) — reuse the `better-sqlite3` pattern.
+- **Keyless stdio MCPs:** fedmgr mints/holds keys on their behalf (matches
+  `provisionMcpTrustCircle`).
+- **Cross-org trust:** **E5a** accepted-anchor (accept a vendor's TA) **and** **E5b**
+  intermediate (large-org delegated departments, central governance) — both demonstrated.
+- **MCP extensions:** define `org.letsfederate/oidf-trust` negotiated at `initialize`;
+  the E1 example MCP is the **reference impl** (Tier-1); the E9 walker wraps legacy
+  stdio MCPs (Tier-2).
+- **Gateway = Policy Enforcement Point:** GitHub sign-in (`federation-admin :3001`) gates
+  the per-MCP token `aud` on trust validation — human identity + machine trust unified.
+- **E9 walker:** target Claude Code `.mcp.json` first; signed-baseline **drift detection**.
+- **"Signed back" UX:** self-signed entity statement / PoP nonce — kept simple.
+- **Domains:** `.org` = public trust root + OSS; `.com` = SaaS; `.net` = redundancy. The
+  public TA hostname (e.g. `trust.letsfederate.org`) is permanent entity identity — pick
+  it before self-signing releases.
+- **Patient zero:** fedmgr signs fedmgr — `@letsfederate/fedmgr-mcp` published as the first
+  OIDF-signed MCP, cosign- + trustmark-verifiable against the public TA.
+
 ## Working principles (apply to every item)
 
 **TDD loop (red → green → refactor):**
