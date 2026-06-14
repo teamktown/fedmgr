@@ -765,6 +765,36 @@ plane* — observable, auditable, and governable. Blue-team posture: detect/cont
 malicious or unsanctioned MCPs **proactively** (inoculation), not after exfiltration
 (the Langfuse-style after-the-fact model). Proposed, not committed.
 
+### Architecture decision — fedmgr is the source of trust truth; waypoint is the runtime view (panel-reviewed 2026-06-14)
+
+A 5-Whys panel (technical architect, cybersecurity, psychosocial, user advocate) found a
+single shared root cause: **trust state must not be modeled twice.** `fedmgr` already owns
+the trust registry (`config-manager.js` → `registry.json` {federations, mcps, users, …},
+`fedmgr list`, `fedmgr inspect`, federation endpoints). A `waypoint_status` that
+re-implements a TA/endpoint registry would create split-brain trust (control-plane truth
+vs runtime enforcement), an unsigned tamper surface, no adoption audit, and an operator who
+must reconcile two contradictory views of "who do I trust."
+
+**Decision (HELD — do not build the standalone registry):**
+- **fedmgr = control plane / single source of truth.** Owns trust topology: federations/TAs,
+  MCPs, endpoints, entity configs. Sign `registry.json`; it is canonical.
+- **waypoint = data plane / runtime view.** Consumes (and signature-verifies) fedmgr's
+  registry; owns ONLY runtime facts: live health, last chain-validation, gate decisions,
+  counters. It never persists or edits trust topology. waypoint's current flat config
+  (`acceptedAnchors[]`, per-downstream `trustAnchor`) should **hydrate from fedmgr's
+  registry** — a refactor candidate, not new construction.
+- **`waypoint_status` = fedmgr inventory ⋈ live runtime** ("fedmgr inspect, with a pulse"):
+  identical entity ids, field names, and vocabulary ("authority over" vs "adopted") as
+  `fedmgr list/inspect`, plus health/last-checked and a **declared-vs-enforced drift check
+  (fail-closed)**.
+- **Genuinely-new piece → goes in fedmgr, not waypoint:** an `adoptedAnchors` registry
+  section for foreign TAs adopted for trust (provenance: who/when/why; accepted vs
+  authoritative), append-only + signed (the 8.3 ledger). waypoint emits adoption *events*;
+  fedmgr keeps the record.
+
+So the 8.1 heartbeat/status below is a **read-through projection over fedmgr's registry +
+live probes**, NOT a second registry.
+
 ### 8.1 Trust heartbeat & self-check (blue-team)
 
 A periodic cycle (interval-configurable) that: runs `waypoint_selfcheck` (config valid,
