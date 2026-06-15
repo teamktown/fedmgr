@@ -40,6 +40,31 @@ WAYPOINT_CONFIG=$(pwd)/waypoint.json \
 Change `acceptedAnchors` and the same downstream flips from exposed to blocked —
 that is the gate.
 
+## Run it remotely (cloud / web — HTTP + OAuth edge)
+
+For cloud assistants (Claude.ai, OpenAI) that connect to a **remote** MCP, run waypoint
+over **Streamable HTTP** behind an **OAuth edge** (the identity plane). Inbound is plain
+OAuth/OIDC — sign in with your IdP (GitHub/Google/Okta/Entra); it is **not** OpenID
+Federation. Downstream, waypoint is still OIDF.
+
+```bash
+npm run build -w @letsfederate/waypoint
+WAYPOINT_CONFIG=$(pwd)/waypoint.json \
+WAYPOINT_OIDC_ISSUER=https://accounts.google.com \
+WAYPOINT_OIDC_AUDIENCE=https://waypoint.example \
+WAYPOINT_OIDC_JWKS_URI=https://www.googleapis.com/oauth2/v3/certs \
+WAYPOINT_HTTP_PORT=8077 \
+  node packages/waypoint/dist/bin-http.js
+```
+
+- `GET /health` — open (probes/load balancers).
+- `POST|GET|DELETE /mcp` — the MCP endpoint; **requires a valid `Authorization: Bearer <token>`**
+  (verified for issuer/audience/signature/expiry against the IdP JWKS). No/invalid token → `401`,
+  fail-closed. Each session gets its own transport sharing the one waypoint.
+
+A cloud assistant adds this URL as a remote MCP connector with OAuth; waypoint enforces trust
+on every downstream regardless of whether the client understands our extension.
+
 ## How trust is decided (and an honest constraint)
 
 The MCP SDK **client strips unknown `extensions`** from a server's advertised
