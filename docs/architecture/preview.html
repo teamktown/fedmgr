@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>fedmgr / waypoint — Trust Fabric Architecture (preview)</title>
+  <style>
+    body { max-width: 1040px; margin: 2rem auto; padding: 0 1.25rem 4rem;
+           font-family: 'Inter', system-ui, -apple-system, sans-serif; line-height: 1.55; color: #1e293b; }
+    h1, h2 { border-bottom: 1px solid #e2e8f0; padding-bottom: .25rem; margin-top: 2rem; }
+    h1 { color: #0f172a; } h2 { color: #0369a1; }
+    pre { background: #f1f5f9; padding: .8rem; border-radius: 8px; overflow: auto; }
+    code { font-family: ui-monospace, 'SF Mono', Menlo, monospace; font-size: .9em; }
+    p code, li code, td code { background: #f1f5f9; padding: .05rem .3rem; border-radius: 4px; }
+    table { border-collapse: collapse; margin: .75rem 0; font-size: .92rem; }
+    th, td { border: 1px solid #cbd5e1; padding: .35rem .6rem; text-align: left; vertical-align: top; }
+    th { background: #f8fafc; }
+    blockquote { border-left: 3px solid #38bdf8; margin: 1rem 0; padding: .25rem 1rem; color: #475569; background: #f8fafc; }
+    .mermaid { background: #fff; margin: 1rem 0; text-align: center; }
+    .banner { background: #fef9c3; border: 1px solid #fde047; border-radius: 8px; padding: .6rem 1rem; font-size: .9rem; }
+    a { color: #0369a1; }
+  </style>
+</head>
+<body>
+  <div class="banner">Local preview — rendered from <code>trust-fabric-architecture.md</code>. Not yet committed. Refresh after edits.</div>
+  <div id="content">Loading…</div>
+  <script type="module">
+    import { marked } from "https://cdn.jsdelivr.net/npm/marked@13/lib/marked.esm.js";
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+    mermaid.initialize({ startOnLoad: false, theme: "default", securityLevel: "loose" });
+    const el = document.getElementById("content");
+    try {
+      const md = await (await fetch("./trust-fabric-architecture.md?_=" + Date.now())).text();
+      el.innerHTML = marked.parse(md);
+      el.querySelectorAll("code.language-mermaid").forEach((c) => {
+        const div = document.createElement("div");
+        div.className = "mermaid";
+        div.textContent = c.textContent;
+        c.closest("pre").replaceWith(div);
+      });
+      await mermaid.run({ querySelector: ".mermaid" });
+    } catch (e) {
+      el.innerHTML = "<pre>Failed to render: " + (e && e.message) + "</pre>";
+    }
+  </script>
+</body>
+</html>

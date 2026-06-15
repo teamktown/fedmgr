@@ -1,0 +1,294 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>fedmgr / waypoint — Trust Fabric Architecture</title>
+<script>
+  (function () {
+    const saved = localStorage.getItem('theme');
+    const dark = saved ? saved === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+    document.documentElement.classList.toggle('dark', dark);
+  })();
+</script>
+<style>
+  :root {
+    --bg:#FAF9F5; --surface:#FFFFFF; --surface2:#F0EEE6;
+    --ink:#141413; --body:#3D3D3A; --muted:#87867F;
+    --line:#D1CFC5; --line-soft:#E6E3DA;
+    --clay:#D97757; --clay-soft:rgba(217,119,87,0.10);
+    --olive:#788C5D; --olive-soft:rgba(120,140,93,0.12);
+    --blue:#5B7E96; --blue-soft:rgba(91,126,150,0.12);
+    --violet:#8A6BA8; --violet-soft:rgba(138,107,168,0.13);
+    --zone:rgba(20,20,19,0.025); --zone-line:#D1CFC5;
+    --serif: ui-serif, Georgia, "Times New Roman", serif;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  html.dark {
+    --bg:#141413; --surface:#1F1F1D; --surface2:#2A2A28;
+    --ink:#FAF9F5; --body:#D1CFC5; --muted:#87867F;
+    --line:#3D3D3A; --line-soft:#2A2A28;
+    --clay:#E48A6E; --clay-soft:rgba(228,138,110,0.14);
+    --olive:#9DB07C; --olive-soft:rgba(157,176,124,0.16);
+    --blue:#7FA3BC; --blue-soft:rgba(127,163,188,0.16);
+    --violet:#B496D0; --violet-soft:rgba(180,150,208,0.16);
+    --zone:rgba(250,249,245,0.03); --zone-line:#3D3D3A;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  html, body { height:100%; }
+  body { background:var(--bg); color:var(--body); font-family:var(--sans);
+    -webkit-font-smoothing:antialiased; display:flex; flex-direction:column; overflow:hidden; }
+  .bar { display:flex; align-items:center; gap:14px; flex-wrap:wrap; padding:12px 20px;
+    border-bottom:1px solid var(--line-soft); flex:none; }
+  .bar h1 { font-family:var(--serif); font-weight:500; font-size:19px; color:var(--ink); letter-spacing:-0.01em; }
+  .bar .sub { font-family:var(--mono); font-size:10.5px; color:var(--muted); letter-spacing:0.06em; text-transform:uppercase; }
+  .spacer { flex:1; }
+  .chips { display:flex; gap:6px; flex-wrap:wrap; }
+  .chip { font-family:var(--mono); font-size:11px; letter-spacing:0.04em; padding:5px 11px;
+    border:1px solid var(--line); border-radius:999px; background:transparent; color:var(--muted);
+    cursor:pointer; transition:all .15s ease; }
+  .chip:hover { color:var(--ink); border-color:var(--muted); }
+  .chip.on { background:var(--ink); border-color:var(--ink); color:var(--bg); }
+  #themeToggle { font-family:var(--mono); font-size:10.5px; text-transform:uppercase; letter-spacing:0.08em;
+    padding:5px 10px; border:1px solid var(--line); border-radius:6px; background:transparent; color:var(--muted); cursor:pointer; }
+  #themeToggle:hover { color:var(--ink); border-color:var(--muted); }
+  .stage { flex:1; position:relative; min-height:0; }
+  .stage svg { position:absolute; inset:0; width:100%; height:100%; display:block; }
+  .zone rect { fill:var(--zone); stroke:var(--zone-line); stroke-width:1; stroke-dasharray:5 5; }
+  .zone.identity rect { fill:var(--violet-soft); stroke:var(--violet); }
+  .zone .ztitle { font-family:var(--mono); font-size:11.5px; letter-spacing:0.09em; text-transform:uppercase; fill:var(--muted); }
+  .pivot { font-family:var(--mono); font-size:11px; letter-spacing:0.04em; fill:var(--clay); }
+  .node { cursor:pointer; }
+  .node rect { fill:var(--surface); stroke:var(--line); stroke-width:1.5; transition:stroke .15s ease; }
+  .node:hover rect { stroke:var(--muted); }
+  .node.sel rect { stroke:var(--clay) !important; stroke-width:2; }
+  .node .t { font-family:var(--sans); font-size:14px; font-weight:600; fill:var(--ink); pointer-events:none; }
+  .node .m { font-family:var(--mono); font-size:10.5px; fill:var(--muted); pointer-events:none; }
+  .node .k { font-family:var(--mono); font-size:9.5px; letter-spacing:0.08em; text-transform:uppercase; fill:var(--clay); pointer-events:none; }
+  .node .pct { font-family:var(--mono); font-size:11px; font-weight:600; pointer-events:none; fill:var(--clay); }
+  .arrowhead { fill:var(--muted); }
+  .node.gate rect { fill:var(--clay-soft); stroke:var(--clay); }
+  .node.store rect { fill:var(--surface2); }
+  .node.lib rect { fill:var(--olive-soft); stroke:var(--olive); }
+  .node.ext rect { fill:var(--blue-soft); stroke:var(--blue); stroke-dasharray:6 3; }
+  .node.idp rect { fill:var(--violet-soft); stroke:var(--violet); }
+  .node.idp .k { fill:var(--violet); }
+  .edge { stroke:var(--muted); stroke-width:1.6; fill:none; marker-end:url(#arrow); transition:opacity .2s ease, stroke .2s ease; }
+  .edge.dash { stroke-dasharray:6 4; }
+  .elbl { font-family:var(--mono); font-size:10px; fill:var(--muted); transition:opacity .2s ease; }
+  .stage.flowing .edge { opacity:0.1; }
+  .stage.flowing .elbl { opacity:0.1; }
+  .stage.flowing .node { opacity:0.3; }
+  .stage.flowing .zone { opacity:0.5; }
+  .stage.flowing .edge.lit { opacity:1; stroke:var(--clay); stroke-dasharray:7 6; animation:march 1s linear infinite; }
+  .stage.flowing .elbl.lit { opacity:1; fill:var(--clay); }
+  .stage.flowing .node.lit { opacity:1; }
+  .stage.flowing .node.lit rect { stroke:var(--clay); }
+  @keyframes march { to { stroke-dashoffset:-13; } }
+  @media (prefers-reduced-motion:reduce){ .stage.flowing .edge.lit { animation:none; } }
+  .panel { position:absolute; background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:14px 16px; box-shadow:0 4px 18px rgba(0,0,0,.06); }
+  #detail { right:16px; top:16px; width:340px; }
+  #detail .dt { font-family:var(--serif); font-size:17px; color:var(--ink); margin-bottom:2px; }
+  #detail .dm { font-family:var(--mono); font-size:10.5px; color:var(--clay); margin-bottom:8px; }
+  #detail .db { font-size:13px; line-height:1.55; }
+  #detail code, #flowcap code { font-family:var(--mono); font-size:11px; color:var(--clay); }
+  #flowcap { left:16px; bottom:16px; max-width:500px; display:none; }
+  #flowcap.show { display:block; }
+  #flowcap .fname { font-family:var(--mono); font-size:10.5px; letter-spacing:0.08em; text-transform:uppercase; color:var(--clay); margin-bottom:6px; }
+  #flowcap ol { margin-left:18px; } #flowcap li { font-size:12.5px; line-height:1.55; }
+  .footer { flex:none; display:flex; align-items:center; gap:18px; flex-wrap:wrap; padding:8px 20px;
+    border-top:1px solid var(--line-soft); font-family:var(--mono); font-size:11px; color:var(--muted); }
+  .footer b { color:var(--ink); } .footer .crit { color:var(--clay); }
+  @media (max-width:900px){ body{ overflow:auto; } .stage{ min-height:600px; } #detail{ position:static; width:auto; margin:12px 16px; } #flowcap{ position:static; margin:0 16px 12px; } }
+</style>
+</head>
+<body>
+<div class="bar">
+  <h1>Trust Fabric</h1>
+  <span class="sub">OAuth/OIDC in · OpenID Federation out</span>
+  <span class="spacer"></span>
+  <div class="chips">
+    <button class="chip on" data-flow="all">Everything</button>
+    <button class="chip" data-flow="signin">Sign in</button>
+    <button class="chip" data-flow="local">Local (stdio)</button>
+    <button class="chip" data-flow="cloud">Cloud / web</button>
+    <button class="chip" data-flow="bootstrap">Bootstrap own CA</button>
+    <button class="chip" data-flow="chain">Chain validate</button>
+    <button class="chip" data-flow="pedigree">Code pedigree</button>
+  </div>
+  <button id="themeToggle">Theme</button>
+</div>
+
+<div class="stage" id="stage">
+<svg viewBox="0 0 1620 780" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Trust fabric architecture with identity plane">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path class="arrowhead" d="M0,0 L10,5 L0,10 z"/>
+    </marker>
+  </defs>
+
+  <!-- zones -->
+  <g class="zone"><rect x="20" y="56" width="250" height="440" rx="16"/><text class="ztitle" x="38" y="82">Clients</text></g>
+  <g class="zone identity"><rect x="290" y="56" width="220" height="300" rx="16"/><text class="ztitle" x="308" y="82">Identity plane · OAuth/OIDC sign-in</text></g>
+  <g class="zone"><rect x="530" y="56" width="230" height="300" rx="16"/><text class="ztitle" x="548" y="82">Data plane · waypoint</text></g>
+  <g class="zone"><rect x="530" y="430" width="230" height="170" rx="16"/><text class="ztitle" x="548" y="456">Gated downstreams</text></g>
+  <g class="zone"><rect x="780" y="56" width="430" height="584" rx="16"/><text class="ztitle" x="798" y="82">Control plane · fedmgr (source of truth)</text></g>
+  <g class="zone"><rect x="1230" y="56" width="370" height="300" rx="16"/><text class="ztitle" x="1248" y="82">Pedigree · letsfederate.org</text></g>
+
+  <!-- the pivot annotation -->
+  <text class="pivot" x="512" y="372">OAuth in  ▸  waypoint  ▸  OIDF out</text>
+
+  <!-- edges -->
+  <path class="edge"      id="e-local"  d="M250,140 C 380,92 470,118 552,168"/>
+  <path class="edge dash" id="e-signin" d="M250,247 C 282,242 298,212 312,202"/>
+  <path class="edge dash" id="e-auth"   d="M488,200 C 518,200 534,200 552,200"/>
+  <path class="edge"      id="e-ide"    d="M250,349 C 290,330 300,250 312,214"/>
+  <path class="edge"      id="e-fwd"    d="M645,268 C 645,330 645,388 645,470"/>
+  <path class="edge dash" id="e-chain"  d="M738,206 C 766,208 780,212 800,214"/>
+  <path class="edge dash" id="e-reg"    d="M738,224 C 770,168 786,142 800,136"/>
+  <path class="edge"      id="e-mg1"    d="M995,164 C 995,174 995,178 995,186"/>
+  <path class="edge"      id="e-mg2"    d="M995,240 C 995,252 995,256 995,266"/>
+  <path class="edge"      id="e-issue"  d="M995,380 C 995,360 995,342 995,320"/>
+  <path class="edge dash" id="e-pedwp"  d="M1250,160 C 980,150 800,202 738,202"/>
+  <path class="edge"      id="e-ped1"   d="M1255,182 C 1190,290 1150,360 1192,394"/>
+  <path class="edge"      id="e-ped3"   d="M1415,186 C 1415,212 1415,224 1415,250"/>
+
+  <text class="elbl" data-e="e-local"  x="300" y="120">stdio — local, no sign-in</text>
+  <text class="elbl" data-e="e-signin" x="244" y="278">OIDC sign-in</text>
+  <text class="elbl" data-e="e-auth"   x="492" y="190">authenticated HTTP/SSE</text>
+  <text class="elbl" data-e="e-fwd"    x="656" y="372">trusted tools (OIDF)</text>
+  <text class="elbl" data-e="e-chain"  x="744" y="196">OIDF chain validate</text>
+  <text class="elbl" data-e="e-reg"    x="690" y="150">consumes registry</text>
+  <text class="elbl" data-e="e-issue"  x="1004" y="356">issue / verify</text>
+  <text class="elbl" data-e="e-pedwp"  x="820" y="180">signs the code</text>
+
+  <!-- CLIENTS -->
+  <g class="node" data-k="clocal"><rect x="40" y="110" width="210" height="64" rx="10"/>
+    <text class="k" x="56" y="132">CLIENT · LOCAL</text><text class="t" x="56" y="151">Claude Code / Desktop</text><text class="m" x="56" y="167">stdio · waypoint local</text></g>
+  <g class="node" data-k="ccloud"><rect x="40" y="214" width="210" height="64" rx="10"/>
+    <text class="k" x="56" y="236">CLIENT · CLOUD</text><text class="t" x="56" y="255">Claude.ai / OpenAI</text><text class="m" x="56" y="271">remote MCP connector</text></g>
+  <g class="node" data-k="cide"><rect x="40" y="316" width="210" height="64" rx="10"/>
+    <text class="k" x="56" y="338">CLIENT · ENTERPRISE</text><text class="t" x="56" y="357">VSCode / managed</text><text class="m" x="56" y="373">SSO · MDM-pinned</text></g>
+
+  <!-- IDENTITY plane -->
+  <g class="node idp" data-k="idp"><rect x="312" y="148" width="176" height="100" rx="11"/>
+    <text class="k" x="328" y="172">IDENTITY · NOT OIDF</text><text class="t" x="328" y="192">GitHub OAuth</text>
+    <text class="m" x="328" y="209">Google · Okta · Entra</text><text class="m" x="328" y="227">OIDC sign-in →</text>
+    <text class="m" x="328" y="243">issues session token</text></g>
+
+  <!-- DATA plane: waypoint -->
+  <g class="node gate" data-k="waypoint"><rect x="552" y="138" width="186" height="128" rx="12"/>
+    <text class="k" x="570" y="162">DATA PLANE · PEP</text><text class="t" x="570" y="183">waypoint</text>
+    <text class="m" x="570" y="201">OAuth in · OIDF out</text><text class="m" x="570" y="218">accepted-anchor + chain</text>
+    <text class="pct" x="570" y="244">45% · stdio only</text></g>
+
+  <!-- DOWNSTREAMS -->
+  <g class="node" data-k="down"><rect x="552" y="470" width="186" height="92" rx="10"/>
+    <text class="k" x="570" y="494">GATED</text><text class="t" x="570" y="514">Downstream MCPs</text>
+    <text class="m" x="570" y="530">fs · shell · cloud · db…</text><text class="m" x="570" y="546">only trusted ones exposed</text></g>
+
+  <!-- CONTROL plane -->
+  <g class="node store" data-k="reg"><rect x="800" y="104" width="390" height="60" rx="10"/>
+    <text class="k" x="818" y="125">CONTROL · SOURCE OF TRUTH</text><text class="t" x="818" y="144">fedmgr CLI + registry.json</text><text class="m" x="818" y="159">federations · MCPs · endpoints (to be signed)</text></g>
+  <g class="node" data-k="ta"><rect x="800" y="186" width="390" height="54" rx="10"/>
+    <text class="t" x="818" y="210">ta-server · your TA / CA</text><text class="m" x="818" y="227">federation_fetch · enroll · trust-mark-status · 75%</text></g>
+  <g class="node" data-k="tmi"><rect x="800" y="266" width="390" height="54" rx="10"/>
+    <text class="t" x="818" y="290">tmi-server · Trust Mark Issuer</text><text class="m" x="818" y="307">issue trust marks · schemas · 70%</text></g>
+  <g class="node" data-k="fmcp"><rect x="800" y="380" width="390" height="54" rx="10"/>
+    <text class="t" x="818" y="404">fedmgr-mcp · MCP tools</text><text class="m" x="818" y="421">validate_mcp_invocation · oidf-trust ext · 70%</text></g>
+  <g class="node lib" data-k="kms"><rect x="800" y="468" width="390" height="54" rx="10"/>
+    <text class="t" x="818" y="492">kms · signing + validators</text><text class="m" x="818" y="509">sign · validateTrustChain · SSRF guard · 85%</text></g>
+
+  <!-- PEDIGREE -->
+  <g class="node ext" data-k="letsfed"><rect x="1250" y="118" width="330" height="66" rx="10"/>
+    <text class="k" x="1268" y="140">PEDIGREE</text><text class="t" x="1268" y="160">trust.letsfederate.org</text><text class="m" x="1268" y="176">signs the code you run (cosign + mark)</text></g>
+  <g class="node store" data-k="oci"><rect x="1250" y="250" width="330" height="60" rx="10"/>
+    <text class="k" x="1268" y="272">DISTRIBUTION</text><text class="t" x="1268" y="292">OCI registry + npm</text><text class="m" x="1268" y="307">cosign · SBOM · provenance</text></g>
+</svg>
+
+<div class="panel" id="detail">
+  <div class="dt" id="d-title">Two boundaries, one pivot</div>
+  <div class="dm" id="d-meta">click a node · pick a flow</div>
+  <div class="db" id="d-body"><b>Inbound</b> to waypoint is identity — sign in with <code>GitHub</code>/OIDC. That is <b>not</b> OpenID Federation. The moment waypoint turns <b>downstream</b>, it <i>becomes</i> OpenID Federation: chain-validating each MCP and forwarding only trusted tools. The identity plane is a peer of the data plane; fedmgr (control) is the source of truth; letsfederate.org (pedigree) signs the code you run.</div>
+</div>
+<div class="panel" id="flowcap">
+  <div class="fname" id="f-name"></div>
+  <ol id="f-steps"></ol>
+</div>
+</div>
+
+<div class="footer">
+  <span>Overall fabric ≈ <b>45–50%</b></span>
+  <span>Trust mechanics <b>strong</b> · delivery surfaces <b>early</b></span>
+  <span class="crit">Finalize next: waypoint <b>HTTP/SSE + OAuth edge auth (identity plane)</b> → hosted deploy → sign registry + hydrate → revocation re-check → audit ledger</span>
+</div>
+
+<script>
+const DETAIL = {
+  clocal:{t:"Claude Code / Desktop",m:"local · stdio",b:"Adds waypoint as a local stdio MCP. <b>No inbound sign-in</b> — local process trust. Works today; journey ≈ <b>60%</b> (missing status/registry hydration)."},
+  ccloud:{t:"Claude.ai / OpenAI",m:"cloud · remote MCP connector",b:"<b>The priority.</b> Cloud assistants connect to a <b>remote</b> waypoint over HTTP/SSE and must <b>sign in</b> first (OAuth/OIDC). Journey ≈ <b>10%</b> — waypoint is <code>stdio only</code>. Finalizing HTTP/SSE + edge auth unlocks this."},
+  cide:{t:"VSCode / managed",m:"enterprise · SSO + MDM",b:"Hundreds of devs; SSO sign-in, config pushed via MDM, pinned to waypoint. Journey ≈ <b>15%</b> — needs managed config + signed-registry distribution + central governance."},
+  idp:{t:"Identity plane — OAuth/OIDC",m:"GitHub / Google / Okta / Entra · NOT OIDF",b:"<b>Inbound identity</b>: the human/agent signs in with an IdP (our base example uses <code>GitHub OAuth</code>), yielding a session/bearer token to reach waypoint. This is plain <b>OIDC, not OpenID Federation</b>. A <b>peer of the data plane</b>. Reuses the OAuth/token-exchange bones in <code>src/fedmgr</code>. Required for HTTP/SSE; skipped for local stdio."},
+  waypoint:{t:"waypoint — the pivot (PEP)",m:"data plane · OAuth in, OIDF out",b:"Client points at <b>one</b> MCP. <b>Inbound</b> it's an OAuth resource server (identity plane). <b>Outbound</b> it's an OpenID Federation relying party: admits downstreams by accepted-anchor + VALID chain, exposes only trusted tools. <b>45%</b>: stdio only — <code>HTTP/SSE + auth is the capability to finalize</code>."},
+  down:{t:"Downstream MCPs",m:"gated · fs/shell/cloud/db…",b:"High-blast-radius servers worth gating. Only those passing the OIDF policy + VALID chain are connected and exposed; everything else is sealed (fail-closed)."},
+  reg:{t:"fedmgr CLI + registry.json",m:"control plane · SOURCE OF TRUTH",b:"Already owns trust topology (federations/TAs, MCPs, endpoints). <b>Decision:</b> sign it; waypoint consumes + drift-checks it. Adopted foreign TAs + audit live <b>here</b>, not in waypoint."},
+  ta:{t:"ta-server — your TA / CA",m:"control · the root you run",b:"Your Trust Anchor: statements, federation_list/fetch, enrollment, trust-mark-status. <b>75%</b>. Stand up in minutes via <code>./examples/lab/up.sh</code> — full agency."},
+  tmi:{t:"tmi-server — Trust Mark Issuer",m:"control · marks",b:"Issues signed, digest-bindable trust marks (proven end-to-end in the lab). <b>70%</b>."},
+  fmcp:{t:"fedmgr-mcp",m:"mcp · tools + extension",b:"Trust ops as MCP tools (<code>validate_mcp_invocation</code>, issue/verify, check_trust_chain) + the <code>oidf-trust</code> extension (patient zero). <b>70%</b>."},
+  kms:{t:"kms — signing + validators",m:"library · crypto core",b:"SoftKMS/OpenBao, <code>validateTrustChain</code>, <code>validateTrustmark</code>, the single SSRF guard. <b>85%</b> — most mature."},
+  letsfed:{t:"trust.letsfederate.org",m:"pedigree · signs the code you run",b:"<b>Secondary</b> trust axis: signs the fedmgr/waypoint components so you can verify the <i>pedigree</i> of the software you run — independent of your runtime CA. ≈ 40%."},
+  oci:{t:"OCI registry + npm",m:"distribution",b:"Signed artifacts. CI already does cosign + SBOM + provenance; the OIDF mark over releases is the remaining round-trip piece."},
+};
+const FLOWS = {
+  signin:{name:"Sign in — OAuth/OIDC (NOT federation)",edges:["e-signin","e-auth"],nodes:["ccloud","idp","waypoint"],
+    steps:["Human/agent signs in with <code>GitHub</code> (or Google/Okta/Entra) — plain OIDC","An IdP token/session is issued — <b>this is not OpenID Federation</b>","Authenticated, the client may now reach waypoint over HTTP/SSE"]},
+  local:{name:"Local — stdio, no sign-in",edges:["e-local","e-fwd","e-chain"],nodes:["clocal","waypoint","down","ta"],
+    steps:["Claude Code adds waypoint as a local stdio MCP — local process trust, no identity plane","waypoint validates each downstream's chain to your TA (VALID?)","Only trusted tools are exposed, namespaced <code>name__tool</code>"]},
+  cloud:{name:"Cloud / web — OAuth in, OIDF out",edges:["e-signin","e-auth","e-fwd","e-chain"],nodes:["ccloud","idp","waypoint","down","ta"],
+    steps:["Cloud assistant <b>signs in</b> (OIDC) and connects to a <b>remote</b> waypoint over HTTP/SSE — <code>the capability to finalize</code>","Inbound is identity (OAuth) — not federation","<b>Downstream</b>, waypoint becomes OpenID Federation: chain-validates each MCP and forwards only trusted tools"]},
+  bootstrap:{name:"Bootstrap your own CA — minutes",edges:["e-mg1","e-mg2","e-reg"],nodes:["reg","ta","tmi","waypoint"],
+    steps:["<code>./examples/lab/up.sh</code> stands up your TA + TMI + registry","Enroll MCPs and issue trust marks via the fedmgr CLI","waypoint reads the (signed) registry — full agency, trust nothing external"]},
+  chain:{name:"Cryptographic admission (OIDF)",edges:["e-chain","e-reg"],nodes:["waypoint","ta","reg"],
+    steps:["For each downstream, <code>validateTrustChain(entityId, TA)</code>","Chain must resolve <b>VALID</b> (not WARN/INVALID) — fail-closed","Stronger than config alone: an accepted anchor that doesn't chain is still denied"]},
+  pedigree:{name:"Code pedigree — verify what you run",edges:["e-pedwp","e-ped1","e-ped3"],nodes:["letsfed","waypoint","fmcp","oci"],
+    steps:["trust.letsfederate.org signs the fedmgr/waypoint components","cosign + SBOM + an OIDF trust mark over the release","You verify the binary's pedigree — independent of your runtime CA"]},
+};
+const stage=document.getElementById('stage');
+const nodes=document.querySelectorAll('.node');
+const edges=document.querySelectorAll('.edge');
+const elbls=document.querySelectorAll('.elbl');
+const chips=document.querySelectorAll('.chip');
+const fcap=document.getElementById('flowcap');
+function setFlow(key){
+  chips.forEach(c=>c.classList.toggle('on',c.dataset.flow===key));
+  edges.forEach(e=>e.classList.remove('lit'));
+  elbls.forEach(l=>l.classList.remove('lit'));
+  nodes.forEach(n=>n.classList.remove('lit'));
+  if(key==='all'){ stage.classList.remove('flowing'); fcap.classList.remove('show'); return; }
+  const f=FLOWS[key];
+  stage.classList.add('flowing');
+  f.edges.forEach(id=>document.getElementById(id)?.classList.add('lit'));
+  elbls.forEach(l=>{ if(f.edges.includes(l.dataset.e)) l.classList.add('lit'); });
+  f.nodes.forEach(k=>document.querySelector(`.node[data-k="${k}"]`)?.classList.add('lit'));
+  document.getElementById('f-name').textContent=f.name;
+  document.getElementById('f-steps').innerHTML=f.steps.map(s=>`<li>${s}</li>`).join('');
+  fcap.classList.add('show');
+}
+chips.forEach(c=>c.addEventListener('click',()=>setFlow(c.dataset.flow)));
+nodes.forEach(n=>n.addEventListener('click',()=>{
+  nodes.forEach(x=>x.classList.remove('sel'));
+  n.classList.add('sel');
+  const d=DETAIL[n.dataset.k]; if(!d) return;
+  document.getElementById('d-title').textContent=d.t;
+  document.getElementById('d-meta').textContent=d.m;
+  document.getElementById('d-body').innerHTML=d.b;
+}));
+document.getElementById('themeToggle').addEventListener('click',()=>{
+  const dark=!document.documentElement.classList.contains('dark');
+  document.documentElement.classList.toggle('dark',dark);
+  localStorage.setItem('theme',dark?'dark':'light');
+});
+</script>
+</body>
+</html>
