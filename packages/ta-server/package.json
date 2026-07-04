@@ -16,6 +16,7 @@
     "pretest": "npm run build --silent"
   },
   "dependencies": {
+    "@letsfederate/fedvec": "*",
     "@letsfederate/kms": "*",
     "better-sqlite3": "^12.8.0",
     "express": "^4.19.2",

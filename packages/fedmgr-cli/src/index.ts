@@ -5,11 +5,13 @@
  *   keys init softkms   Generate encrypted JWK pair via step CLI
  *   trustmark issue     POST to TMI and print the signed JWS
  *   oci attach          Attach a trustmark as a cosign attestation
+ *   search <query>      Semantic search over federation entities
  */
 import { Command } from "commander";
 import { registerKeysCommands } from "./commands/keys.js";
 import { registerTrustmarkCommands } from "./commands/trustmark.js";
 import { registerOciCommands } from "./commands/oci.js";
+import { registerSearchCommands } from "./commands/search.js";
 
 export const program = new Command("fedmgr")
   .description("fedmgr — OpenID Federation tool for MCP trust management")
@@ -19,3 +21,4 @@ export const program = new Command("fedmgr")
 registerKeysCommands(program);
 registerTrustmarkCommands(program);
 registerOciCommands(program);
+registerSearchCommands(program);

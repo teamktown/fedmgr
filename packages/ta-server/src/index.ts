@@ -63,6 +63,8 @@ import {
 } from "./federation/entity-statements.js";
 import { createTrustMarkStatusRouter } from "./federation/trust-mark-status.js";
 import { SqliteFederationStore } from "./db/sqlite-store.js";
+import { FederationIndex, FastEmbedder } from "@letsfederate/fedvec";
+import { createFederationSearchRouter } from "./federation/federation-search.js";
 import { createEnrollmentRouter } from "./enrollment/index.js";
 import { createManagementRouter } from "./management/index.js";
 import { createDashboardRouter } from "./dashboard/index.js";
@@ -132,6 +134,27 @@ store.migrate();
 process.stderr.write(
   `[ta-server] DB opened: ${DB_PATH}\n`
 );
+
+// ---------------------------------------------------------------------------
+// Semantic search index (fedvec) — a single on-disk RuVector `.rvf` file that
+// sits next to the SQLite store. Rebuilt on demand from subordinate metadata;
+// zero external services.
+//
+//   TA_VEC_PATH       override the .rvf location (default: next to the DB)
+//   TA_VEC_EMBEDDER   "hash" (default: offline, zero-download, lexical) or
+//                     "minilm" (local ONNX all-MiniLM-L6-v2 — higher quality
+//                     semantic matching; fetches the model once, then offline)
+// ---------------------------------------------------------------------------
+
+const VEC_PATH =
+  process.env["TA_VEC_PATH"] ??
+  path.join(path.dirname(DB_PATH), "federation.rvf");
+const federationIndex = new FederationIndex({
+  rvfPath: VEC_PATH,
+  ...(process.env["TA_VEC_EMBEDDER"] === "minilm"
+    ? { embedder: new FastEmbedder() }
+    : {}),
+});
 
 // ---------------------------------------------------------------------------
 // Bootstrap subordinates from TA_SUBORDINATES env var
@@ -323,6 +346,13 @@ app.get("/federation_list", (req: Request, res: Response) => {
   res.setHeader("Content-Type", "application/json");
   res.json(ids);
 });
+
+// ---------------------------------------------------------------------------
+// GET /federation_search — semantic (vector) discovery over subordinates.
+// See createFederationSearchRouter for details.
+// ---------------------------------------------------------------------------
+
+app.use(createFederationSearchRouter(store, federationIndex));
 
 // ---------------------------------------------------------------------------
 // GET /federation_fetch?sub=<entityId>

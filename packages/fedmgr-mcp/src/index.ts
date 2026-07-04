@@ -233,6 +233,44 @@ async function toolListSubordinates(args: Record<string, unknown>): Promise<stri
   return `Registered entities (type=${entityType}):\n${JSON.stringify(data, null, 2)}`;
 }
 
+interface SearchResultItem {
+  entityId: string;
+  status?: string;
+  score: number;
+  distance: number;
+}
+
+async function toolSearchFederation(args: Record<string, unknown>): Promise<string> {
+  const taUrl = requireSafeUrl(String(args["ta_url"] ?? DEFAULT_TA_URL), "ta_url");
+  const query = String(args["query"] ?? "").trim();
+  if (!query) throw new Error("query is required");
+  const kRaw = Number(args["k"] ?? 5);
+  const k = Number.isFinite(kRaw) && kRaw > 0 ? Math.min(Math.floor(kRaw), 50) : 5;
+
+  const url =
+    `${taUrl}/federation_search?q=${encodeURIComponent(query)}&k=${encodeURIComponent(String(k))}`;
+  const data = (await fetchJson(url)) as { results?: SearchResultItem[] };
+
+  const results = data.results ?? [];
+  if (results.length === 0) {
+    return `No federation entities matched "${query}".`;
+  }
+
+  const lines = results.map((r, i) => {
+    const pct = (r.score * 100).toFixed(1);
+    const status = r.status ? ` [${r.status}]` : "";
+    return `${i + 1}. ${r.entityId}${status} — ${pct}% match`;
+  });
+  return [
+    `Top ${results.length} federation entities for "${query}":`,
+    "",
+    ...lines,
+    "",
+    "Full response:",
+    JSON.stringify(data, null, 2),
+  ].join("\n");
+}
+
 async function toolEnrollServer(args: Record<string, unknown>): Promise<string> {
   const taUrl    = requireSafeUrl(String(args["ta_url"]    ?? DEFAULT_TA_URL), "ta_url");
   const entityId = requireSafeUrl(String(args["entity_id"]),                   "entity_id");
@@ -684,6 +722,32 @@ export async function startMcpServer(): Promise<void> {
         },
       },
       {
+        name: "search_federation",
+        description:
+          "Semantic (natural-language) search over registered federation entities. " +
+          "Ranks entities by how well their id and metadata match the query using a " +
+          "local RuVector vector index — e.g. \"who can issue trust marks?\" or " +
+          "\"MCP server for weather\".",
+        inputSchema: {
+          type: "object" as const,
+          properties: {
+            query: {
+              type: "string",
+              description: "Natural-language description of the entity you're looking for.",
+            },
+            k: {
+              type: "number",
+              description: "Maximum number of results to return (default 5, max 50).",
+            },
+            ta_url: {
+              type: "string",
+              description: `URL of the Trust Anchor server (default: ${DEFAULT_TA_URL})`,
+            },
+          },
+          required: ["query"],
+        },
+      },
+      {
         name: "enroll_server",
         description:
           "Enroll a new MCP server or entity into the federation. Returns enrollment_id and nonce for the operator to sign.",
@@ -978,6 +1042,9 @@ export async function startMcpServer(): Promise<void> {
           break;
         case "list_subordinates":
           text = await toolListSubordinates(a);
+          break;
+        case "search_federation":
+          text = await toolSearchFederation(a);
           break;
         case "enroll_server":
           text = await toolEnrollServer(a);

@@ -1,0 +1,5 @@
+dist/
+# RuVector store artifacts (index files + companions are runtime/derived data)
+*.rvf
+*.rvf.idmap.json
+*.rvf.map.json
