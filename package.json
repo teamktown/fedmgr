@@ -4,7 +4,8 @@
   "private": true,
   "description": "fedmgr — OpenID Federation trust backplane for MCP. Private workspace root; the published front door is @letsfederate/fedmgr (packages/fedmgr).",
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "site"
   ],
   "scripts": {
     "build": "npm run build -ws --if-present",
