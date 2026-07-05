@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Deep re-assessment — fedmgr vs the MCP trust-backplane thesis (2026-07)</title>
+<style>
+  :root{
+    --bg:#0b0f14; --panel:#121821; --panel2:#161d28; --ink:#e6edf3; --muted:#9fb0c3;
+    --line:#22303f; --accent:#4dd0a7; --accent2:#5aa9ff; --warn:#f5c451; --bad:#ff6b6b;
+    --crit:#ff6b6b; --high:#f5934f; --med:#f5c451;
+    --radius:14px; --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 600px at 70% -10%,#132030 0,var(--bg) 55%);
+    color:var(--ink);font:16px/1.6 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;}
+  .wrap{max-width:1020px;margin:0 auto;padding:48px 24px 80px;}
+  .kicker{color:var(--accent);font:600 13px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;}
+  h1{font-size:31px;margin:.35em 0 .15em;letter-spacing:-.01em;}
+  h2{font-size:22px;margin:1.9em 0 .5em;border-bottom:1px solid var(--line);padding-bottom:.35em;}
+  h3{font-size:16.5px;margin:1.5em 0 .3em;}
+  .sub{color:var(--muted);font-size:16.5px;max-width:78ch;}
+  p{max-width:82ch}
+  code{font-family:var(--mono);background:#0e141c;border:1px solid var(--line);padding:2px 6px;border-radius:6px;font-size:.86em;}
+  .method{background:#0e141c;border:1px solid var(--line);border-radius:10px;padding:14px 18px;margin:14px 0;font-size:14.5px;color:var(--muted);}
+  .finding{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line);
+    border-left-width:4px;border-radius:10px;padding:16px 18px;margin:14px 0;}
+  .finding.crit{border-left-color:var(--crit)} .finding.high{border-left-color:var(--high)}
+  .finding.med{border-left-color:var(--med)} .finding.op{border-left-color:var(--accent2)}
+  .sev{display:inline-block;font:700 10.5px/1 var(--mono);letter-spacing:.09em;text-transform:uppercase;
+    padding:4px 8px;border-radius:5px;margin-right:8px;vertical-align:middle;}
+  .sev.crit{background:#3a1618;color:#ff9a9a} .sev.high{background:#3a2514;color:#ffb783}
+  .sev.med{background:#3a3314;color:#f5d98a} .sev.op{background:#13233a;color:#9dc4ff}
+  .verified{color:var(--accent);font:600 11px/1 var(--mono);border:1px solid #1f4a3c;background:#0e1a16;padding:4px 8px;border-radius:5px;}
+  .found{color:var(--warn);font:600 11px/1 var(--mono);border:1px solid #4a3d1f;background:#1a160e;padding:4px 8px;border-radius:5px;}
+  .finding h3{margin:.1em 0 .5em;font-size:16.5px}
+  .finding .loc{font-family:var(--mono);font-size:12.5px;color:var(--muted);word-break:break-all;}
+  .finding .angle{margin-top:8px;padding-top:8px;border-top:1px solid var(--line);font-size:14px;color:var(--accent2);}
+  .finding .angle b{color:var(--accent)}
+  table{border-collapse:collapse;width:100%;margin:14px 0;font-size:14px;}
+  th,td{border:1px solid var(--line);padding:8px 11px;text-align:left;vertical-align:top;}
+  th{background:var(--panel2);font-weight:600;}
+  .footnote{color:var(--muted);font-size:13.5px;border-top:1px solid var(--line);margin-top:40px;padding-top:16px;}
+  a{color:var(--accent2)}
+  .dim{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 18px;margin:12px 0;}
+  .dim h3{margin:0 0 .3em;color:var(--accent2)}
+  .lead{font-size:17px;border-left:3px solid var(--accent);padding-left:16px;margin:20px 0;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="kicker">letsfederate · fedmgr · deep re-assessment</div>
+  <h1>Are we building THE trust backplane for MCP? An honest re-audit</h1>
+  <p class="sub">A fresh multi-agent teardown of the codebase against its own thesis — verify (don't
+  assume) which MCP tool servers to trust — and against its own standards (real TDD, no test lies,
+  zero-HIGH/CRITICAL before a trustmark, minimal deps, LLM-legible logs). Dated 2026-07-05.</p>
+
+  <div class="method">
+    <strong>Method &amp; honesty note.</strong> Seven independent agents audited one dimension each
+    (thesis alignment · OIDF-spec conformance · security · supply-chain · DX · test honesty · code
+    quality), each required to cite concrete <code>file:line</code> evidence. Findings then entered an
+    adversarial verification pass (an independent skeptic re-opens the files and tries to <em>refute</em>
+    each one). <strong>The verification and synthesis stages were cut off by a platform session limit
+    after 61 agents / 653k tokens.</strong> So this report is scrupulous about status: four findings
+    are marked <span class="verified">✓ adversarially verified</span> (a skeptic re-checked the code and
+    confirmed, high-confidence); the rest are marked <span class="found">● found — verify interrupted</span>
+    (cited by the auditor, not yet independently re-confirmed this run). I have not upgraded any
+    "found" claim to "true" — treat them as strong leads to confirm, not verdicts.
+  </div>
+
+  <p class="lead"><strong>The verdict in one line:</strong> fedmgr has built a real, honest, partial
+  trust <em>surface</em> — the federation documents are spec-shaped and the plumbing (KMS signing,
+  proof-of-key enrollment, fail-closed admission) is genuine — but the trust <em>verification</em> layer,
+  which is the entire thesis, has critical holes: a trust mark today is verified against a key the
+  presenter chooses, the chain walk doesn't bind leaf keys to their issuer, and the zero-HIGH/CRITICAL
+  SLA gates nothing in code. None of this is fatal, and — crucially — <strong>every one of these gaps,
+  fixed, is a demonstrable letsfederate.org story.</strong> The gap between "surface" and "verification"
+  is the site's entire narrative arc.</p>
+
+  <h2>Dimension summaries (the honest state of each)</h2>
+
+  <div class="dim"><h3>Thesis alignment</h3><p>More than demos: the TA (SQLite subordinate registry,
+  proof-of-key enrollment, OIDF §12 status endpoint), TMI (real ES256 signing via KMS), and waypoint
+  (fail-closed admission wired to a live chain walk) form a genuine partial backplane, and the docs are
+  unusually honest about scope. But the spine is TA→TMI, not TA→<em>MCP-tool-server</em>: no MCP server
+  can currently be a resolvable OIDF leaf (nothing hosts entity statements for them), nothing binds the
+  spawned downstream process to the validated identity, trustmarks aren't cryptographically checked at
+  admission, and revocation is write-only. The single most thesis-undermining gap: <strong>a leaf-identity
+  story for MCP servers</strong> (hosting + process/artifact binding). Without it, "verify which MCP tool
+  servers to trust" verifies the anchor's registry, not the server you actually run.</p></div>
+
+  <div class="dim"><h3>OIDF-spec conformance</h3><p>Spec-shaped at the document level (signed ES256 entity
+  configurations at <code>/.well-known/openid-federation</code> with iss=sub, jwks, authority_hints,
+  correct typ and Content-Type; fetch + list endpoints). But the <em>verification</em> side does not
+  implement §10 chain-validation: the leaf configuration is never signature-verified or key-bound to the
+  superior's subordinate statement, iss/sub/typ are unchecked, and TA keys are fetched over the network
+  rather than pinned out-of-band — so "chain verified" reduces to "the URL served something self-consistent
+  over TLS." Trust marks are weakest: rooted in an attacker-controllable <code>jku</code> header, using the
+  renamed <code>id</code> claim instead of <code>trust_mark_type</code>, never surfaced in the
+  <code>trust_marks</code> claim, and the TA never publishes <code>trust_mark_issuers</code>. Resolve
+  endpoint and metadata policy are absent.</p></div>
+
+  <div class="dim"><h3>Security</h3><p>Crypto plumbing mostly sound (PBES2-encrypted private JWEs,
+  gitignored, 0600; proof-of-key enrollment with pinned ES256 allowlist + SSRF-guarded JWKS fetch; OAuth
+  edge fails closed on missing exp). Two hard breaks reported: <code>oci verify-trustmark</code> hardcodes
+  cosign identity/issuer to <code>.+</code> (verifies a signature, accepts any signer), and an RSA private
+  key is reported committed in git history. OAuth edge omits an algorithms allowlist and enforces no
+  scopes. With the T0 public-tunnel direction, the lab's default-unauthenticated admin plane and unbounded
+  session Map become real exposure.</p></div>
+
+  <div class="dim"><h3>Supply chain</h3><p>Individual pieces are well-crafted (pure deterministic scan-gate,
+  independent cosign cross-verification with node:crypto, honest CBOM). But SBOM→sign→push→gate→trustmark
+  is not a <em>chain</em>: each stage is a side-by-side artifact with no cryptographic binding, the
+  zero-HIGH/CRITICAL SLA is consulted by nothing, and <code>oci verify-trustmark</code> never verifies the
+  embedded trustmark JWS. Cheapest high-leverage fix: one signed in-toto Statement (subject = artifact
+  digest; predicate = SBOM digest + scan tally + gate verdict) the TMI requires before signing — plus
+  making verify actually verify.</p></div>
+
+  <div class="dim"><h3>DX / onboarding</h3><p>Two realities side by side. The new spine is genuinely good
+  (<code>fedmgr doctor</code> preflight, idempotent lab bring-up with health waits, honest running.md, green
+  230-test suite via <code>npm ci &amp;&amp; npm test</code>). But a stranger lands first on ~200 lines of
+  dead README describing a deleted demo, three stale quickstarts contradict it, <code>npx
+  @letsfederate/fedmgr</code> 404s (and couldn't publish as-is), and no doc gets a stranger from zero to an
+  authenticated <code>POST /mcp</code>. The website will send strangers here — these break them.</p></div>
+
+  <div class="dim"><h3>Test honesty</h3><p>Better than most (real ephemeral keys, genuine independent
+  cross-checks for CA/SBOM/CBOM, strong negatives for OAuth-edge/selfcheck/admission). But the mandate is
+  violated where the thesis lives: <code>kms/src/trust-validator.ts</code> — the 566-line production trust
+  engine — has <strong>zero tests</strong>, and waypoint's "crypto admission" tests substitute a
+  <code>fakeValidator</code>, mocking away the exact thing they claim to prove. The SLA gate is tested only
+  as a pure function; revocation is write-only. Five most-wanted tests: (1) admission through the real
+  validator against a forged chain, (2) issuance refused when the gate is blocked, (3) revoke-then-verify →
+  INVALID, (4) expired statement rejected, (5) key-substitution rejected.</p></div>
+
+  <div class="dim"><h3>Code quality</h3><p>Per-package runtime code is well-crafted (small files,
+  fail-closed with invariant comments, strict TS, jose-only). But cross-cutting layers lag the project's own
+  standards: <code>@letsfederate/obs</code> is imported by only 3 files while four parallel logging
+  implementations coexist and the trust plane emits zero OTel spans; entity-statement signing is duplicated
+  ta-server↔tmi-server; waypoint drags a 540 MB onnxruntime chain to import one 145-line policy module; and
+  monolith-era dead scripts/env remain.</p></div>
+
+  <h2>Verified findings (a skeptic re-checked these)</h2>
+
+  <div class="finding crit">
+    <span class="sev crit">Critical</span><span class="verified">✓ adversarially verified · high confidence</span>
+    <h3>Trust-mark verification is rooted in the attacker-controlled <code>jku</code> header, not the federation</h3>
+    <p><code>validateTrustmark()</code> takes the JWKS URL straight from the JWS header
+    (<code>opts.jwksUrl ?? header["jku"]</code>), fetches it (only SSRF-filtered), and returns VALID if any
+    fetched key verifies the signature. No issuer allowlist, no requirement that <code>jku</code> belong to
+    the issuer, no resolution of issuer keys via a trust chain, no <code>trust_mark_issuers</code> check.
+    Anyone can self-sign a "trustmark" with their own key, host a JWKS anywhere public, and get
+    <code>[TRUST:VALID]</code> — including the TMI's own startup self-gate.</p>
+    <p class="loc">packages/kms/src/trust-validator.ts:114 · confirmed: validateTrustmark and MCP
+    verify-trustmark both use only this path; validateTrustChain is separate and never binds the mark's key.</p>
+    <p class="angle"><b>Site demo →</b> "A badge anyone can mint is not trust." Show a forged jku-signed
+    trustmark being <em>rejected</em> because its issuer has no chain to the anchor. This is the headline
+    bring-your-own-trust demonstration.</p>
+  </div>
+
+  <div class="finding crit">
+    <span class="sev crit">Critical</span><span class="verified">✓ adversarially verified · high confidence</span>
+    <h3>Chain validation skips §10 binding rules — leaf keys never bound, iss/sub/typ never checked, TA keys unpinned</h3>
+    <p>Both chain walkers violate OIDF §10: the leaf entity configuration is only <code>decodeJwt</code>'d
+    (self-signature never verified, keys never checked against the superior's subordinate statement —
+    the core binding), subordinate-statement iss/sub are never compared to the expected entity, the
+    <code>typ</code> header is never enforced, TA keys are network-fetched and self-verified (spec requires
+    out-of-band pinning), and only <code>authority_hints[0]</code> is followed. Waypoint gates MCP
+    admission on exactly this, so admission trust currently reduces to TLS + DNS of one URL.</p>
+    <p class="loc">packages/kms/src/trust-validator.ts:320 · confirmed: waypoint admission wraps
+    validateTrustChain; a correct binding path exists in fedmgr-mcp but does not cover the walkers/waypoint.</p>
+    <p class="angle"><b>Site centerpiece →</b> an interactive trust-chain walkthrough where each hop shows
+    exactly which key verified which statement, and a broken binding is visibly rejected — bring-your-own-trust
+    made legible.</p>
+  </div>
+
+  <div class="finding high">
+    <span class="sev high">High</span><span class="verified">✓ adversarially verified · high confidence</span>
+    <h3>Trust-mark JWT uses the obsolete <code>id</code> claim, no <code>trust-mark+jwt</code> typ, no delegation — non-interoperable</h3>
+    <p>The mark payload is <code>{iss, sub, id, iat, exp}</code> with header <code>{jku}</code> only — no
+    <code>typ: "trust-mark+jwt"</code>. The final spec names the claim <code>trust_mark_type</code>, requires
+    the typ, and defines a <code>delegation</code> claim; none exist (adoption is reinvented via custom
+    <code>adopted_from_*</code>). The verifier hard-wires the obsolete <code>id</code> too. The codebase
+    demonstrably knows typ headers (entity statements set them), so this is a real gap, not a tooling limit.</p>
+    <p class="loc">packages/tmi-server/src/index.ts:183 · confirmed: zero code hits for trust_mark_type /
+    trust-mark+jwt / delegation.</p>
+    <p class="angle"><b>Site widget →</b> "paste any SPID/CIE or OIDF trust mark and we parse it" only works
+    once fedmgr speaks <code>trust_mark_type</code> — spec-exact claim names are the proof of <em>real</em>
+    interop, not a lookalike.</p>
+  </div>
+
+  <div class="finding high">
+    <span class="sev high">High</span><span class="verified">✓ adversarially verified · high confidence</span>
+    <h3>Marks never appear in the subject's <code>trust_marks</code> claim; TA never publishes <code>trust_mark_issuers</code></h3>
+    <p>Per §3.1.2 a subject advertises marks via a top-level <code>trust_marks</code> array of
+    <code>{trust_mark_type, trust_mark}</code>. No entity configuration emits this; fedmgr-mcp instead puts a
+    bare string array in <code>metadata.federation_entity.trust_marks</code> (wrong location, wrong shape).
+    The TA omits <code>trust_mark_issuers</code>, so a conformant resolver cannot discover a subject's marks
+    or learn which issuers the federation authorizes.</p>
+    <p class="loc">packages/fedmgr-mcp/src/openid-ops.ts:59 · confirmed across TA/TMI entity-statement generation.</p>
+    <p class="angle"><b>Site headline UX →</b> point an AI assistant at any MCP server's entity ID and it
+    discovers <em>and</em> verifies the server's supply-chain trust marks from the entity configuration alone.</p>
+  </div>
+
+  <h2>Found — verification interrupted (strong leads to confirm)</h2>
+  <p class="sub">These were cited with <code>file:line</code> evidence by the dimension auditors but the
+  skeptic pass didn't reach them before the session limit. Ranked by reported severity. Confirm before
+  acting.</p>
+  <table>
+    <tr><th>Severity</th><th>Finding</th><th>Dimension</th></tr>
+    <tr><td><span class="sev crit">Crit</span></td><td>cosign trustmark verification accepts ANY signer (identity/issuer regex hardcoded to <code>.+</code>)</td><td>security</td></tr>
+    <tr><td><span class="sev crit">Crit</span></td><td>A real RSA private key is committed in git history, reachable from origin/main</td><td>security</td></tr>
+    <tr><td><span class="sev crit">Crit</span></td><td><code>oci verify-trustmark</code> verifies nothing meaningful — never checks the trustmark JWS or image digest</td><td>supply-chain</td></tr>
+    <tr><td><span class="sev crit">Crit</span></td><td>Zero-HIGH/CRITICAL SLA does not gate trustmark issuance anywhere in code — the TMI mints on request</td><td>supply-chain</td></tr>
+    <tr><td><span class="sev high">High</span></td><td>Nothing binds the spawned downstream process to its validated identity (digest binding built, never wired into waypoint)</td><td>thesis</td></tr>
+    <tr><td><span class="sev high">High</span></td><td>Revocation is write-only: revoke works &amp; is tested, but no verifier consults status — a revoked trustmark still verifies VALID</td><td>thesis/tests</td></tr>
+    <tr><td><span class="sev high">High</span></td><td>Production trust engine <code>kms/trust-validator.ts</code> has zero tests; waypoint's crypto-admission tests mock it away</td><td>tests</td></tr>
+    <tr><td><span class="sev high">High</span></td><td>SBOM/signature/scan/trustmark are unbound side-by-side artifacts — no verifiable chain object exists</td><td>supply-chain</td></tr>
+    <tr><td><span class="sev high">High</span></td><td>Verifiers hardcode ES256/ignore kid; the OpenBao KMS provider signs RS256 chains no fedmgr verifier can validate</td><td>oidf-spec</td></tr>
+    <tr><td><span class="sev high">High</span></td><td>Metadata-policy processing entirely absent; resolve endpoint absent</td><td>oidf-spec</td></tr>
+    <tr><td><span class="sev high">High</span></td><td>OAuth edge omits algorithms allowlist and enforces no scopes; any audience-valid token gets full access</td><td>security</td></tr>
+    <tr><td><span class="sev high">High</span></td><td>TA admin + enrollment plane unauthenticated by default (only fails closed under NODE_ENV=production)</td><td>security</td></tr>
+    <tr><td><span class="sev med">Med</span></td><td>Root README + 4 contradictory quickstarts describe a system that no longer exists; front door 404s</td><td>dx</td></tr>
+    <tr><td><span class="sev med">Med</span></td><td>No documented path reaches an authenticated <code>POST /mcp</code>; README's OAuth example can't mint a valid token</td><td>dx</td></tr>
+    <tr><td><span class="sev med">Med</span></td><td>CBOM unconditionally claims a hybrid PQC edge KEM (X25519MLKEM768) no code configures</td><td>supply-chain</td></tr>
+    <tr><td><span class="sev med">Med</span></td><td>CI's primary test job runs a deleted script; committed test-results include a FAILING run from a dead suite</td><td>tests</td></tr>
+    <tr><td><span class="sev med">Med</span></td><td>Unbounded per-client session/transport Map = memory-exhaustion DoS on <code>/mcp</code></td><td>security</td></tr>
+    <tr><td><span class="sev med">Med</span></td><td>obs bypassed by 4 of 7 packages (four logging impls); TRUST_SPANS emits zero spans at runtime</td><td>quality</td></tr>
+  </table>
+
+  <h2>Opportunities worth building (each is site material)</h2>
+  <div class="finding op"><span class="sev op">Opportunity</span>
+    <h3>One stranger-runnable loop, run in CI</h3>
+    <p>Every component exists (lab bring-up, proof-of-key enrollment, trustmark issuance, crypto admission,
+    revocation) but nothing chains them end-to-end as a CI test — the only evidence is dated point-in-time
+    docs. <b>Build <code>examples/02-trusted-mcp</code>:</b> enroll a real MCP server as a leaf → issue it a
+    digest-bound trustmark → start waypoint with <code>requireValidChain</code> → show tools exposed →
+    revoke at the TA → show admission flip to DENIED.</p>
+    <p class="angle"><b>Site homepage demo →</b> "deploy OIDF for MCP in five minutes" — and running it in
+    CI keeps the site's claims perpetually true.</p>
+  </div>
+  <div class="finding op"><span class="sev op">Opportunity</span>
+    <h3>A public <code>/resolve</code> endpoint</h3>
+    <p>Missing today. The Resolve endpoint returns a subject's chain-verified, policy-resolved metadata and
+    validated trust marks in one signed response — the one call an AI client actually wants (and mandated on
+    TAs by Italy's SPID/CIE profile).</p>
+    <p class="angle"><b>Live API →</b> paste an MCP server's entity ID, get back its verified metadata and
+    trust marks — OIDF-with-AI in a single HTTP call.</p>
+  </div>
+  <div class="finding op"><span class="sev op">Opportunity</span>
+    <h3>A closing "here is your trust ecosystem" inventory from <code>init</code></h3>
+    <p><code>init</code> ends with only a log line; the minted artifacts (root CA, signed SBOM, cosign
+    keypair, TA/TMI URLs, gate verdict) are visible only as scrollback. Add a final summary block (+ <code>--json</code>)
+    and/or a <code>fedmgr status</code> that re-derives it idempotently (doubling as a drift detector).</p>
+    <p class="angle"><b>Money screenshot →</b> the moment bring-your-own-trust becomes tangible.</p>
+  </div>
+
+  <h2>What this means for the build order</h2>
+  <ol>
+    <li><strong>Close the verification gap before anything else</strong> — one shared §10 verifier that pins
+      the TA key out-of-band, binds leaf keys to subordinate statements, checks iss/sub/typ/exp, and verifies
+      trust marks via the chain + <code>trust_mark_issuers</code> (kills both criticals). This is the product.</li>
+    <li><strong>Bind the supply chain</strong> — one signed in-toto Statement tying artifact digest + SBOM
+      digest + scan verdict, required by the TMI before it signs, and make <code>oci verify-trustmark</code>
+      actually verify signer + JWS + digest.</li>
+    <li><strong>Test where the thesis lives</strong> — the five missing tests on the real validator; delete
+      the fakeValidator substitution.</li>
+    <li><strong>Make revocation mean something</strong> — a verifier that consults trust-mark status.</li>
+    <li><strong>Fix the front door</strong> — one true quickstart, kill the dead README, publishable package —
+      because letsfederate.org sends strangers straight here.</li>
+  </ol>
+  <p>The through-line: <strong>fedmgr's honesty is its asset.</strong> The docs already admit most of this;
+  the audit just made the list concrete and ranked. Fixing items 1–2 turns "spec-shaped surface" into
+  "verifiable trust" — and each fix ships as a letsfederate.org demonstration, so the roadmap and the
+  advocacy site are the same backlog.</p>
+
+  <p class="footnote">Audit: 7-dimension multi-agent teardown, 61 agents, adversarial verification
+  (interrupted by session limit — see method note). Full machine output retained at
+  <code>tasks/w3jm6jx8h.output</code>. Companion: <a href="website-ai-infrastructure.html">AI-infrastructure
+  comparison</a> · <a href="trustworthy-mcp-progress.html">R1–R15 progress</a> ·
+  <a href="index.html">workbench</a>.</p>
+</div>
+</body>
+</html>
