@@ -38,10 +38,16 @@ grep -rlI $'\x00' node_modules --include=*.js   # list corrupted files
 rm -rf node_modules && npm install               # clean repair
 ```
 
-## Guard: Node version
-Local runtime here is **Node 18**; `engines` want `>=22` (the Docker images use
-`node:22`). The test runner (`node --test`) works on 18, but native addons
-(better-sqlite3, @ruvector/rvf) are ABI-sensitive — rebuild if you switch Node.
+## Guard: Node version + npm 11 native rebuilds
+Runtime and `engines` are **Node 24** (OpenSSL 3.5 — gives native ML-KEM/ML-DSA
+for the PQC path). Two gotchas after upgrading Node:
+- **npm 11 skips install scripts by default** (a security gate). A plain
+  `npm install` will NOT rebuild native addons — you'll see
+  `npm warn allow-scripts`. Rebuild the ABI-sensitive ones explicitly:
+  `npm rebuild better-sqlite3 --foreground-scripts` (also `pkcs11js`,
+  `onnxruntime-node` if you exercise them). `@ruvector/rvf` ships prebuilds.
+- **Node 24's `node --test` default reporter is `spec`** (`✔`/`ℹ`), not TAP.
+  Count with `ℹ tests|pass|fail`, not `# tests`.
 
 ## Guard: RVF cosine metric is lost on reopen
 `@ruvector/rvf` 0.2.x does **not** restore the cosine metric after

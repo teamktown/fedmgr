@@ -36,11 +36,11 @@
     "fastembed": "^2.1.0"
   },
   "devDependencies": {
-    "@types/node": "^22.0.0",
+    "@types/node": "^24.0.0",
     "typescript": "^5.4.0"
   },
   "engines": {
-    "node": ">=22.0.0 <27.0.0"
+    "node": ">=24.0.0 <27.0.0"
   },
   "license": "MIT"
 }
