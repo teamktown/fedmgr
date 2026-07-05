@@ -164,6 +164,11 @@ claude-flow
 ./context
 .claude/*
 ./.claude/*
+# ...but the committed dev skill IS tracked (bootstraps repo learnings/guards
+# for any Claude Code session working here). Everything else under .claude
+# stays local.
+!.claude/skills/
+!.claude/skills/**
 ./reports/*
 ./reports
 
