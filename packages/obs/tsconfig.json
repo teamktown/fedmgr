@@ -5,9 +5,5 @@
     "rootDir": "src",
     "types": ["node"]
   },
-  "references": [
-    { "path": "../kms" },
-    { "path": "../obs" }
-  ],
   "include": ["src/**/*"]
 }

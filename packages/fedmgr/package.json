@@ -37,6 +37,7 @@
   },
   "dependencies": {
     "@letsfederate/kms": "*",
+    "@letsfederate/obs": "*",
     "commander": "^12.0.0",
     "jose": "^5.2.4"
   },
