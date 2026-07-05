@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trust at scale — trustmarket, auth chaining, enterprise governance</title>
+<style>
+  :root{--bg:#0b0f14;--panel:#121821;--panel2:#161d28;--ink:#e6edf3;--muted:#9fb0c3;--line:#22303f;--accent:#4dd0a7;--accent2:#5aa9ff;--warn:#f5c451;--bad:#ff6b6b;--radius:14px;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;}
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 600px at 70% -10%,#132030 0,var(--bg) 55%);color:var(--ink);font:16px/1.62 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;}
+  .wrap{max-width:1060px;margin:0 auto;padding:40px 24px 90px}
+  a{color:var(--accent2);text-decoration:none}a:hover{text-decoration:underline}
+  .back{font:600 13px/1 var(--mono);color:var(--muted)}
+  .kicker{color:var(--accent);font:600 13px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;margin-top:18px}
+  h1{font-size:31px;margin:.3em 0 .1em}
+  .sub{color:var(--muted);max-width:80ch}
+  h2{font-size:21px;margin:36px 0 6px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+  h3{font-size:15px;margin:18px 0 4px;color:var(--accent)}
+  .card{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px;margin:14px 0}
+  .key{border-left:3px solid var(--accent2)}
+  ul{margin:8px 0 8px 2px;padding-left:20px}li{margin:6px 0}
+  code{font-family:var(--mono);background:#0e141c;border:1px solid var(--line);padding:2px 6px;border-radius:6px;font-size:.85em}
+  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:13.5px}
+  th,td{text-align:left;padding:8px 9px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font:600 11px/1 var(--mono);letter-spacing:.05em;text-transform:uppercase}
+  pre{margin:8px 0;padding:12px;background:#0e141c;border:1px solid var(--line);border-radius:8px;overflow-x:auto;font:12.5px/1.55 var(--mono);color:var(--ink)}
+  .step{counter-reset:s;list-style:none;padding-left:0}
+  .step li{position:relative;padding:11px 12px 11px 44px;border:1px solid var(--line);border-radius:10px;margin:8px 0;background:var(--panel)}
+  .step li::before{counter-increment:s;content:counter(s);position:absolute;left:12px;top:11px;width:22px;height:22px;border-radius:50%;background:#0e1a16;border:1px solid #1f4a3c;color:var(--accent);font:700 12px/22px var(--mono);text-align:center}
+  .muted{color:var(--muted)} .win{color:var(--accent);font-weight:700} .pending{color:var(--warn);font-weight:700}
+  .tag{font:600 11px/1 var(--mono);padding:3px 7px;border-radius:6px}
+  .id{color:#0d1622;background:var(--accent2)} .tr{color:#0b1a14;background:var(--accent)}
+  footer{margin-top:36px;color:var(--muted);font-size:13px;border-top:1px solid var(--line);padding-top:18px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="index.html">← workbench</a>
+  <div class="kicker">Deep design · 2026-07-05</div>
+  <h1>Trust at scale</h1>
+  <p class="sub">Three questions that sit underneath "how do we connect waypoint": <strong>(1)</strong> once I'm
+  signed into Claude and reach waypoint, do I authenticate again downstream — and where does a federation-minted
+  token fit? <strong>(2)</strong> how do we find trustworthy MCPs at scale without one vendor becoming the
+  gatekeeper — the <em>trustmarket</em>? <strong>(3)</strong> how does an enterprise make waypoint <em>the</em>
+  governed MCP without taking away dev freedom?</p>
+
+  <h2>1 · The token flow: two different kinds of "trust"</h2>
+  <div class="card key">
+    <strong>You sign in once. The rest is waypoint marshalling — because "who is calling" and "which server is
+    trustworthy" are different questions answered by different credentials.</strong>
+  </div>
+  <table>
+    <tr><th></th><th>Identity plane <span class="tag id">OAuth / OIDC</span></th><th>Trust plane <span class="tag tr">OpenID Federation / CA</span></th></tr>
+    <tr><td><strong>Answers</strong></td><td><em>Who</em> is calling? (the human/agent)</td><td><em>Which</em> server is a legitimate, blessed MCP?</td></tr>
+    <tr><td><strong>Artifact</strong></td><td>Access token (JWT), audience-bound (RFC 8707), short-lived, from your IdP</td><td>Entity statement + trust mark, signed up to a trust anchor / the letsfederate CA</td></tr>
+    <tr><td><strong>Who mints it</strong></td><td>Entra / Google / Okta …</td><td>Trust Anchor + Trustmark Issuer (the CA-rooted chain)</td></tr>
+    <tr><td><strong>Where it's checked</strong></td><td>waypoint's OAuth edge, on every <code>/mcp</code> call</td><td>waypoint's downstream policy, at admission (accepted-anchor + chain + mark)</td></tr>
+  </table>
+
+  <h3>So: do you auth again downstream? No.</h3>
+  <ul>
+    <li><strong>Leg 1 — client → waypoint (identity):</strong> Claude runs OAuth 2.1 + PKCE once; the token's
+    <code>aud</code> is waypoint's canonical URL. waypoint verifies it. <em>This is the only sign-in the human
+    does.</em></li>
+    <li><strong>Leg 2 — waypoint → downstream (trust, not identity):</strong>
+      <ul>
+        <li><strong>Local/spawned MCPs (stdio):</strong> waypoint already admitted them by federation policy;
+        it just marshals. No re-auth.</li>
+        <li><strong>Remote MCPs (HTTP):</strong> waypoint is the client to them and presents <em>its own</em>
+        credential — a machine/service token, or its <strong>federation identity</strong>. Not your user token.</li>
+        <li><strong>If a downstream needs to act <em>as you</em> (delegation):</strong> waypoint does
+        <strong>token exchange</strong> (RFC 8693) — swap your inbound token for a downstream-scoped one
+        (<code>aud</code>=that MCP), preserving your identity in the <code>act</code> claim. Still no second
+        prompt.</li>
+      </ul>
+    </li>
+  </ul>
+
+  <h3>Where "the JWT with the CA" and a "federation-minted token" fit</h3>
+  <p class="sub">The CA-signed chain is a <strong>trust</strong> artifact ("this server is a blessed federation
+  member"), not a user-<strong>identity</strong> token. They're complementary axes. The clean composition:</p>
+  <pre>Claude ──(1) user access token, aud=waypoint──▶ waypoint  [verifies identity]
+                                                  │
+                        (2) admission: is downstream federation-trusted?
+                             chain → accepted anchor + required trust mark   [verifies TRUST]
+                                                  │
+   ┌──────────────────────────────────────────────┼───────────────────────────────┐
+   ▼ stdio: marshal (no auth)     ▼ remote: waypoint's service/federation cred      ▼ delegated: token-exchange
+                                                                                     (aud=downstream, act=user)</pre>
+  <p class="muted" style="margin:4px 0 0"><strong>Yes, a federation-minted token is usable</strong> — as the
+  credential waypoint presents downstream to prove entitlement (trust axis), and/or as the target of a
+  token-exchange that binds your identity to a federation-scoped audience. The mistake to avoid is conflating it
+  with the user identity token; keeping the two axes separate is what lets governance and delegation compose.</p>
+
+  <h2>2 · The trustmarket — discovery without a gatekeeper</h2>
+  <div class="card key">
+    <strong>OpenID Federation is deliberately multi-anchor: a verifier chooses which trust anchors it accepts.
+    That is the structural answer to "what if Anthropic becomes the root" — there is no single root unless we
+    build one.</strong>
+  </div>
+  <h3>The capture risk, defused</h3>
+  <p class="sub">If Anthropic adopted OIDF and became "federation implementation #1," the fear is they'd gatekeep
+  which Trustmark Issuers are approved — a stranglehold. But federation doesn't have <em>a</em> root; it has
+  <em>anchors you choose</em>. letsfederate is <strong>one anchor among many</strong>; Anthropic could be
+  another; an enterprise's corp anchor another. A relying party sets its own <code>acceptedAnchors</code>. The
+  defense against capture is architectural: <strong>don't accept a single root.</strong></p>
+  <h3>"Ingest theirs, remint?" — yes, trust-mark composition</h3>
+  <p class="sub">You don't need to <em>be</em> the root to add value. letsfederate can <strong>ingest</strong>
+  another issuer's mark as <em>evidence</em> and issue its <strong>own augmented mark</strong> ("letsfederate
+  certifies X — based on Anthropic's mark <em>plus</em> our SBOM + zero-HIGH-CVE gate"). The mark carries the
+  <code>evidence</code> / <code>adopted_from</code> lineage. An enterprise ingests both and remints
+  <em>their</em> corporate mark. Multi-issuer, layered, no single choke — federation working as designed.</p>
+  <h3>What the trustmarket <em>is</em></h3>
+  <p class="sub">Federation gives <strong>verifiability</strong> (is this chain valid? does it carry mark X?).
+  At scale you also need <strong>discoverability</strong> and <strong>reputation</strong>. The trustmarket
+  (<code>letsfederate.org/trustmarket</code>) is the layer on top:</p>
+  <ul>
+    <li>An index of MCP entities <strong>across multiple anchors</strong> — with their trust marks, provenance
+    (SBOM + signature), and reputation signals.</li>
+    <li><strong>Queryable by trust, semantically</strong> — this is exactly what <code>fedvec</code> (our local
+    semantic search over federation entities) is for: <em>"find a trustworthy calendar MCP, anchored to an
+    anchor I accept, carrying a valid trust mark and a clean SBOM."</em></li>
+    <li>A <strong>market, not a registry-of-one</strong>: multiple issuers/anchors "certify," verifiers "shop"
+    with their own acceptance policy. Trust marks are the listings; anchors are the certifying bodies.</li>
+  </ul>
+  <h3>Embracing trust indicators at scale (the stumbling block)</h3>
+  <table>
+    <tr><th>Problem</th><th>Scalable answer</th></tr>
+    <tr><td>Resolving full chains at call time is expensive</td><td>Precompute a cached <strong>trust receipt / witness</strong> (a signed, dated statement of "chain valid + marks present"), refreshed periodically; verifiers check the cheap receipt and spot-check.</td></tr>
+    <tr><td>Too many signals to reason about</td><td><strong>Tiered indicators:</strong> ① anchored (resolves to an accepted anchor) ② marked (carries required marks — <code>SBOM-verified</code>, <code>zero-HIGH-CVE</code>) ③ reputation (usage/attestation history). One badge summarizes.</td></tr>
+    <tr><td>Revocation across a huge set</td><td>Compact <strong>status lists</strong> / the revocation registry — check one status endpoint, not per-mark (this is assessment item R4).</td></tr>
+    <tr><td>Discovery is the real bottleneck</td><td>Semantic search (<code>fedvec</code>) + trust filters, so "trustworthy" is a <em>query facet</em>, not a manual audit.</td></tr>
+  </table>
+
+  <h2>3 · Enterprise tabletop — waypoint as <em>the</em> governed MCP</h2>
+  <p class="sub">"Let devs use Claude locally, but make fedmgr waypoint THE MCP they connect to — so we marshal,
+  govern, and get telemetry corporately." Here's how that plays out for <strong>Acme Corp</strong>.</p>
+  <h3>The setup</h3>
+  <ul>
+    <li><strong>Corporate trustmarket registry</strong> — Acme security curates: accepted anchors (letsfederate
+    + Acme's own corp anchor), the blessed MCP catalog, and the remint policy (e.g. "only MCPs with a clean SBOM
+    + an Acme mark"). This is <em>their</em> slice of the trustmarket.</li>
+    <li><strong>One endpoint</strong> — <code>waypoint.acme.example</code> (Cloudflare Tunnel + Access → Acme's
+    Entra tenant). Every dev's Claude adds this as its MCP connector. waypoint admits only Acme-blessed
+    downstreams.</li>
+    <li><strong>Governance overlay</strong> — because everything funnels through waypoint: telemetry (every tool
+    call, who/what/when — the OTel spans we built), policy (trust gate + zero-HIGH-CVE gate + data-egress
+    controls), central revocation, and signed audit of what the corporate AI could touch.</li>
+  </ul>
+  <h3>Dev freedom, preserved</h3>
+  <p class="sub">Devs still pick from the blessed catalog and still run their own local MCPs for their personal
+  dev loop. What's governed is the <em>corporate AI plane</em> — what the company's assistant can invoke — and
+  that's waypoint-mediated. "Do your thing; the AI/MCP governance plane is overlaid, not in your way."</p>
+  <h3>Walkthrough</h3>
+  <ol class="step">
+    <li>Security curates the corporate trustmarket: accept anchors, bless MCPs, set the gates.</li>
+    <li>Platform deploys <code>waypoint.acme.example</code> (tunnel + Access → Entra SSO).</li>
+    <li>A dev adds the one connector in Claude; Entra SSO signs them in (one auth).</li>
+    <li>Dev: "use the Jira MCP" → waypoint checks it's Acme-blessed → admits → marshals → logs the call.</li>
+    <li>A new CVE hits an MCP → the SSC gate flips → waypoint <strong>blocks it corp-wide</strong>; telemetry
+    shows the blast radius instantly.</li>
+    <li>Audit: security queries the trustmarket + waypoint telemetry — "what MCPs did engineering's AI touch
+    last quarter, and were any ever un-blessed?"</li>
+  </ol>
+  <p class="muted" style="margin:6px 0 0">Net: one sign-in, governed fan-out, full telemetry — the "overlay AI
+  and MCP governance without blocking devs" outcome. waypoint is the chokepoint <em>by design</em>, which is
+  exactly what makes it the control + observability plane.</p>
+
+  <h2 id="rc">4 · Impact of the MCP 2026-07-28 release candidate</h2>
+  <div class="card key">
+    <strong>The RC goes stateless — and that direction is <em>good</em> for a governed trust chokepoint like
+    waypoint.</strong> It's breaking but not yet final (locked May&nbsp;21&nbsp;2026, publishes
+    <code>2026-07-28</code>); <code>2025-11-25</code> stays valid, so we version-negotiate rather than scramble.
+  </div>
+  <h3>What the RC changes</h3>
+  <ul>
+    <li><strong>Stateless transport:</strong> removes <code>Mcp-Session-Id</code>, the
+    <code>initialize</code>/<code>initialized</code> handshake, the standalone GET SSE stream, and SSE
+    resumability. Per-request <code>_meta</code> carries protocol version + client identity + capabilities; a new
+    <strong><code>server/discover</code></strong> RPC (MUST) advertises the server; cross-call state becomes
+    <strong>explicit server-minted handles passed as ordinary tool arguments</strong>. Still one POST endpoint;
+    SSE is now optional and per-request. New routing headers <code>Mcp-Method</code> / <code>Mcp-Name</code>.</li>
+    <li><strong>Auth tightens</strong> (resource-server model unchanged): CIMD formally <em>replaces</em>
+    deprecated DCR; RFC&nbsp;9207 <code>iss</code> validation; <code>application_type</code> at registration;
+    credentials keyed to (and non-reusable across) issuers.</li>
+    <li><strong>Extensions become first-class</strong> (reverse-DNS ids; MCP Apps + Tasks ship as extensions);
+    OpenTelemetry trace-context (<code>traceparent</code>) is documented in <code>_meta</code>.</li>
+  </ul>
+  <h3>Score against our approach — mostly tailwind</h3>
+  <table>
+    <tr><th>RC change</th><th>Effect on fedmgr / waypoint</th></tr>
+    <tr><td>Stateless + <code>Mcp-Method</code> routing</td><td><span class="win">Win.</span> waypoint can run behind a plain round-robin load balancer — the enterprise "one governed endpoint at scale" story gets easier, no sticky sessions / shared session store.</td></tr>
+    <tr><td>Server-minted handles as tool args</td><td><span class="win">Win, and on-theme.</span> A federation <em>trust receipt</em> / capability is naturally a server-minted handle the model passes back — trust state as an explicit, composable argument instead of hidden transport metadata.</td></tr>
+    <tr><td>OTel trace-context in <code>_meta</code></td><td><span class="win">Win.</span> Our <code>@letsfederate/obs</code> spans propagate natively across the MCP boundary — corporate telemetry/governance becomes end-to-end without bolt-ons.</td></tr>
+    <tr><td>CIMD over DCR + <code>iss</code> validation + credential binding</td><td><span class="win">Reinforces the plan.</span> The OAuth discovery layer we already said to build is <em>exactly</em> right — just target CIMD first and add <code>iss</code> checks.</td></tr>
+    <tr><td>Extensions mechanism</td><td><span class="win">Opportunity.</span> A reverse-DNS <code>org.letsfederate/trust</code> extension could advertise federation trust metadata (anchors, marks) as a first-class capability.</td></tr>
+    <tr><td>Per-session transport <code>Map</code> (waypoint today)</td><td><span class="pending">Debt.</span> Valid for 2025-11-25, dead-end for the RC. Don't deepen it; add a stateless path selected by <code>MCP-Protocol-Version</code>.</td></tr>
+  </table>
+  <h3>Our stance</h3>
+  <p class="sub"><strong>Build the OAuth discovery layer now against <code>2025-11-25</code></strong> (it works with
+  claude.ai today and every auth piece is RC-forward), <strong>and make waypoint's HTTP handler
+  stateless-ready</strong> — read identity from <code>_meta</code>, add <code>server/discover</code>, keep the
+  per-session path only as a negotiated fallback. Treat trust as a <em>server-minted handle</em>, which the RC
+  now blesses as the idiomatic pattern. Net: the RC doesn't invalidate our direction — it validates it and makes
+  the enterprise-scale + telemetry story <em>cleaner</em>. Watch the <code>2026-07-28</code> finalization and the
+  Tier-1 SDK betas before committing RC-only code.</p>
+
+  <footer>
+    Companion to the <a href="waypoint-remote-access.html">remote-access options</a> and
+    <a href="waypoint-cloud-connector.html">connector readiness</a> pages. Token exchange = RFC 8693; audience =
+    RFC 8707; trust marks / entity statements = OpenID Federation. Back to the <a href="index.html">workbench</a>.
+  </footer>
+</div>
+</body>
+</html>
