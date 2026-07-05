@@ -31,6 +31,7 @@ import {
   verifyBlobIndependently,
   toolAvailable,
 } from "../provenance.js";
+import { scanTarget, enforceGate } from "../ssc.js";
 
 const PKG_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -246,10 +247,40 @@ export function registerInitCommands(program: Command): void {
         });
       }
 
-      // Phase 5 — SSC enforcement gate (next slice).
-      log.info("ssc-gate lands next", {
-        pending: ["scan waypoint", "block trustmark on HIGH/CRITICAL"],
-      });
+      // Phase 5 — SSC enforcement gate: scan and compute the block/allow
+      // verdict against the SLA (zero HIGH/CRITICAL). Trust-mark issuance
+      // (a later slice) consults this verdict before signing.
+      if (!repoRoot) {
+        log.warn("ssc-gate skipped", { reason: "run from a checkout" });
+      } else if (!haveTool("trivy")) {
+        log.warn("ssc-gate skipped", { reason: "trivy not on PATH (see fedmgr doctor)" });
+      } else {
+        await withSpan(TRUST_SPANS.verify, () => {
+          const scan = scanTarget(repoRoot);
+          const verdict = enforceGate(scan);
+          log.info("SSC scan complete", {
+            critical: scan.critical,
+            high: scan.high,
+            medium: scan.medium,
+            low: scan.low,
+          });
+          if (verdict.blocked) {
+            log.warn("TRUST MARK BLOCKED — SLA (zero HIGH/CRITICAL) not met", {
+              reasons: verdict.reasons,
+              top: scan.findings
+                .filter((f) => f.severity === "CRITICAL" || f.severity === "HIGH")
+                .slice(0, 5)
+                .map((f) => `${f.severity} ${f.id} ${f.pkg}@${f.version}`),
+            });
+          } else {
+            log.info("SSC gate PASSED — safe to issue a trust mark");
+          }
+        }).catch((err) => {
+          log.error("ssc-gate scan failed", {
+            error: err instanceof Error ? err.message : String(err),
+          });
+        });
+      }
       log.info("init complete", { note: "run 'fedmgr doctor' to check readiness" });
     });
 }
