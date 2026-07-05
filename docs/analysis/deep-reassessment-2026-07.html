@@ -140,17 +140,27 @@
   monolith-era dead scripts/env remain.</p></div>
 
   <div class="method" style="border-color:var(--accent)">
-    <strong>Update 2026-07-05 — the four verified findings are FIXED.</strong> A shared §10 verifier
-    (<code>@letsfederate/oidf-verify</code>, 23 tests, TDD) now performs per-hop key binding, pins the
-    trust-anchor key out-of-band, and verifies trust marks via chain-resolved issuer keys +
-    <code>trust_mark_issuers</code> — never <code>jku</code>. It is wired into waypoint admission (the
-    <code>fakeValidator</code> mock is deleted; admission runs the real engine). The TA now publishes
-    <code>trust_mark_issuers</code>, the TMI emits <code>trust_mark_type</code> + <code>typ:
-    trust-mark+jwt</code>, and a new <code>fedmgr entity config</code> mints a hostable leaf entity
-    configuration (the missing issuing step). See ADR&nbsp;0002. <em>Remaining follow-ups:</em> the CLI
-    <code>trustmark check</code> chain path still uses the legacy kms walker (waypoint — the enforcement
-    point — is fixed; the CLI is a diagnostic and now warns); per-mark revocation-at-verify (G4); the
-    "found — verify interrupted" items below are not yet triaged.
+    <strong>Update 2026-07-05 — the four verified findings are FIXED, and the weak engine is GONE.</strong>
+    A shared §10 verifier (<code>@letsfederate/oidf-verify</code>) now performs per-hop key binding, pins
+    the trust-anchor key out-of-band, follows all <code>authority_hints</code>, and verifies trust marks
+    via chain-resolved issuer keys + <code>trust_mark_issuers</code> — never <code>jku</code>.
+    <br><strong>Tier 1 — every trust decision now routes through it:</strong> waypoint admission (the
+    <code>fakeValidator</code> mock deleted), the MCP tools an AI actually calls
+    (<code>verify_trustmark</code>, <code>check_trust_chain</code>), the CLI <code>trustmark
+    check</code>/<code>adopt</code>, and the TMI's own self-gate. The old jku-rooted
+    <code>validateTrustmark</code> / §10-skipping <code>validateTrustChain</code> were <strong>deleted from
+    kms</strong> — no weak trust-decision path remains reachable (verified: zero consumers before removal).
+    <br><strong>Supply chain:</strong> <code>oci verify-trustmark</code> now refuses a wildcard cosign
+    signer and verifies the embedded trustmark JWS chain-rooted, bound to the image digest. The TA
+    publishes <code>trust_mark_issuers</code>, the TMI emits <code>trust_mark_type</code> + <code>typ:
+    trust-mark+jwt</code>, and <code>fedmgr entity config</code> mints a hostable leaf configuration.
+    See ADR&nbsp;0002. Full suite 272 tests, 0 fail.
+    <br><em>Remaining (Tier 2/3):</em> bind SBOM+scan+mark into one signed in-toto statement and make the
+    zero-HIGH/CRITICAL SLA a hard gate on issuance (today it only logs — <code>init.ts:255</code>, TMI
+    ungated); scrub the test private key committed in history
+    (<code>mcp_protocol_servers/.../mcp-private.pem</code>, reachable from <code>origin/main</code>);
+    per-mark revocation-at-verify (G4); OAuth-edge algorithms allowlist + scope enforcement; then triage
+    the "found — verify interrupted" items below.
   </div>
 
   <h2>Verified findings (a skeptic re-checked these — now FIXED)</h2>

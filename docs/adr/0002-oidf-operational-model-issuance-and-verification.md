@@ -117,6 +117,26 @@ statement = the cert the CA issues**, **entity configuration = the leaf's CSR-si
   and sign intermediate subordinate statements periodically; the online surface serves cached
   statements. `isIntermediate()` + `/intermediates` already anticipate the tier.
 
+## Implementation status (2026-07-05)
+
+**Done.** The shared `@letsfederate/oidf-verify` engine ships (§10 key binding, pinned anchors, all
+authority_hints, trust marks via chain-resolved keys + `trust_mark_issuers`, never `jku`).
+**Every trust decision routes through it** — waypoint admission, the `verify_trustmark` /
+`check_trust_chain` MCP tools, the CLI `trustmark check` / `adopt`, and the TMI self-gate. The weak
+`validateTrustmark` / `validateTrustChain` were **removed from kms** (zero consumers first), so no weak
+path remains. G1 (`fedmgr entity config` mints a hostable leaf configuration) and G3 (TA
+`trust_mark_issuers`, TMI `trust_mark_type` + `typ: trust-mark+jwt`, field rename) landed. `oci
+verify-trustmark` now pins the cosign signer and verifies the embedded mark bound to the image digest.
+
+**Anchor pinning.** All consumers resolve their anchor via `resolvePinnedAnchor`: a hard-pinned JWKS
+(preferred) from config — `WAYPOINT_ANCHOR_JWKS`, `TMI_ANCHOR_JWKS`, the CLI `--anchor-jwks <file>`, or
+inline `trust_anchor_jwks` on the MCP tools — else trust-on-first-use (fetch the anchor EC once) with a
+logged warning. Hard-pinning is strongly recommended for production.
+
+**Not yet done (Tier 2/3):** per-mark revocation-at-verify (G4 — entity revocation already fails the
+chain via a 403 on `federation_fetch`); binding SBOM+scan+trustmark into one signed in-toto statement +
+making the SLA a hard gate on issuance; the resolve endpoint and metadata policy.
+
 ## Scope of the first implementation pass (proposed)
 
 1. **Shared `@letsfederate/oidf-verify`** module: the §10 algorithm above (pin TA, bind keys,
