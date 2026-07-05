@@ -22,6 +22,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createLogger, withSpan, TRUST_SPANS } from "@letsfederate/obs";
+import { caPaths, mintLocalCa, acceptCa, verifyCa } from "../ca.js";
 
 const PKG_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -121,13 +122,34 @@ export function registerInitCommands(program: Command): void {
         process.exit(1);
       }
 
-      // Phase 2 — mint-ca (stub this slice).
+      // Phase 2 — mint (or accept) the trust root, then verify it independently.
       await withSpan(TRUST_SPANS.mintCa, () => {
+        const paths = caPaths();
         if (opts.acceptCa) {
-          log.warn("accept-ca not yet armed", { ref: opts.acceptCa });
+          const r = acceptCa(opts.acceptCa, paths);
+          log.info("accepted provider CA", { ref: opts.acceptCa, cert: r.cert });
         } else {
-          log.warn("mint-ca not yet armed", { plannedDir: "~/.letsfederate/ca" });
+          const existed = existsSync(paths.cert);
+          mintLocalCa(paths);
+          log.info(existed ? "local root CA present (reused)" : "minted local root CA", {
+            dir: paths.dir,
+          });
         }
+        // Independent cross-check: node's X.509 parser must agree it's a valid
+        // CA — a different tool than the one that produced it. Fail-fast if not.
+        const verdict = verifyCa(readFileSync(paths.cert));
+        if (!verdict.ok) {
+          throw new Error(`CA failed independent verification: ${verdict.reasons.join("; ")}`);
+        }
+        log.info("CA verified independently", {
+          subject: verdict.subject,
+          notAfter: verdict.notAfter,
+        });
+      }).catch((err) => {
+        log.error("mint-ca failed — aborting", {
+          error: err instanceof Error ? err.message : String(err),
+        });
+        process.exit(1);
       });
 
       // Phase 3 — ecosystem (real, repo mode).
