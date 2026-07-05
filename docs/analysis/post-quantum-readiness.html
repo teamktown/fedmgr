@@ -121,6 +121,37 @@
   (LTS to 2030) / Node 24.7+. Reserve <strong>SLH-DSA (FIPS 205)</strong> or stateful hash-based (LMS/XMSS) for a
   conservative long-lived root-signing tier, per NSA CNSA 2.0's "sign firmware/roots earliest" ordering.</p>
 
+  <h2>Are we minting PQC-ready CAs today? (tested on this VM)</h2>
+  <div class="card win">
+    <strong>No — but we proved we <em>can</em>, and the blocker is exactly acceptance, as suspected.</strong>
+    Our <code>ca.ts</code> mints EC&nbsp;P-256 via the smallstep step-cli container. On Node&nbsp;24 (OpenSSL
+    3.5.7) we tested the full post-quantum path and it works end-to-end:
+  </div>
+  <table>
+    <tr><th>Test (2026-07-05, Node 24 / OpenSSL 3.5.7)</th><th>Result</th></tr>
+    <tr><td>Node 24 <code>crypto</code> ML-DSA (FIPS 204) keygen + sign + verify + tamper-reject</td><td><span class="st now">✓ works</span> — ml-dsa-44/65/87 (sigs 2420/3309/4627 B)</td></tr>
+    <tr><td>Node 24 ML-KEM-768 (FIPS 203) keygen + <code>encapsulate</code></td><td><span class="st now">✓ works</span></td></tr>
+    <tr><td>Mint an <strong>ML-DSA-65 self-signed CA</strong> (OpenSSL 3.5, CA:TRUE)</td><td><span class="st now">✓ minted</span></td></tr>
+    <tr><td><strong>Node 24 <code>X509Certificate</code> accepts that ML-DSA CA</strong> (parse, ca=true, self-signature verifies)</td><td><span class="st now">✓ accepted</span></td></tr>
+  </table>
+  <h3>So what's stopping us? — acceptance, then tooling</h3>
+  <ul>
+    <li><strong>Acceptance (the real blocker, as you guessed):</strong> a CA is only useful if every relying
+    party recognizes its root algorithm. <em>Within a fedmgr-only federation</em> where every verifier runs
+    Node 24 / OpenSSL 3.5, acceptance is <strong>ready now</strong> — we just proved our own verifier accepts an
+    ML-DSA CA. So a <strong>private PQC trust fabric is technically feasible today.</strong> <em>Across the wider
+    ecosystem</em> it isn't: trust marks are JWS and PQC-JOSE (<code>draft-ietf-cose-dilithium</code>) code
+    points aren't final, no public trust store accepts ML-DSA, and other federation members must run
+    PQC-capable verifiers. Everyone must agree on the same PQC root alg — and the interop standards aren't there.</li>
+    <li><strong>Tooling (solvable):</strong> our CA path uses step-cli (EC/RSA only) and the system OpenSSL is
+    3.0 (no PQC). To mint ML-DSA we'd swap the CA backend to an OpenSSL-3.5 path (a container like the tested
+    <code>alpine:edge</code>, or Node-based issuance) — straightforward, gated only on wanting it.</li>
+  </ul>
+  <p class="sub"><strong>Recommendation:</strong> keep ECDSA the default for interop, but add an <strong>opt-in
+  ML-DSA CA + intra-fedmgr PQC trust-chain mode</strong> — because our own stack already mints <em>and</em>
+  accepts it, we can credibly demo a fully post-quantum private federation now, while being honest that
+  cross-ecosystem interop waits on JOSE-PQC finalization.</p>
+
   <h2>rUv-native option (unchanged, honest)</h2>
   <p class="sub"><strong>QuDAG</strong> (<code>qudag-crypto</code>) targets ML-KEM-768 + ML-DSA, but its own
   testing report flags the implementations as <em>placeholder / not production-ready</em>. A reference, not a
