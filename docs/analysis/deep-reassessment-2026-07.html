@@ -139,7 +139,21 @@
   ta-server↔tmi-server; waypoint drags a 540 MB onnxruntime chain to import one 145-line policy module; and
   monolith-era dead scripts/env remain.</p></div>
 
-  <h2>Verified findings (a skeptic re-checked these)</h2>
+  <div class="method" style="border-color:var(--accent)">
+    <strong>Update 2026-07-05 — the four verified findings are FIXED.</strong> A shared §10 verifier
+    (<code>@letsfederate/oidf-verify</code>, 23 tests, TDD) now performs per-hop key binding, pins the
+    trust-anchor key out-of-band, and verifies trust marks via chain-resolved issuer keys +
+    <code>trust_mark_issuers</code> — never <code>jku</code>. It is wired into waypoint admission (the
+    <code>fakeValidator</code> mock is deleted; admission runs the real engine). The TA now publishes
+    <code>trust_mark_issuers</code>, the TMI emits <code>trust_mark_type</code> + <code>typ:
+    trust-mark+jwt</code>, and a new <code>fedmgr entity config</code> mints a hostable leaf entity
+    configuration (the missing issuing step). See ADR&nbsp;0002. <em>Remaining follow-ups:</em> the CLI
+    <code>trustmark check</code> chain path still uses the legacy kms walker (waypoint — the enforcement
+    point — is fixed; the CLI is a diagnostic and now warns); per-mark revocation-at-verify (G4); the
+    "found — verify interrupted" items below are not yet triaged.
+  </div>
+
+  <h2>Verified findings (a skeptic re-checked these — now FIXED)</h2>
 
   <div class="finding crit">
     <span class="sev crit">Critical</span><span class="verified">✓ adversarially verified · high confidence</span>

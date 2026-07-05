@@ -110,7 +110,12 @@ export function registerTrustmarkCommands(program: Command): void {
 
   // ----- verify -----
   tm.command("verify")
-    .description("Verify a trustmark JWS against its jku JWKS")
+    .description(
+      "Low-level check that a trustmark JWS verifies against its jku JWKS. " +
+      "NOT a trust decision — it trusts the presenter-supplied jku. For an " +
+      "authoritative decision, resolve the issuer to a pinned anchor with " +
+      "'trustmark check' (chain-rooted, via @letsfederate/oidf-verify)."
+    )
     .requiredOption("--jws <token>", "The compact JWS trustmark to verify")
     .option(
       "--jwks <url>",
@@ -140,6 +145,11 @@ export function registerTrustmarkCommands(program: Command): void {
         process.stderr.write(`[trustmark verify] JWKS fetch failed (${jwksUrl}): ${String(err)}\n`);
         process.exit(1);
       }
+
+      process.stderr.write(
+        "[TRUST:WARN] 'trustmark verify' checks the signature against the jku JWKS only — " +
+        "it does NOT root trust in an anchor. Use 'trustmark check' for an authoritative decision.\n"
+      );
 
       // Try each key in the JWKS until one verifies.
       let verified = false;
