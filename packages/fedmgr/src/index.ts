@@ -12,6 +12,7 @@
 import { Command } from "commander";
 import { registerInitCommands } from "./commands/init.js";
 import { registerDoctorCommands } from "./commands/doctor.js";
+import { registerCbomCommands } from "./commands/cbom.js";
 import { registerKeysCommands } from "./commands/keys.js";
 import { registerTrustmarkCommands } from "./commands/trustmark.js";
 import { registerOciCommands } from "./commands/oci.js";
@@ -24,6 +25,7 @@ export const program = new Command("fedmgr")
 
 registerInitCommands(program);
 registerDoctorCommands(program);
+registerCbomCommands(program);
 registerKeysCommands(program);
 registerTrustmarkCommands(program);
 registerOciCommands(program);
