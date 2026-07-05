@@ -100,7 +100,7 @@
   built (<strong>166 tests green</strong>). Phases below are wired ✓ or planned.</p>
   <ol class="steps">
     <li><strong>Validate before run.</strong> <span class="st done">wired ✓</span> Hash our own installed files against a shipped manifest; abort on mismatch. <span class="muted">(Self-consistency, not authorship — the authorship gap rides npm/sigstore provenance. Arms once the publish pipeline emits the manifest.)</span></li>
-    <li><strong>Mint a local CA.</strong> <span class="st todo">next</span> Root CA into <code>~/.letsfederate/ca/</code> via step-cli. <code>--accept-ca</code> to run the provider's CA once we can distribute one safely.</li>
+    <li><strong>Mint a local CA.</strong> <span class="st done">wired ✓</span> Root CA into <code>~/.letsfederate/ca/</code> via step-cli, idempotent. <code>--accept-ca &lt;file&gt;</code> to trust a provider CA. Every CA is <em>independently re-verified by Node's X.509 parser</em> (a different tool than the one that made it) or <code>init</code> aborts.</li>
     <li><strong>Stand up the minimal ecosystem.</strong> <span class="st done">wired ✓</span> Local OCI registry + Trust Anchor + Trustmark Issuer, keys auto-generated (<code>init</code> drives the lab).</li>
     <li><strong>Self-provenance demo.</strong> <span class="st todo">next</span> Build waypoint → SBOM → sign with the local CA/cosign → push to the local registry → attach the trustmark. The ecosystem proves the trust loop <em>on itself</em>.</li>
     <li><strong>Enforce the SLA.</strong> <span class="st todo">next</span> Run SSC <code>scan-all</code> against waypoint; <span class="gate">no trustmark while any HIGH/CRITICAL exists.</span></li>
@@ -127,9 +127,27 @@ fedmgr doctor</pre>
     </ul>
   </div>
 
+  <h2>How we test — no theatre</h2>
+  <div class="card">
+    <ul>
+      <li><strong>Independent cross-checks.</strong> When one tool produces an artifact, a <em>different</em>
+      tool verifies it. The CA is minted by <code>step</code> and re-verified by Node's own X.509 parser (and
+      spot-checked with <code>openssl</code>) — a green means two implementations agree, not that one function
+      returned.</li>
+      <li><strong>Negative tests.</strong> Every checker has a test that feeds it something bad (a non-CA leaf
+      cert) and asserts it's <em>rejected</em>. A rubber-stamp check can't pass those.</li>
+      <li><strong>Honest skips.</strong> Docker-gated tests print <code># SKIP</code> when Docker is absent —
+      reported as skipped, never counted as a pass. We don't manufacture green.</li>
+      <li><strong>Tests are drift detection for you too.</strong> <code>npm test</code> doubles as an
+      environment health check: if a tool's output drifts, an independent verifier stops agreeing and the
+      suite fails loudly. <strong>172 tests, 0 fail, 8 honest skips.</strong></li>
+    </ul>
+  </div>
+
   <footer>
     Live snapshot, hand-updated as we go. For the full teardown that produced these decisions, see the
-    <a href="trustworthy-mcp-assessment.html">trustworthy-MCP assessment</a>.
+    <a href="trustworthy-mcp-assessment.html">trustworthy-MCP assessment</a> and its
+    <a href="trustworthy-mcp-progress.html">progress addendum</a>.
   </footer>
 </div>
 </body>
