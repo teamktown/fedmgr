@@ -106,11 +106,15 @@
     <li><strong>Enforce the SLA.</strong> <span class="st todo">next</span> Run SSC <code>scan-all</code> against waypoint; <span class="gate">no trustmark while any HIGH/CRITICAL exists.</span></li>
   </ol>
   <div class="card">
-    <strong>Try it now (from a checkout):</strong>
-    <ul>
-      <li><code>fedmgr doctor</code> — real host readiness check (human table or <code>--json</code> for an LLM)</li>
-      <li><code>fedmgr init --dry-run</code> — see the phased plan; <code>LOG_FORMAT=json</code> for structured telemetry</li>
-    </ul>
+    <strong>Run it now (SSH'd into the VM):</strong>
+    <pre style="margin:8px 0 4px;padding:12px;background:#0e141c;border:1px solid var(--line);border-radius:8px;overflow-x:auto;font:13px/1.5 var(--mono);color:var(--ink)">cd /home/vagrant/fedmgr
+npm install &amp;&amp; npm run build          <span style="color:var(--muted)"># once</span>
+node packages/fedmgr/dist/bin.js doctor
+node packages/fedmgr/dist/bin.js init --dry-run
+<span style="color:var(--muted)"># handy alias:</span>
+alias fedmgr='node /home/vagrant/fedmgr/packages/fedmgr/dist/bin.js'
+fedmgr doctor</pre>
+    <p class="muted" style="margin:6px 0 0">Full guide: <code>docs/dev/running.md</code> (logging knobs, the lab, running tests). Logs → stderr, data → stdout.</p>
   </div>
 
   <h2>Observability — legible to LLM &amp; human <span class="st done">built: @letsfederate/obs</span></h2>
