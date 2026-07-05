@@ -106,6 +106,33 @@
     <tr><td>Enterprise blessed waypoint</td><td><span class="st rec">Cloudflare Tunnel + Access</span> (or zrok self-hosted)</td><td>Stable <code>waypoint.corp.example</code>, outbound-only connectors, identity-aware edge federating Entra/Google/Okta + service tokens + mTLS. zrok if a fully org-owned control plane is mandatory.</td></tr>
   </table>
 
+  <h2>Priority: what we can actually test now (ranked)</h2>
+  <p class="sub">Production-best (Cloudflare+Access) and test-fastest are different orderings. For <em>proving
+  waypoint is externally reachable and the gate holds</em>, rank by setup friction — fewest accounts/domains
+  first. Each tier is a concrete, testable milestone on this VM.</p>
+  <table>
+    <tr><th>#</th><th>Option</th><th>Setup to test</th><th>Gives</th><th>Test milestone</th></tr>
+    <tr><td>1</td><td><span class="win">cloudflared quick tunnel</span></td><td><code>cloudflared tunnel --url http://localhost:8077</code> — <strong>no account, no domain, no token</strong></td><td>ephemeral <code>*.trycloudflare.com</code> HTTPS</td><td><strong>T0:</strong> public <code>/health</code> 200 + <code>/mcp</code> 401 from the open internet — reachability + gate proven today</td></tr>
+    <tr><td>2</td><td>ngrok free</td><td>one free authtoken</td><td>stable <code>*.ngrok-free.dev</code> + optional edge OAuth</td><td>stable URL to register once discovery lands</td></tr>
+    <tr><td>3</td><td>Tailscale Funnel</td><td>tailscale account + enable funnel</td><td>public <code>*.ts.net</code></td><td>laptop→claude.ai demo</td></tr>
+    <tr><td>4</td><td>zrok (hosted)</td><td>zrok.io enable token</td><td>public share + custom domain (Pro)</td><td>self-host-shaped test</td></tr>
+    <tr><td>5</td><td>Cloudflare Tunnel + Access</td><td>CF account + a domain on CF</td><td>stable <code>waypoint.&lt;domain&gt;</code> + identity edge</td><td>the production/enterprise endpoint</td></tr>
+    <tr><td>6</td><td>SSH -R / raw + allowlist</td><td>a public VPS + TLS you run</td><td>full DIY control</td><td>last resort</td></tr>
+  </table>
+  <div class="card">
+    <strong>The testable rollout:</strong>
+    <ul>
+      <li><strong>T0 — reachability (now):</strong> quick tunnel → confirm the public internet gets
+      <code>/health</code> 200 and <code>/mcp</code> 401. No new code. Proves the tunnel model end-to-end.</li>
+      <li><strong>T1 — claude.ai connect:</strong> build waypoint's OAuth discovery layer (PRM + WWW-Authenticate
+      + external IdP), wire one IdP, keep the quick tunnel → Claude runs the OAuth flow and calls a tool.</li>
+      <li><strong>T2 — production shape:</strong> swap the ephemeral tunnel for Cloudflare Tunnel + Access on a
+      stable hostname; add the enterprise trust policy.</li>
+    </ul>
+    <p class="muted" style="margin:4px 0 0">T0 needs only the (checksum-verified) <code>cloudflared</code> binary
+    and your go to open an outbound tunnel — nothing else on the VM changes.</p>
+  </div>
+
   <h2>The enterprise pattern (two CAs, one tenant, blessed MCPs)</h2>
   <div class="card">
     <p style="margin:0 0 6px">Devs work locally; the org exposes <strong>one blessed <code>waypoint.corp.example</code></strong>
