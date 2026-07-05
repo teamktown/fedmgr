@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>letsfederate.org — content architecture blueprint</title>
+<style>
+  :root{
+    --bg:#0b0f14; --panel:#121821; --panel2:#161d28; --ink:#e6edf3; --muted:#9fb0c3;
+    --line:#22303f; --accent:#4dd0a7; --accent2:#5aa9ff; --warn:#f5c451;
+    --radius:14px; --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 600px at 70% -10%,#132030 0,var(--bg) 55%);
+    color:var(--ink);font:16px/1.6 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;}
+  .wrap{max-width:1020px;margin:0 auto;padding:48px 24px 80px;}
+  .kicker{color:var(--accent);font:600 13px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;}
+  h1{font-size:31px;margin:.35em 0 .15em;}
+  h2{font-size:22px;margin:1.9em 0 .5em;border-bottom:1px solid var(--line);padding-bottom:.35em;}
+  h3{font-size:16.5px;margin:1.4em 0 .3em;color:var(--accent2);}
+  .sub{color:var(--muted);font-size:16.5px;max-width:78ch;}
+  p{max-width:82ch}
+  code{font-family:var(--mono);background:#0e141c;border:1px solid var(--line);padding:2px 6px;border-radius:6px;font-size:.86em;}
+  table{border-collapse:collapse;width:100%;margin:14px 0;font-size:14px;}
+  th,td{border:1px solid var(--line);padding:9px 12px;text-align:left;vertical-align:top;}
+  th{background:var(--panel2);font-weight:600;}
+  .arc{color:var(--accent);font-weight:600}
+  a{color:var(--accent2)}
+  .card{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line);border-radius:12px;padding:16px 20px;margin:14px 0}
+  .status{font:600 11px/1 var(--mono);padding:4px 8px;border-radius:5px}
+  .built{color:var(--accent);border:1px solid #1f4a3c;background:#0e1a16}
+  .next{color:var(--warn);border:1px solid #4a3d1f;background:#1a160e}
+  .footnote{color:var(--muted);font-size:13.5px;border-top:1px solid var(--line);margin-top:40px;padding-top:16px}
+  .flow{font:13px/1.7 var(--mono);color:#cfe0f0;background:#0e141c;border:1px solid var(--line);border-radius:10px;padding:14px 16px;overflow-x:auto;white-space:pre}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="kicker">letsfederate · website plane</div>
+  <h1>letsfederate.org — content architecture blueprint</h1>
+  <p class="sub">How the advocacy site is organized: three story arcs × three audiences × guided
+  journeys, with every piece of content traceable to a demonstrable fedmgr capability (or an honestly
+  labelled roadmap item). This is the map; the <a href="website-ai-infrastructure.html">AI-infrastructure
+  paper</a> is the plumbing and the <a href="deep-reassessment-2026-07.html">deep re-assessment</a> is the
+  raw material. Dated 2026-07-05.</p>
+
+  <h2>1 · The spine: three arcs</h2>
+  <p>Every page, Q&amp;A entry, and demo belongs to exactly one arc, so a visitor always knows which
+  question they're answering. The arcs came straight out of the audit's <code>websiteAngle</code>
+  harvest — the fixes to fedmgr's real gaps <em>are</em> the demonstrations.</p>
+  <table>
+    <tr><th>Arc</th><th>The promise</th><th>The proof (from the audit)</th></tr>
+    <tr><td><span class="arc">Deploy OIDF with AI</span></td>
+      <td>Stand up verifiable trust for MCP and watch a chain resolve, admit, and revoke.</td>
+      <td>The five-minute enroll→issue→admit→revoke loop; the hop-by-hop chain walk showing which key
+        verifies which statement.</td></tr>
+    <tr><td><span class="arc">Bring your own trust</span></td>
+      <td>You choose the anchors; no vendor is the chokepoint. A badge anyone can mint is not trust.</td>
+      <td>The forged-<code>jku</code> trust-mark being rejected because its issuer has no chain to the
+        anchor; the multi-anchor accepted-list.</td></tr>
+    <tr><td><span class="arc">Supply-chain integrity</span></td>
+      <td>A trust mark proves <em>this exact artifact</em> passed your gate, verifiable offline.</td>
+      <td>Digest-bound in-toto binding of SBOM + scan + mark; fedmgr signing its own release; the honest CBOM.</td></tr>
+  </table>
+
+  <h2>2 · The audiences</h2>
+  <p>Three reader profiles, identified in the earlier remote-access work. Content is tagged by audience
+  so journeys and search can lean toward the right depth.</p>
+  <table>
+    <tr><th>Audience</th><th>Arrives asking</th><th>Wants to leave with</th><th>Entry point</th></tr>
+    <tr><td><strong>Local developer</strong></td><td>"Can I try this on my laptop without infra?"</td>
+      <td>The local lab loop run once, one chain walked end to end.</td><td>Home → "Deploy in five minutes" → local lab</td></tr>
+    <tr><td><strong>Enterprise platform team</strong></td><td>"How do we govern which MCP servers our AI may use, on our IdP?"</td>
+      <td>The gateway + anchor model, the scorecard result, a governance conversation.</td><td>Scorecard → tier guidance → "who runs what" + auth-at-scale</td></tr>
+    <tr><td><strong>Federation / IdP operator</strong></td><td>"Is this real OIDF, and will it interop with my federation?"</td>
+      <td>Spec-conformance honesty, the resolve endpoint, trust-mark claim exactness.</td><td>Deep re-assessment → oidf-spec arc → GitHub</td></tr>
+  </table>
+
+  <h2>3 · Guided journeys</h2>
+  <div class="card">
+    <h3>Journey A — "Curious → convinced" (local dev)</h3>
+    <div class="flow">Home hero ("verify, don't assume")
+  → Ask the docs: "can I try this locally?"
+  → deploy-in-five-minutes answer
+  → the enroll→issue→admit→revoke loop (CI-run demo)  [roadmap: examples/02-trusted-mcp]
+  → GitHub / fedmgr init</div>
+  </div>
+  <div class="card">
+    <h3>Journey B — "Assess → plan" (enterprise)</h3>
+    <div class="flow">Scorecard (10 questions)
+  → tier + per-section bars + guidance
+  → weakest section deep-dive (e.g. supply-chain binding, revocation)
+  → "who runs what" + "authenticate at scale"
+  → (opt-in) guided AI assessment tier  [roadmap: Dify+Langfuse]
+  → contact / commercial letsfederate.com</div>
+  </div>
+  <div class="card">
+    <h3>Journey C — "Verify the claims" (operator)</h3>
+    <div class="flow">Deep re-assessment (honest gaps, ranked)
+  → oidf-spec conformance answers (trust_mark_type, resolve endpoint)
+  → the trust-chain walkthrough
+  → paste-a-trust-mark widget  [roadmap: needs trust_mark_type on read]
+  → GitHub issues / spec discussion</div>
+  </div>
+
+  <h2>4 · The scorecard as the capture instrument</h2>
+  <p>The scorecard is how we learn whether the thesis lands. It maps 1:1 onto the arcs, so a low score in
+  a section routes the visitor to that arc's content, and the anonymous aggregate tells us which sections
+  the market is weakest in (and therefore where our advocacy should concentrate).</p>
+  <table>
+    <tr><th>Scorecard section</th><th>Feeds arc</th><th>What a low score triggers</th></tr>
+    <tr><td>Identity &amp; access</td><td>Deploy OIDF with AI</td><td>Route to auth-at-scale; "start with a managed OIDC IdP".</td></tr>
+    <tr><td>Trust decisions</td><td>Bring your own trust</td><td>Route to chain walkthrough + anchor model.</td></tr>
+    <tr><td>Supply-chain integrity</td><td>Supply-chain integrity</td><td>Route to SBOM→sign→gate→bind; "start with syft in CI".</td></tr>
+    <tr><td>AI &amp; MCP exposure</td><td>Deploy OIDF with AI</td><td>Route to gateway model; CBOM for the PQC question.</td></tr>
+  </table>
+  <p>Capture posture (your decision): <strong>anonymous aggregate</strong> — client-side scoring, and on
+  explicit consent a POST of answers + tier + pct only (no identity, no free text, credentials omitted).
+  The endpoint is a Cloudflare Worker → D1; locally it's a no-op preview so the scorecard works offline.
+  A weekly triage reads the aggregate + the Tier-1 "misses" (questions that retrieved poorly) + Langfuse
+  traces from the opt-in tier, and every improvement lands as a content commit that re-mints the corpus.</p>
+
+  <h2>5 · Build status</h2>
+  <table>
+    <tr><th>Piece</th><th>Status</th><th>Where</th></tr>
+    <tr><td>Three-arc information architecture</td><td><span class="status built">built</span></td><td><code>site/public/index.html</code></td></tr>
+    <tr><td>In-browser RVF-WASM Q&amp;A (12 entries, 3 arcs)</td><td><span class="status built">built</span></td><td><code>site/content/qa/*.md</code>, <code>site/public/app/qa.mjs</code></td></tr>
+    <tr><td>Readiness scorecard (10 Q, client-side scoring)</td><td><span class="status built">built</span></td><td><code>site/content/scorecard.json</code>, <code>site/public/scorecard.html</code></td></tr>
+    <tr><td>Corpus mint pipeline (hash-gated, no-empty-shells)</td><td><span class="status built">built</span></td><td><code>site/tools/build-corpus.mjs</code></td></tr>
+    <tr><td>Anonymous-aggregate capture seam</td><td><span class="status built">seam built (stub)</span></td><td><code>site/public/app/capture.mjs</code></td></tr>
+    <tr><td>Cloudflare Worker → D1 capture endpoint</td><td><span class="status next">next (Phase 2)</span></td><td>OpenTofu <code>cloudflare-site</code> module</td></tr>
+    <tr><td>Query-embedding upgrade (transformers.js MiniLM)</td><td><span class="status next">next (Phase 2)</span></td><td>swaps query side only; no remint</td></tr>
+    <tr><td>Opt-in Dify + Langfuse guided tier</td><td><span class="status next">next (Phase 3)</span></td><td>Rackspace-spot k8s / Hetzner via OpenTofu</td></tr>
+    <tr><td>Signed corpus (syft+cosign on the answer set)</td><td><span class="status next">next</span></td><td>same treatment fedmgr gives its releases</td></tr>
+    <tr><td><code>examples/02-trusted-mcp</code> CI demo (the homepage loop)</td><td><span class="status next">next (fedmgr roadmap)</span></td><td>blocks on the leaf-identity fix from the audit</td></tr>
+  </table>
+
+  <p class="footnote">Companion documents: <a href="deep-reassessment-2026-07.html">deep re-assessment</a>
+  (the harvest source) · <a href="website-ai-infrastructure.html">AI-infrastructure comparison</a> (the
+  plumbing) · <a href="index.html">trust workbench</a>. Content truth lives in git under
+  <code>site/content/</code>; the site is minted from it.</p>
+</div>
+</body>
+</html>
