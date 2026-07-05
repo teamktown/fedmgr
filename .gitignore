@@ -190,3 +190,7 @@ packages/*/keys/*.pub.jwk
 
 # SSC scanner raw outputs (ephemeral; only the markdown reports are committed)
 SSC/raw/
+# ...but SSC reports ARE committed — the broad `reports/` rule above would
+# otherwise hide them. Re-include the dir and its contents.
+!SSC/reports/
+!SSC/reports/**
