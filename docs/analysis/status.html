@@ -94,20 +94,29 @@
     <p class="muted" style="margin:10px 0 0">Bonus catch: a clean reinstall repaired ~20+ <code>node_modules</code> files left NUL-corrupted by the earlier disk-full event.</p>
   </div>
 
-  <h2>Phase 2 — <code>fedmgr init</code>: mint a trust ecosystem</h2>
-  <p class="sub">Each step is a fail-fast gate; if it can't be proven, <code>init</code> stops rather than pretend.</p>
+  <h2>Phase 2 — <code>fedmgr init</code>: mint a trust ecosystem <span class="st prog">spine shipped</span></h2>
+  <p class="sub">Each step is a fail-fast gate; if it can't be proven, <code>init</code> stops rather than pretend.
+  The spine — the observability core, the <code>init</code> phase runner, and <code>fedmgr doctor</code> — is
+  built (<strong>166 tests green</strong>). Phases below are wired ✓ or planned.</p>
   <ol class="steps">
-    <li><strong>Validate before run.</strong> Hash our own installed files against a shipped manifest; abort on mismatch. <span class="muted">(Self-consistency, not authorship — the authorship gap rides npm/sigstore provenance, documented plainly.)</span></li>
-    <li><strong>Mint a local CA.</strong> Root CA into <code>~/.letsfederate/ca/</code> via step-cli. <code>--accept-ca</code> stub to run the provider's CA once we can distribute one safely.</li>
-    <li><strong>Stand up the minimal ecosystem.</strong> Local OCI registry + Trust Anchor + Trustmark Issuer, keys auto-generated.</li>
-    <li><strong>Self-provenance demo.</strong> Build waypoint → SBOM → sign with the local CA/cosign → push to the local registry → attach the trustmark as an attestation. The ecosystem proves the trust loop <em>on itself</em>.</li>
-    <li><strong>Enforce the SLA.</strong> Run SSC <code>scan-all</code> against waypoint; <span class="gate">no trustmark while any HIGH/CRITICAL exists.</span></li>
+    <li><strong>Validate before run.</strong> <span class="st done">wired ✓</span> Hash our own installed files against a shipped manifest; abort on mismatch. <span class="muted">(Self-consistency, not authorship — the authorship gap rides npm/sigstore provenance. Arms once the publish pipeline emits the manifest.)</span></li>
+    <li><strong>Mint a local CA.</strong> <span class="st todo">next</span> Root CA into <code>~/.letsfederate/ca/</code> via step-cli. <code>--accept-ca</code> to run the provider's CA once we can distribute one safely.</li>
+    <li><strong>Stand up the minimal ecosystem.</strong> <span class="st done">wired ✓</span> Local OCI registry + Trust Anchor + Trustmark Issuer, keys auto-generated (<code>init</code> drives the lab).</li>
+    <li><strong>Self-provenance demo.</strong> <span class="st todo">next</span> Build waypoint → SBOM → sign with the local CA/cosign → push to the local registry → attach the trustmark. The ecosystem proves the trust loop <em>on itself</em>.</li>
+    <li><strong>Enforce the SLA.</strong> <span class="st todo">next</span> Run SSC <code>scan-all</code> against waypoint; <span class="gate">no trustmark while any HIGH/CRITICAL exists.</span></li>
   </ol>
+  <div class="card">
+    <strong>Try it now (from a checkout):</strong>
+    <ul>
+      <li><code>fedmgr doctor</code> — real host readiness check (human table or <code>--json</code> for an LLM)</li>
+      <li><code>fedmgr init --dry-run</code> — see the phased plan; <code>LOG_FORMAT=json</code> for structured telemetry</li>
+    </ul>
+  </div>
 
-  <h2>Observability — legible to LLM &amp; human</h2>
+  <h2>Observability — legible to LLM &amp; human <span class="st done">built: @letsfederate/obs</span></h2>
   <div class="card">
     <ul>
-      <li><strong>Dual-format logs.</strong> Syslog-style decorated lines for people, structured JSON for machines/LLMs, one global <code>LOG_LEVEL</code>.</li>
+      <li><strong>Dual-format logs.</strong> <span class="st done">done</span> Syslog-style decorated lines for people, structured JSON for machines/LLMs, one global <code>LOG_LEVEL</code>; logs to stderr so stdout stays machine-clean.</li>
       <li><strong>OpenTelemetry-friendly.</strong> OTel <em>API</em> in the code (near-zero cost, no forced exporter); a heavier collector/Grafana sink stays an opt-in compose profile.</li>
       <li><strong>Single pane, lightweight.</strong> <code>docker compose logs</code> as the floor; our own <code>fedmgr logs</code> / <code>fedmgr doctor</code> console as the default pane — minimal deps, minimal support surface.</li>
       <li><strong>Mission-aligned traces.</strong> Span names map to trust operations: <code>mint-ca · build · sbom · sign · push · trustmark · verify</code> — so an assistant can reason about exactly where trust was established or broke.</li>
