@@ -25,8 +25,8 @@
 #   developers).
 #
 # Usage:
-#   scripts/generate-sbom.sh                  # writes ./sbom.cdx.json
-#   scripts/generate-sbom.sh --check          # diffs against repo head, fails on drift (CI use)
+#   SSC/scripts/generate-sbom.sh                  # writes ./sbom.cdx.json
+#   SSC/scripts/generate-sbom.sh --check          # diffs against repo head, fails on drift (CI use)
 #
 # Exit codes:
 #   0  SBOM written / matches HEAD
@@ -36,7 +36,8 @@
 set -euo pipefail
 IFS=$'\n\t'
 
-REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# This script lives at SSC/scripts/, so the repo root is two levels up.
+REPO_ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 OUT="$REPO_ROOT/sbom.cdx.json"
 CHECK_MODE=0
 
@@ -76,7 +77,9 @@ VERSION="${VERSION:-dev}"
 #   .git              — VCS metadata
 #   SSC/raw           — scanner raw outputs (large + ephemeral)
 #   __pycache__       — bytecode caches
-#   node_modules      — leftover from the Node prototype era
+#   node_modules      — installed tree; Syft catalogs npm deps from the
+#                       package-lock.json / package.json instead (no need to
+#                       walk the hoisted install), so exclude the heavy dir.
 syft "dir:." \
   --exclude './.venv-*/**' \
   --exclude './.git/**' \
@@ -84,14 +87,14 @@ syft "dir:." \
   --exclude './**/__pycache__/**' \
   --exclude './node_modules/**' \
   --output "cyclonedx-json=$TMP" \
-  --source-name genesis-shim \
+  --source-name fedmgr \
   --source-version "$VERSION" \
   --quiet
 
 if [ "$CHECK_MODE" -eq 1 ]; then
   if ! diff -q "$TMP" "$OUT" >/dev/null 2>&1; then
     echo "[drift] committed sbom.cdx.json does not match what Syft would produce." >&2
-    echo "       run scripts/generate-sbom.sh and commit the result." >&2
+    echo "       run SSC/scripts/generate-sbom.sh and commit the result." >&2
     exit 2
   fi
   echo "[ok] sbom.cdx.json matches current source"
