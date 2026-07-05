@@ -17,6 +17,7 @@ import { registerKeysCommands } from "./commands/keys.js";
 import { registerTrustmarkCommands } from "./commands/trustmark.js";
 import { registerOciCommands } from "./commands/oci.js";
 import { registerSearchCommands } from "./commands/search.js";
+import { registerEntityCommands } from "./commands/entity.js";
 
 export const program = new Command("fedmgr")
   .description("fedmgr — one front door for OpenID Federation trust in MCP")
@@ -30,3 +31,4 @@ registerKeysCommands(program);
 registerTrustmarkCommands(program);
 registerOciCommands(program);
 registerSearchCommands(program);
+registerEntityCommands(program);
