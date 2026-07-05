@@ -1,0 +1,45 @@
+{
+  "name": "@letsfederate/oidf-verify",
+  "version": "0.0.1",
+  "description": "OpenID Federation §10 trust-chain and trust-mark verification — pinned anchors, key-binding, no jku trust",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "CHANGELOG.md",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/teamktown/fedmgr.git",
+    "directory": "packages/oidf-verify"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "test": "node --test test/*.test.mjs",
+    "prepublishOnly": "npm run build && npm test",
+    "pretest": "npm run build --silent"
+  },
+  "dependencies": {
+    "jose": "^5.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.4.0"
+  },
+  "engines": {
+    "node": ">=24.0.0 <27.0.0"
+  },
+  "license": "MIT"
+}
