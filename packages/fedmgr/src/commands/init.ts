@@ -17,7 +17,6 @@
  */
 import { type Command } from "commander";
 import { spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
 import { existsSync, readFileSync, mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -32,6 +31,7 @@ import {
   toolAvailable,
 } from "../provenance.js";
 import { scanTarget, enforceGate } from "../ssc.js";
+import { verifyChecksums } from "../selfcheck.js";
 
 const PKG_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -70,23 +70,11 @@ function validateSelf(log: ReturnType<typeof createLogger>): void {
     });
     return;
   }
-  const lines = readFileSync(manifest, "utf8").split("\n").filter((l) => l.trim());
-  let checked = 0;
-  for (const line of lines) {
-    const m = line.match(/^([0-9a-f]{64})\s+(.+)$/i);
-    if (!m) continue;
-    const [, expected, rel] = m;
-    const path = resolve(PKG_ROOT, rel);
-    if (!existsSync(path)) {
-      throw new Error(`validate-before-run: missing file ${rel}`);
-    }
-    const actual = createHash("sha256").update(readFileSync(path)).digest("hex");
-    if (actual !== expected.toLowerCase()) {
-      throw new Error(`validate-before-run: checksum mismatch for ${rel}`);
-    }
-    checked++;
+  const verdict = verifyChecksums(PKG_ROOT, manifest);
+  if (!verdict.ok) {
+    throw new Error(`validate-before-run failed: ${verdict.reasons.join("; ")}`);
   }
-  log.info("self-validation passed", { files: checked });
+  log.info("self-validation passed", { files: verdict.checked });
 }
 
 const PLAN: Array<{ n: number; span: string; title: string; detail: string }> = [

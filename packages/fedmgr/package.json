@@ -16,6 +16,8 @@
   },
   "files": [
     "dist",
+    "provenance",
+    "deploy",
     "CHANGELOG.md",
     "README.md"
   ],
@@ -32,7 +34,8 @@
     "build": "tsc -b",
     "dev": "tsx src/bin.ts",
     "test": "node --test test/*.test.mjs",
-    "prepublishOnly": "npm run build && npm test",
+    "provenance:gen": "node ../../scripts/gen-provenance.mjs",
+    "prepublishOnly": "npm run build && npm test && npm run provenance:gen",
     "pretest": "npm run build --silent"
   },
   "dependencies": {

@@ -195,6 +195,10 @@ packages/*/keys/*.pub.jwk
 
 # SSC scanner raw outputs (ephemeral; only the markdown reports are committed)
 SSC/raw/
+
+# validate-before-run manifest is generated from dist at publish (prepublishOnly),
+# not committed — it changes every build. Regenerate: npm run provenance:gen.
+packages/fedmgr/provenance/
 # ...but SSC reports ARE committed — the broad `reports/` rule above would
 # otherwise hide them. Re-include the dir and its contents.
 !SSC/reports/
