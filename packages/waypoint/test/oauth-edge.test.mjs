@@ -5,6 +5,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { generateKeyPair, SignJWT } from "jose";
+import { InvalidTokenError } from "@modelcontextprotocol/sdk/server/auth/errors.js";
 import { makeOAuthEdge } from "../dist/oauth-edge.js";
 
 const ISS = "https://idp.example", AUD = "https://waypoint.example";
@@ -57,4 +58,24 @@ test("tampered signature → reject", async () => {
 });
 test("config without key or jwksUri throws (fail-closed)", () => {
   assert.throws(() => makeOAuthEdge({ issuer: ISS, audience: AUD }));
+});
+
+// Rejections must be the SDK's InvalidTokenError so requireBearerAuth returns
+// 401 — a raw jose error becomes a 500 (leaks nothing useful and looks like a
+// server fault on attacker input). Regression guard for that.
+test("malformed / invalid tokens reject as InvalidTokenError (=> 401, not 500)", async () => {
+  const v = await edge();
+  const cases = [
+    "not.a.jwt",
+    "garbage",
+    await mint({ iss: "https://evil.example" }),
+    await mint({ aud: "https://other.example" }),
+  ];
+  for (const t of cases) {
+    await assert.rejects(
+      () => v.verifyAccessToken(t),
+      (e) => e instanceof InvalidTokenError,
+      `expected InvalidTokenError for token: ${t.slice(0, 12)}…`,
+    );
+  }
 });

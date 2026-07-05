@@ -18,6 +18,7 @@ import {
 } from "jose";
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import type { OAuthTokenVerifier } from "@modelcontextprotocol/sdk/server/auth/provider.js";
+import { InvalidTokenError } from "@modelcontextprotocol/sdk/server/auth/errors.js";
 
 export interface OAuthEdgeConfig {
   /** Expected token issuer (the IdP), e.g. https://accounts.google.com. */
@@ -45,13 +46,20 @@ export function makeOAuthEdge(cfg: OAuthEdgeConfig): OAuthTokenVerifier {
   }
   return {
     async verifyAccessToken(token: string): Promise<AuthInfo> {
-      // jose checks signature, issuer, audience, exp/nbf. Throws on any failure.
-      // The key is either a resolver function (createRemoteJWKSet) or a pinned key.
+      // jose checks signature, issuer, audience, exp/nbf. It throws jose-typed
+      // errors on any failure; we normalize those to the SDK's InvalidTokenError
+      // so requireBearerAuth returns 401 (a raw error would become a 500 — a
+      // server-fault status for attacker-supplied input).
       const opts = { issuer: cfg.issuer, audience: cfg.audience };
-      const { payload } =
-        typeof key === "function"
-          ? await jwtVerify(token, key as JWTVerifyGetKey, opts)
-          : await jwtVerify(token, key as KeyLike | Uint8Array, opts);
+      let payload;
+      try {
+        ({ payload } =
+          typeof key === "function"
+            ? await jwtVerify(token, key as JWTVerifyGetKey, opts)
+            : await jwtVerify(token, key as KeyLike | Uint8Array, opts));
+      } catch (err) {
+        throw new InvalidTokenError(err instanceof Error ? err.message : "invalid token");
+      }
       const scopes =
         typeof payload["scope"] === "string"
           ? (payload["scope"] as string).split(" ").filter(Boolean)
