@@ -18,11 +18,19 @@
 import { type Command } from "commander";
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createLogger, withSpan, TRUST_SPANS } from "@letsfederate/obs";
 import { caPaths, mintLocalCa, acceptCa, verifyCa } from "../ca.js";
+import {
+  generateSbom,
+  validateSbom,
+  ensureCosignKeypair,
+  signBlob,
+  verifyBlobIndependently,
+  toolAvailable,
+} from "../provenance.js";
 
 const PKG_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -177,10 +185,71 @@ export function registerInitCommands(program: Command): void {
         });
       }
 
-      // Phases 4 & 5 — planned for the next slices.
-      log.info("next phases land in the next slices", {
-        pending: ["self-provenance", "ssc-gate"],
+      // Phase 4 — self-provenance: SBOM the artifact, sign it, verify the
+      // signature with an independent tool (node), fail-fast if it doesn't hold.
+      // Self-provenance doesn't need the ecosystem, so it runs even with
+      // --no-up (a fast "prove my supply chain" path).
+      const haveTool = toolAvailable;
+      if (!repoRoot) {
+        log.warn("self-provenance unavailable", {
+          reason: "packaged assets not bundled yet; run from a checkout",
+        });
+      } else if (!haveTool("syft") || !haveTool("cosign")) {
+        log.warn("self-provenance skipped", {
+          reason: "need syft + cosign on PATH (see fedmgr doctor)",
+          syft: haveTool("syft"),
+          cosign: haveTool("cosign"),
+        });
+      } else {
+        const base = resolve(caPaths().dir, "..");
+        const provDir = resolve(base, "provenance");
+        const keyDir = resolve(base, "cosign");
+        mkdirSync(provDir, { recursive: true });
+        // SBOM the workspace root — it carries waypoint's full dependency
+        // closure (deps hoist here); the package dir alone catalogs nothing.
+        const target = repoRoot;
+        const sbom = resolve(provDir, "waypoint.sbom.cdx.json");
+        const bundle = `${sbom}.bundle.json`;
+
+        await withSpan(TRUST_SPANS.sbom, () => {
+          generateSbom(target, sbom);
+          const sv = validateSbom(readFileSync(sbom, "utf8"));
+          if (!sv.ok) throw new Error(`SBOM invalid: ${sv.reasons.join("; ")}`);
+          if (sv.componentCount === 0) {
+            // A valid-but-empty SBOM is a red flag, not a success.
+            log.warn("SBOM catalogued zero components — check the scan target", { path: sbom });
+          }
+          log.info("SBOM generated", {
+            target: "workspace (waypoint dependency closure)",
+            components: sv.componentCount,
+            path: sbom,
+          });
+        }).catch((err) => {
+          log.error("sbom failed — aborting", { error: err instanceof Error ? err.message : String(err) });
+          process.exit(1);
+        });
+
+        await withSpan(TRUST_SPANS.sign, () => {
+          const { pub } = ensureCosignKeypair(keyDir);
+          signBlob(sbom, keyDir, bundle);
+          const verdict = verifyBlobIndependently(sbom, bundle, pub);
+          if (!verdict.ok) {
+            throw new Error(`signature failed independent verification: ${verdict.reasons.join("; ")}`);
+          }
+          log.info("SBOM signed + independently verified", {
+            bundle,
+            verifier: "node:crypto (not cosign)",
+          });
+        }).catch((err) => {
+          log.error("sign failed — aborting", { error: err instanceof Error ? err.message : String(err) });
+          process.exit(1);
+        });
+      }
+
+      // Phase 5 — SSC enforcement gate (next slice).
+      log.info("ssc-gate lands next", {
+        pending: ["scan waypoint", "block trustmark on HIGH/CRITICAL"],
       });
-      log.info("init complete (spine)", { note: "run 'fedmgr doctor' to check readiness" });
+      log.info("init complete", { note: "run 'fedmgr doctor' to check readiness" });
     });
 }
