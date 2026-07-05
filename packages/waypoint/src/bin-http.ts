@@ -8,6 +8,9 @@
  *   WAYPOINT_OIDC_AUDIENCE   this waypoint's audience/identifier
  *   WAYPOINT_OIDC_JWKS_URI   the IdP's JWKS endpoint
  *   WAYPOINT_HTTP_PORT       listen port (default 8077)
+ *   WAYPOINT_RESOURCE_METADATA_URL  public PRM URL to advertise on 401
+ *                            (default ${AUDIENCE}/.well-known/oauth-protected-resource;
+ *                            set to the public URL when behind a tunnel)
  *
  * Inbound = OAuth/OIDC (identity plane). Downstream = OpenID Federation.
  */
@@ -46,8 +49,21 @@ async function main(): Promise<void> {
   await initTelemetrySdk();
   const waypoint = new Waypoint(await loadConfig(), sdkConnector, { trustValidator: kmsTrustValidator });
   await waypoint.start();
-  const verifier = makeOAuthEdge(oauthConfig());
-  startHttpWaypoint({ waypoint, verifier });
+  const oc = oauthConfig();
+  const verifier = makeOAuthEdge(oc);
+  const resourceMetadataUrl =
+    process.env["WAYPOINT_RESOURCE_METADATA_URL"] ??
+    `${oc.audience.replace(/\/$/, "")}/.well-known/oauth-protected-resource`;
+  startHttpWaypoint({
+    waypoint,
+    verifier,
+    oauthMetadata: {
+      resource: oc.audience,
+      authorizationServers: [oc.issuer],
+      scopesSupported: ["mcp"],
+      resourceMetadataUrl,
+    },
+  });
   const admitted = waypoint.admissions().filter((a) => a.admit).map((a) => a.name);
   log.info("waypoint HTTP ready", { admitted, tools: waypoint.listTools().length });
 }

@@ -122,8 +122,10 @@
   <div class="card">
     <strong>The testable rollout:</strong>
     <ul>
-      <li><strong>T0 — reachability (now):</strong> quick tunnel → confirm the public internet gets
-      <code>/health</code> 200 and <code>/mcp</code> 401. No new code. Proves the tunnel model end-to-end.</li>
+      <li><strong>T0 — reachability <span style="color:var(--accent)">✓ PROVEN 2026-07-05</span>:</strong>
+      cloudflared quick tunnel published waypoint at a public <code>*.trycloudflare.com</code> URL;
+      <code>POST /mcp</code> from the open internet returned <strong>401</strong> — full
+      public→edge→tunnel→waypoint→auth-gate path works, gate holds externally. No new code.</li>
       <li><strong>T1 — claude.ai connect:</strong> build waypoint's OAuth discovery layer (PRM + WWW-Authenticate
       + external IdP), wire one IdP, keep the quick tunnel → Claude runs the OAuth flow and calls a tool.</li>
       <li><strong>T2 — production shape:</strong> swap the ephemeral tunnel for Cloudflare Tunnel + Access on a

@@ -24,11 +24,23 @@ import { requireBearerAuth } from "@modelcontextprotocol/sdk/server/auth/middlew
 import type { OAuthTokenVerifier } from "@modelcontextprotocol/sdk/server/auth/provider.js";
 import type { Waypoint } from "./mux.js";
 import { log } from "./telemetry.js";
+import {
+  buildProtectedResourceMetadata,
+  type ProtectedResourceMetadataConfig,
+} from "./oauth-metadata.js";
 
 export interface HttpWaypointOptions {
   waypoint: Waypoint;
   /** The OAuth edge verifier (identity plane). */
   verifier: OAuthTokenVerifier;
+  /**
+   * OAuth discovery (RFC 9728). When present, waypoint serves Protected Resource
+   * Metadata at /.well-known/oauth-protected-resource and points the 401 there,
+   * so a remote MCP client (claude.ai) can discover the authorization server.
+   * `resourceMetadataUrl` is the PUBLIC URL of that document (differs from the
+   * bind address behind a tunnel).
+   */
+  oauthMetadata?: ProtectedResourceMetadataConfig & { resourceMetadataUrl?: string };
 }
 
 /** A per-session MCP Server that delegates to the shared Waypoint. */
@@ -55,12 +67,25 @@ export function createHttpApp(opts: HttpWaypointOptions) {
   const app = express();
   app.use(express.json());
   const transports = new Map<string, StreamableHTTPServerTransport>();
-  const auth = requireBearerAuth({ verifier: opts.verifier });
+  const rmUrl = opts.oauthMetadata?.resourceMetadataUrl;
+  const auth = requireBearerAuth({
+    verifier: opts.verifier,
+    ...(rmUrl ? { resourceMetadataUrl: rmUrl } : {}),
+  });
 
   // Open health endpoint (no auth) for probes/load balancers.
   app.get("/health", (_req: Request, res: Response) => {
     res.json({ status: "ok", tools: opts.waypoint.listTools().length });
   });
+
+  // OAuth discovery (RFC 9728) — open. Lets a remote MCP client find the
+  // authorization server. The 401 above carries resource_metadata pointing here.
+  if (opts.oauthMetadata) {
+    const prm = buildProtectedResourceMetadata(opts.oauthMetadata);
+    app.get("/.well-known/oauth-protected-resource", (_req: Request, res: Response) => {
+      res.json(prm);
+    });
+  }
 
   // All MCP traffic is authenticated by the OAuth edge.
   app.post("/mcp", auth, async (req: Request, res: Response) => {
