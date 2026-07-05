@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Secure remote access for waypoint — MCP exposure</title>
+<style>
+  :root{--bg:#0b0f14;--panel:#121821;--panel2:#161d28;--ink:#e6edf3;--muted:#9fb0c3;--line:#22303f;--accent:#4dd0a7;--accent2:#5aa9ff;--warn:#f5c451;--bad:#ff6b6b;--radius:14px;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;}
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 600px at 70% -10%,#132030 0,var(--bg) 55%);color:var(--ink);font:16px/1.6 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;}
+  .wrap{max-width:1060px;margin:0 auto;padding:40px 24px 90px}
+  a{color:var(--accent2);text-decoration:none}a:hover{text-decoration:underline}
+  .back{font:600 13px/1 var(--mono);color:var(--muted)}
+  .kicker{color:var(--accent);font:600 13px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;margin-top:18px}
+  h1{font-size:31px;margin:.3em 0 .1em}
+  .sub{color:var(--muted);max-width:80ch}
+  h2{font-size:20px;margin:34px 0 6px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+  h3{font-size:15px;margin:18px 0 4px;color:var(--accent)}
+  .card{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px;margin:14px 0}
+  .fork{border-left:3px solid var(--accent2)}
+  ul{margin:8px 0 8px 2px;padding-left:20px}li{margin:6px 0}
+  code{font-family:var(--mono);background:#0e141c;border:1px solid var(--line);padding:2px 6px;border-radius:6px;font-size:.85em}
+  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:13.5px}
+  th,td{text-align:left;padding:8px 9px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font:600 11px/1 var(--mono);letter-spacing:.05em;text-transform:uppercase}
+  .st{font:600 11px/1 var(--mono);padding:3px 7px;border-radius:6px;white-space:nowrap}
+  .yes{color:#0b1a14;background:var(--accent)}.no{color:var(--muted);border:1px solid var(--line)}.mid{color:#1a1405;background:var(--warn)}.rec{color:#0b1a14;background:var(--accent2)}
+  pre{margin:8px 0;padding:12px;background:#0e141c;border:1px solid var(--line);border-radius:8px;overflow-x:auto;font:12.5px/1.5 var(--mono);color:var(--ink)}
+  .q{counter-reset:q;list-style:none;padding-left:0}
+  .q li{position:relative;padding:12px 12px 12px 44px;border:1px solid var(--line);border-radius:10px;margin:9px 0;background:var(--panel)}
+  .q li::before{counter-increment:q;content:"Q"counter(q);position:absolute;left:12px;top:12px;padding:2px 6px;border-radius:6px;background:#0d1622;border:1px solid #1e3a5a;color:var(--accent2);font:700 12px/1 var(--mono)}
+  .muted{color:var(--muted)} .win{color:var(--accent);font-weight:700}
+  footer{margin-top:36px;color:var(--muted);font-size:13px;border-top:1px solid var(--line);padding-top:18px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="index.html">← workbench</a>
+  <div class="kicker">Research + recommendation · 2026-07-05</div>
+  <h1>Getting to waypoint from the outside — safely</h1>
+  <p class="sub">How do we let Claude (or anyone we choose) reach a running waypoint without opening the barn
+  door? This is grounded in the current MCP spec (<code>2025-11-25</code>) and the providers' own docs. It ends
+  with the <a href="#questions">key questions</a> only you can answer — those pick the path.</p>
+
+  <div class="card fork">
+    <strong>The one question that decides everything: where does the MCP <em>client</em> run?</strong>
+    <ul>
+      <li><strong>Path A — on infra you control</strong> (your own cloud pod / dev box running Claude Code, or
+      another local agent). Put both ends on a <strong>private overlay</strong> (Tailscale/WireGuard); waypoint
+      is never public. Least attack surface, least ceremony.</li>
+      <li><strong>Path B — in Anthropic's cloud</strong> (claude.ai connectors, Cowork, the API connector). The
+      connection originates from <strong>Anthropic's cloud even for the desktop apps</strong> — a private overlay
+      can't help. waypoint must be <strong>publicly reachable over HTTPS</strong> and gated by auth (a tunnel +
+      OAuth). Anthropic's egress is the stable range <code>160.79.104.0/21</code>.</li>
+    </ul>
+    Most real setups need <em>both</em>, by audience.
+  </div>
+
+  <h2>Transport &amp; auth reality (what waypoint must speak)</h2>
+  <div class="card">
+    <ul>
+      <li><strong>Transport:</strong> Streamable HTTP (MCP <code>2025-11-25</code>; the old HTTP+SSE is
+      deprecated). One endpoint, <code>POST</code>/<code>GET</code>, optional SSE. Clients send
+      <code>MCP-Protocol-Version</code>. Waypoint already does this on <code>/mcp</code>.</li>
+      <li><strong>Auth = OAuth 2.1 + PKCE(S256), and waypoint is a <em>resource server</em>.</strong> Since spec
+      2025-06-18 the authorization server can be <em>separate</em> — i.e. an external IdP (Entra, Google,
+      Okta/Auth0, Cognito). Waypoint verifies tokens; it doesn't have to <em>be</em> the login system.</li>
+      <li><strong>The discovery handshake waypoint must implement</strong> (this is exactly what's missing today —
+      see the <a href="waypoint-cloud-connector.html">connector-readiness page</a>):
+        <ul>
+          <li>401 with <code>WWW-Authenticate: Bearer resource_metadata="https://waypoint.example/.well-known/oauth-protected-resource"</code></li>
+          <li>serve <strong>Protected Resource Metadata</strong> (RFC 9728) at that path, listing ≥1
+          <code>authorization_servers</code></li>
+          <li>the client then reads the AS metadata (RFC 8414 <em>or</em> OIDC <code>/.well-known/openid-configuration</code> — both accepted in 2025-11-25, which is what makes Entra work)</li>
+          <li>enforce the token <strong>audience</strong> (RFC 8707 <code>resource</code> = waypoint's canonical URL); reject tokens minted for anything else; <strong>never forward the client's token to downstreams</strong></li>
+        </ul>
+      </li>
+      <li><strong>Client registration:</strong> prefer <strong>CIMD</strong> (Client ID Metadata Documents — now
+      the SHOULD default); <strong>DCR</strong> (RFC 7591) still works but is deprecated. <strong>Entra ID
+      supports neither → pre-register the client</strong> (static client id/secret in the connector's advanced
+      settings).</li>
+    </ul>
+    <p class="muted" style="margin:6px 0 0"><strong>The trap to design around:</strong> Anthropic's backend hits
+    your IdP's <code>/token</code>, <code>/register</code> and <code>/.well-known/*</code> from
+    <code>160.79.104.0/21</code>. A WAF in front of your IdP silently breaks the OAuth flow even when
+    <code>/mcp</code> is reachable — <strong>allowlist that range on the IdP too.</strong></p>
+  </div>
+
+  <h2>Exposure options (how the bytes get there)</h2>
+  <table>
+    <tr><th>Option</th><th>Public to Anthropic?</th><th>Custom domain?</th><th>Edge auth (OIDC/SAML)</th><th>Self-host</th><th>Compose sidecar</th><th>Best for</th></tr>
+    <tr><td><strong>Cloudflare Tunnel + Access</strong></td><td><span class="st yes">yes</span></td><td><span class="st yes">yes</span> (your CF zone)</td><td><span class="st yes">strong</span> Entra/Google/Okta + generic OIDC/SAML, service tokens, mTLS</td><td>edge is SaaS; you run <code>cloudflared</code></td><td><span class="st yes">yes</span></td><td><span class="win">Enterprise blessed endpoint</span></td></tr>
+    <tr><td><strong>zrok / OpenZiti</strong></td><td><span class="st yes">yes</span></td><td><span class="st yes">yes</span> (reserved + custom)</td><td><span class="st mid">generic OIDC</span> (Keycloak/Auth0/Okta/Entra)</td><td><span class="st yes">fully</span> (Apache-2.0)</td><td><span class="st yes">yes</span></td><td><span class="win">Solo dev / org-owned control plane</span></td></tr>
+    <tr><td><strong>Tailscale (private tailnet)</strong></td><td><span class="st no">no</span> (Path A only)</td><td>MagicDNS</td><td>tailnet SSO (join-time)</td><td>coord SaaS</td><td><span class="st yes">yes</span></td><td>Path A — your own pod/laptop mesh</td></tr>
+    <tr><td><strong>Tailscale Funnel</strong></td><td><span class="st yes">yes</span></td><td><span class="st no">no</span> (<code>*.ts.net</code>)</td><td><span class="st no">none</span> (strips identity → rely on MCP OAuth)</td><td>coord SaaS</td><td><span class="st yes">yes</span></td><td>Fast laptop→claude.ai demo</td></tr>
+    <tr><td><strong>ngrok</strong></td><td><span class="st yes">yes</span></td><td><span class="st mid">paid</span> (BYO domain)</td><td><span class="st yes">yes</span> OAuth/OIDC edge, IP-restrict, mTLS</td><td>edge SaaS; run agent</td><td><span class="st mid">easy adapt</span></td><td>Quick demo / prototype</td></tr>
+    <tr><td><strong>SSH -R to a VPS</strong></td><td><span class="st yes">yes</span></td><td><span class="st yes">yes</span> (your VPS)</td><td><span class="st no">none</span> (DIY nginx/Caddy)</td><td><span class="st yes">you run all</span></td><td><span class="st mid">autossh</span></td><td>Low-tech, you own the box</td></tr>
+    <tr><td><strong>Raw public + IP allowlist</strong></td><td><span class="st yes">yes</span></td><td>if you add TLS</td><td><span class="st no">none</span> — network-origin only</td><td>you run all</td><td>n/a</td><td><span class="st no">throwaway testing only</span></td></tr>
+  </table>
+
+  <h2>Recommendation, by who's connecting</h2>
+  <table>
+    <tr><th>Scenario</th><th>Pick</th><th>Why</th></tr>
+    <tr><td>Solo dev, own pod/VM</td><td><span class="st rec">zrok public share</span> (or CF Tunnel if you already have a CF domain)</td><td>Self-hostable, free/OSS, outbound-only, public HTTPS — satisfies Anthropic's public-reachability rule with no inbound ports.</td></tr>
+    <tr><td>Laptop → claude.ai (demo)</td><td><span class="st rec">Tailscale Funnel</span> or <span class="st rec">ngrok free</span></td><td>Fastest public HTTPS URL; lean on waypoint's own OAuth since Funnel adds no edge auth. (A plain tailnet won't work — claude.ai needs public reach.)</td></tr>
+    <tr><td>Enterprise blessed waypoint</td><td><span class="st rec">Cloudflare Tunnel + Access</span> (or zrok self-hosted)</td><td>Stable <code>waypoint.corp.example</code>, outbound-only connectors, identity-aware edge federating Entra/Google/Okta + service tokens + mTLS. zrok if a fully org-owned control plane is mandatory.</td></tr>
+  </table>
+
+  <h2>The enterprise pattern (two CAs, one tenant, blessed MCPs)</h2>
+  <div class="card">
+    <p style="margin:0 0 6px">Devs work locally; the org exposes <strong>one blessed <code>waypoint.corp.example</code></strong>
+    behind Cloudflare Access (or a self-hosted zrok/OpenZiti edge). Two trust roots compose cleanly:</p>
+    <ul>
+      <li><strong>Identity plane (who is calling):</strong> the corp's own IdP tenant — <strong>Entra / Google /
+      AWS</strong> — federated at the edge (Access) <em>and/or</em> as waypoint's OAuth resource-server
+      authorization server. This is the <em>corp CA / corp identity</em> leg.</li>
+      <li><strong>Trust plane (which MCP is legitimate):</strong> the <strong>letsfederate CA</strong> as the
+      federation base of trust — waypoint's downstream policy admits only MCP servers whose OpenID-Federation
+      chain resolves to an accepted anchor and carries the required trust mark. This is the "blessed managed
+      artifact" leg you already have (SSC gate → signed SBOM → trust mark).</li>
+    </ul>
+    <p class="muted" style="margin:6px 0 0">Net: the edge answers "is this caller allowed in?" (corp tenant); waypoint
+    answers "is this tool server trustworthy?" (letsfederate federation). Different questions, different roots —
+    layered, not conflated.</p>
+  </div>
+
+  <h2>When local MCPs must reach waypoint themselves</h2>
+  <div class="card">
+    <ul>
+      <li><strong>Same host / compose:</strong> they're on the Docker network — waypoint reaches them over stdio
+      (spawned downstreams) or the compose service DNS. No exposure needed.</li>
+      <li><strong>Dev laptop → central waypoint:</strong> Path A overlay (Tailscale) is ideal — the laptop joins
+      the tailnet and reaches <code>waypoint</code> privately.</li>
+      <li><strong>Across orgs / to the cloud:</strong> Path B — the same tunnel + OAuth edge, with a
+      service-token (non-human) credential for the machine caller rather than a browser OAuth flow.</li>
+    </ul>
+  </div>
+
+  <h2>"Keep it clean and easy" — a compose tunnel sidecar</h2>
+  <p class="sub">The bootstrapping burden you flagged is real. The answer is a one-service sidecar that anyone
+  can drop next to the lab. Examples shipped under <code>examples/tunnels/</code> (Cloudflare + zrok variants,
+  with a README). Cloudflare shape:</p>
+  <pre>services:
+  waypoint-http:
+    build: { context: ../.., dockerfile: Dockerfile.waypoint }   # :8077, OAuth-gated
+    environment: [ WAYPOINT_CONFIG=..., WAYPOINT_OIDC_ISSUER=..., ... ]
+  cloudflared:                        # outbound-only; no inbound ports opened
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate run --token ${CF_TUNNEL_TOKEN}
+    depends_on: [ waypoint-http ]     # CF dashboard maps waypoint.example -> http://waypoint-http:8077
+    restart: unless-stopped</pre>
+  <p class="muted" style="margin:4px 0 0">One secret (<code>CF_TUNNEL_TOKEN</code>), zero firewall changes. The
+  zrok variant is fully self-hostable if you don't want a SaaS edge.</p>
+
+  <h2>The <code>letsfederate.com</code> hosted option</h2>
+  <p class="sub">Every path above asks the user to stand up a tunnel + an IdP relationship + discovery metadata.
+  That's the bootstrapping tax. <strong>letsfederate.com could host the edge</strong> — a managed exposure +
+  authorization-server + trust-anchor service — so a user runs one command and gets
+  <code>their-name.letsfederate.com</code> with OAuth + federation trust already wired. It trades their setup
+  burden for our operational responsibility (an AS and a public edge are real infra to run and secure). That's a
+  product decision, not just an engineering one — flagged as Q7 below.</p>
+
+  <h2 id="questions">Key questions for you</h2>
+  <ol class="q">
+    <li><strong>Client location — the fork.</strong> Are we targeting Path A (your own pods/laptops), Path B
+    (claude.ai / API), or both? First target?</li>
+    <li><strong>Domain &amp; DNS.</strong> Do we standardize on <code>waypoint.&lt;domain&gt;</code>? Whose domain —
+    yours, the user's, or a hosted <code>*.letsfederate.com</code>?</li>
+    <li><strong>IdP for sign-in.</strong> Which authorization server do callers authenticate against —
+    Entra, Google, AWS/Cognito, Okta/Auth0, or a letsfederate-hosted AS? (Sets the OAuth audience and whether we
+    can use CIMD or must pre-register, e.g. Entra.)</li>
+    <li><strong>Exposure tool of record.</strong> Cloudflare Tunnel+Access (easiest production edge, SaaS) vs
+    zrok/OpenZiti (self-hostable, org-owned) as the <em>blessed example</em> we ship and support?</li>
+    <li><strong>Human vs machine callers.</strong> Do we need the non-interactive path (service token / API
+    connector <code>authorization_token</code>) in addition to the browser OAuth flow?</li>
+    <li><strong>Enterprise CA composition.</strong> Confirm the two-root model: corp tenant for identity +
+    letsfederate CA for federation trust. Any org that wants its own CA to also anchor the federation?</li>
+    <li><strong>Self-host vs hosted service.</strong> Do we build only the self-host examples, or also stand up
+    <code>letsfederate.com</code> as a hosted edge/AS to remove the bootstrapping burden? (Biggest scope call.)</li>
+  </ol>
+
+  <footer>
+    Grounded in MCP <code>2025-11-25</code> (modelcontextprotocol.io), Anthropic connector + IP-range docs
+    (platform.claude.com), and Cloudflare / Tailscale / zrok / ngrok docs. Decision framing:
+    <a href="../adr/0001-waypoint-remote-access.md">ADR 0001</a>. Prereq regardless of path: the MCP OAuth
+    discovery layer (<a href="waypoint-cloud-connector.html">connector readiness</a>). Back to the
+    <a href="index.html">workbench</a>.
+  </footer>
+</div>
+</body>
+</html>

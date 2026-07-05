@@ -1,0 +1,24 @@
+# zrok (OpenZiti) public-share sidecar for waypoint — self-hostable, OSS, outbound-only.
+#
+#   ZROK_ENABLE_TOKEN=... docker compose -f examples/tunnels/docker-compose.zrok.yml up -d
+#
+# Gives a public HTTPS URL that proxies to the host-run waypoint-http (:8077).
+# Use the hosted zrok.io or your own self-hosted controller/frontend. For a
+# stable name use a reserved share + custom domain, and gate with generic OIDC
+# (--oauth-provider / OIDC) per https://docs.zrok.io. waypoint keeps enforcing
+# its own OAuth + trust policy behind the share.
+
+services:
+  zrok-share:
+    image: openziti/zrok
+    container_name: waypoint-zrok
+    # Enable the environment once (zrok enable <token>), then share the backend.
+    # web backend-mode proxies HTTP to the target origin.
+    entrypoint: ["sh", "-c"]
+    command:
+      - >
+        zrok enable ${ZROK_ENABLE_TOKEN:?set ZROK_ENABLE_TOKEN} &&
+        zrok share public --backend-mode web --headless http://host.docker.internal:8077
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped

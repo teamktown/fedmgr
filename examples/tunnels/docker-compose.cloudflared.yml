@@ -1,0 +1,21 @@
+# Cloudflare Tunnel sidecar for waypoint — outbound-only, no inbound ports.
+#
+#   CF_TUNNEL_TOKEN=eyJ... docker compose -f examples/tunnels/docker-compose.cloudflared.yml up -d
+#
+# In the Cloudflare Zero Trust dashboard, create the tunnel, copy its token, and
+# map a public hostname (waypoint.<your-domain>) to the ORIGIN below. Then add a
+# Cloudflare Access application on that hostname (your IdP + a service token for
+# the non-human MCP caller). waypoint still enforces its own OAuth + trust policy
+# behind the edge — defense in depth.
+#
+# ORIGIN: this points at a waypoint-http running on the Docker host (:8077). If
+# you containerize waypoint instead, replace with the compose service URL.
+
+services:
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: waypoint-cloudflared
+    command: tunnel --no-autoupdate run --token ${CF_TUNNEL_TOKEN:?set CF_TUNNEL_TOKEN}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # reach the host-run waypoint-http:8077
+    restart: unless-stopped
