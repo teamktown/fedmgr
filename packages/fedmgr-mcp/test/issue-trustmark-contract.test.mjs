@@ -11,10 +11,7 @@
  */
 import test from "node:test";
 import assert from "node:assert/strict";
-import {
-  buildIssueTrustmarkBody,
-  resolveTrustmarkVerifyJwksUrl,
-} from "../dist/index.js";
+import { buildIssueTrustmarkBody } from "../dist/index.js";
 import { IssueRequestSchema } from "@letsfederate/tmi-server/dist/schemas.js";
 
 const CUSTOM_MARK = "https://letsfederate.org/trustmarks/Custom_v1";
@@ -57,12 +54,6 @@ test("#2 issue body omits unset optionals; TMI applies its defaults", () => {
   assert.equal(parsed.data.ttl_s, 3600); // schema default
 });
 
-test("#7 verify JWKS override targets the TMI; defaults to the jku header", () => {
-  // No override → undefined → validateTrustmark uses the trustmark's own jku.
-  assert.equal(resolveTrustmarkVerifyJwksUrl({}), undefined);
-  // An override points at the TMI JWKS, never the TA.
-  assert.equal(
-    resolveTrustmarkVerifyJwksUrl({ tmi_url: "https://tmi.example.com" }),
-    "https://tmi.example.com/.well-known/jwks.json"
-  );
-});
+// #7 (obsolete): the old jku-override path is gone. verify_trustmark no longer
+// trusts the mark's jku at all — it resolves the issuer through the pinned trust
+// anchor (§10) and checks trust_mark_issuers. See verify-trustmark.test.mjs.

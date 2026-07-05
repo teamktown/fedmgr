@@ -17,14 +17,21 @@ import {
 import fs from "node:fs/promises";
 import path from "node:path";
 import {
-  validateTrustmark,
-  validateTrustChain,
   formatTrustMessage,
   type TrustResult,
 } from "@letsfederate/kms";
 // SSRF guard — single source of truth lives in @letsfederate/kms (Finding #10).
 import { assertSafeUrl, UrlSafetyError } from "@letsfederate/kms";
 import { MemoryOpenBaoTransitClient, OpenBaoTransitProvider } from "@letsfederate/kms";
+// Trust decisions route through the shared §10 verifier — never the presenter's
+// jku, always a pinned anchor with per-hop key binding.
+import {
+  verifyTrustChain,
+  verifyTrustMark,
+  resolvePinnedAnchor,
+  type ChainResult,
+  type TrustMarkResult,
+} from "@letsfederate/oidf-verify";
 import type { JWK } from "jose";
 import {
   provisionMcpTrustCircle,
@@ -355,37 +362,77 @@ async function toolIssueTrustmark(args: Record<string, unknown>): Promise<string
 }
 
 /**
- * Resolve the optional JWKS-override URL for trustmark verification.
- *
- * AI-NOTE: trustmarks are signed by the Trust Mark Issuer, so any JWKS override
- * MUST point at the TMI, never the Trust Anchor (review Finding #7 — overriding
- * with the TA JWKS makes every verification fail, since the TA lacks the TMI
- * signing key). Returns undefined by default: the trustmark's own `jku` header
- * (SSRF-checked inside validateTrustmark) already points to the TMI JWKS.
+ * Adapt a shared-verifier result (VALID/INVALID) into the TrustResult shape the
+ * existing formatting helpers expect. The §10 engine is binary and fail-closed —
+ * there is no WARN half-state.
  */
-export function resolveTrustmarkVerifyJwksUrl(
-  args: Record<string, unknown>
-): string | undefined {
-  return args["tmi_url"]
-    ? `${requireSafeUrl(String(args["tmi_url"]), "tmi_url")}/.well-known/jwks.json`
-    : undefined;
+function toTrustResult(r: ChainResult | TrustMarkResult): TrustResult {
+  const isMark = "issuer" in r;
+  return {
+    state: r.state,
+    subject: r.subject,
+    message: r.message,
+    ...(r.trustAnchor ? { trustAnchor: r.trustAnchor } : {}),
+    ...(isMark && (r as TrustMarkResult).issuer ? { issuer: (r as TrustMarkResult).issuer } : {}),
+    ...(isMark && (r as TrustMarkResult).trustMarkType
+      ? { trustmarkId: (r as TrustMarkResult).trustMarkType }
+      : {}),
+    ...("chainDepth" in r && r.chainDepth !== undefined ? { chainDepth: r.chainDepth } : {}),
+    ...(r.state !== "VALID"
+      ? { recommendedAction: "Resolve the entity/mark's chain to a pinned trust anchor; a broken key binding, an unauthorized issuer, or an unreachable statement all fail closed." }
+      : {}),
+  };
+}
+
+/**
+ * Resolve the pinned trust anchor for a tool call: inline `trust_anchor_jwks`
+ * (hard pin, preferred), else trust-on-first-use against `trust_anchor_url`.
+ * Anchor keys are PINNED — the trust decision never depends on a mark's `jku`.
+ */
+async function resolveToolAnchor(args: Record<string, unknown>) {
+  const anchorUrl = requireSafeUrl(String(args["trust_anchor_url"] ?? DEFAULT_TA_URL), "trust_anchor_url");
+  const inline = args["trust_anchor_jwks"];
+  const pinnedJwks =
+    inline && typeof inline === "object" && Array.isArray((inline as { keys?: unknown }).keys)
+      ? (inline as { keys: JWK[] })
+      : undefined;
+  return resolvePinnedAnchor({
+    entityId: anchorUrl,
+    ...(pinnedJwks ? { pinnedJwks } : {}),
+    onTofu: (id) =>
+      log.warn("trust anchor not hard-pinned — trusting on first use", {
+        anchor: id,
+        hint: "pass trust_anchor_jwks for a hard pin",
+      }),
+  });
 }
 
 async function toolVerifyTrustmark(args: Record<string, unknown>): Promise<string> {
   const jws = String(args["jws"]);
-  const jwksUrl = resolveTrustmarkVerifyJwksUrl(args);
-
-  const result = await validateTrustmark(jws, jwksUrl ? { jwksUrl } : {});
-  const formatted = formatTrustMessage(result);
-  const summary = summarizeTrustResult(result);
+  const requiredType = args["required_trust_mark"] ? String(args["required_trust_mark"]) : undefined;
+  let result: TrustResult;
+  try {
+    const anchor = await resolveToolAnchor(args);
+    const r = await verifyTrustMark(jws, {
+      trustAnchors: [anchor],
+      ...(requiredType ? { requiredTypes: [requiredType] } : {}),
+    });
+    result = toTrustResult(r);
+  } catch (err) {
+    // Fail closed — a resolution/fetch error is a denial, never an admit.
+    result = {
+      state: "INVALID",
+      subject: "(unknown)",
+      message: `[TRUST:FAIL] trustmark verification error: ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
   const prefix = trustPrefix(result);
-
   return [
-    `${prefix} Trustmark verification result`,
+    `${prefix} Trustmark verification result (chain-rooted; jku ignored)`,
     "",
-    summary,
+    summarizeTrustResult(result),
     "",
-    `Formatted: ${formatted}`,
+    `Formatted: ${formatTrustMessage(result)}`,
     "",
     "Full result:",
     JSON.stringify(result, null, 2),
@@ -393,31 +440,37 @@ async function toolVerifyTrustmark(args: Record<string, unknown>): Promise<strin
 }
 
 async function toolCheckTrustChain(args: Record<string, unknown>): Promise<string> {
-  const subjectUrl     = requireSafeUrl(String(args["subject_url"]),                           "subject_url");
-  const trustAnchorUrl = requireSafeUrl(String(args["trust_anchor_url"] ?? DEFAULT_TA_URL),    "trust_anchor_url");
-
-  const result = await validateTrustChain(subjectUrl, trustAnchorUrl);
-  const formatted = formatTrustMessage(result);
-  const summary = summarizeTrustResult(result);
-  const prefix = trustPrefix(result);
-
+  const subjectUrl = requireSafeUrl(String(args["subject_url"]), "subject_url");
+  let result: TrustResult;
+  try {
+    const anchor = await resolveToolAnchor(args);
+    const r = await verifyTrustChain(subjectUrl, { trustAnchors: [anchor] });
+    result = toTrustResult(r);
+  } catch (err) {
+    result = {
+      state: "INVALID",
+      subject: subjectUrl,
+      message: `[TRUST:FAIL] chain validation error: ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
   const lines = [
-    `${prefix} Trust chain validation result`,
+    `${trustPrefix(result)} Trust chain validation result (§10 key-binding, pinned anchor)`,
     "",
-    summary,
+    summarizeTrustResult(result),
     "",
-    `Formatted: ${formatted}`,
+    `Formatted: ${formatTrustMessage(result)}`,
     "",
     "Full result:",
     JSON.stringify(result, null, 2),
   ];
-
   if (result.state !== "VALID" && result.recommendedAction) {
     lines.push("", `Action required: ${result.recommendedAction}`);
   }
-
   return lines.join("\n");
 }
+
+/** Test-only handle onto the rewired trust tools (exercised over a hermetic federation). */
+export const __testHandlers = { toolVerifyTrustmark, toolCheckTrustChain };
 
 /**
  * The MCP server capabilities. Advertises the `org.letsfederate/oidf-trust`
@@ -831,7 +884,9 @@ export async function startMcpServer(): Promise<void> {
       {
         name: "verify_trustmark",
         description:
-          "Verify a trustmark JWS token — checks signature, expiry, and issuer.",
+          "Verify a trustmark JWS — chain-rooted (OIDF §10). The mark's issuer must " +
+          "resolve to the PINNED trust anchor and be authorized in its trust_mark_issuers; " +
+          "the mark's own jku header is IGNORED. Not a trust decision otherwise.",
         inputSchema: {
           type: "object" as const,
           properties: {
@@ -839,11 +894,19 @@ export async function startMcpServer(): Promise<void> {
               type: "string",
               description: "Compact JWS trustmark token to verify",
             },
-            tmi_url: {
+            trust_anchor_url: {
               type: "string",
+              description: `Trust anchor entity id/URL the issuer must chain to (default: ${DEFAULT_TA_URL})`,
+            },
+            trust_anchor_jwks: {
+              type: "object",
               description:
-                "Optional Trust Mark Issuer URL whose JWKS overrides the trustmark's jku header. " +
-                "Normally unnecessary — the trustmark's jku already points to the issuing TMI.",
+                "Hard-pinned trust anchor JWKS ({keys:[...]}). Preferred; without it the " +
+                "anchor is trusted on first use (a warning is logged).",
+            },
+            required_trust_mark: {
+              type: "string",
+              description: "Optional: require the mark to be of this trust_mark_type.",
             },
           },
           required: ["jws"],
@@ -852,7 +915,8 @@ export async function startMcpServer(): Promise<void> {
       {
         name: "check_trust_chain",
         description:
-          "Validate the full OIDF trust chain from a subject entity up to the trust anchor.",
+          "Validate the OIDF §10 trust chain from a subject entity to the PINNED trust anchor " +
+          "(per-hop key binding, iss/sub/typ/exp, all authority_hints). Fail-closed.",
         inputSchema: {
           type: "object" as const,
           properties: {
@@ -862,7 +926,13 @@ export async function startMcpServer(): Promise<void> {
             },
             trust_anchor_url: {
               type: "string",
-              description: `Expected trust anchor URL (default: ${DEFAULT_TA_URL})`,
+              description: `Trust anchor entity id/URL (default: ${DEFAULT_TA_URL})`,
+            },
+            trust_anchor_jwks: {
+              type: "object",
+              description:
+                "Hard-pinned trust anchor JWKS ({keys:[...]}). Preferred; without it the " +
+                "anchor is trusted on first use (a warning is logged).",
             },
           },
           required: ["subject_url"],

@@ -433,6 +433,43 @@ export async function verifyTrustMark(
   };
 }
 
+export interface ResolveAnchorOptions {
+  /** The trust anchor's entity id (its base URL). */
+  entityId: string;
+  /** Hard-pinned keys (from config/env/inline). When present, no network fetch. */
+  pinnedJwks?: { keys: JWK[] };
+  /** Optional pinned type → issuer-id authorization. */
+  trustMarkIssuers?: Record<string, string[]>;
+  fetchFn?: typeof fetch;
+  assertUrl?: (u: string) => void;
+  /** Invoked when falling back to trust-on-first-use (so the caller can warn). */
+  onTofu?: (entityId: string) => void;
+}
+
+/**
+ * Resolve a PinnedAnchor for a consumer: prefer hard-pinned keys; otherwise fall
+ * back to trust-on-first-use (fetch + verify the anchor EC once) and invoke
+ * `onTofu` so the caller can log the weaker posture. Every trust-deciding
+ * surface should route anchor resolution through this so pinning is consistent.
+ */
+export async function resolvePinnedAnchor(opts: ResolveAnchorOptions): Promise<PinnedAnchor> {
+  if (opts.pinnedJwks?.keys?.length) {
+    return {
+      entityId: opts.entityId,
+      jwks: opts.pinnedJwks,
+      ...(opts.trustMarkIssuers ? { trustMarkIssuers: opts.trustMarkIssuers } : {}),
+    };
+  }
+  opts.onTofu?.(opts.entityId);
+  const descriptor = await fetchAnchorDescriptor(opts.entityId, {
+    ...(opts.fetchFn ? { fetchFn: opts.fetchFn } : {}),
+    ...(opts.assertUrl ? { assertUrl: opts.assertUrl } : {}),
+  });
+  return opts.trustMarkIssuers
+    ? { ...descriptor, trustMarkIssuers: opts.trustMarkIssuers }
+    : descriptor;
+}
+
 /**
  * Helper for consumers: fetch an anchor's Entity Configuration and derive a
  * PinnedAnchor from it. This is TRUST-ON-FIRST-USE — the caller SHOULD prefer a

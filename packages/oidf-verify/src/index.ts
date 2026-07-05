@@ -11,6 +11,7 @@ export {
   verifyTrustChain,
   verifyTrustMark,
   fetchAnchorDescriptor,
+  resolvePinnedAnchor,
 } from "./verify.js";
 export type {
   PinnedAnchor,
@@ -18,4 +19,5 @@ export type {
   ChainResult,
   VerifyTrustMarkOptions,
   TrustMarkResult,
+  ResolveAnchorOptions,
 } from "./verify.js";

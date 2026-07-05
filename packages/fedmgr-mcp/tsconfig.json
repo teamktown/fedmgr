@@ -15,6 +15,9 @@
     {
       "comment": "Build-only: the issue_trustmark contract test imports TMI's IssueRequestSchema. Ensures tmi-server/dist exists whenever fedmgr-mcp is built.",
       "path": "../tmi-server"
+    },
+    {
+      "path": "../oidf-verify"
     }
   ],
   "include": [
