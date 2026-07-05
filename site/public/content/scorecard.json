@@ -1,0 +1,128 @@
+{
+  "version": 1,
+  "title": "Federation & AI-trust readiness scorecard",
+  "intro": "Ten questions across identity, trust, and supply chain. Runs entirely in your browser; on completion you may optionally share your anonymous answers (no identity, no free text) so we learn whether our guidance is on the mark.",
+  "sections": [
+    {
+      "id": "identity",
+      "title": "Identity & access",
+      "questions": [
+        {
+          "id": "idp",
+          "text": "Do you operate a standards-based identity provider (OIDC or SAML)?",
+          "options": [
+            { "value": "single", "label": "Yes — consolidated on one OIDC IdP", "points": 2 },
+            { "value": "multiple", "label": "Several IdPs / mid-migration", "points": 1, "guidance": "Consolidating on one OIDC issuer first makes waypoint's audience/issuer checks simpler." },
+            { "value": "none", "label": "No standards-based IdP yet", "points": 0, "guidance": "Start with a managed OIDC provider (Entra, Google, Okta) — waypoint delegates login to it rather than reinventing it." }
+          ]
+        },
+        {
+          "id": "token-audience",
+          "text": "Do the tokens your services accept enforce an audience (are they scoped to a specific resource)?",
+          "options": [
+            { "value": "enforced", "label": "Yes — audience is validated", "points": 2 },
+            { "value": "issued-not-checked", "label": "Tokens carry an audience but it isn't checked everywhere", "points": 1, "guidance": "An unchecked audience lets a token minted for one service be replayed at another — enforce it at every resource." },
+            { "value": "no", "label": "No audience scoping", "points": 0, "guidance": "Audience-restricted tokens (RFC 8707) are the baseline for safely exposing an MCP gateway." }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "trust",
+      "title": "Trust decisions",
+      "questions": [
+        {
+          "id": "how-trust",
+          "text": "How do you decide which external tools / MCP servers to trust today?",
+          "options": [
+            { "value": "verified", "label": "Cryptographic verification against an anchor we control", "points": 2 },
+            { "value": "allowlist", "label": "A maintained allowlist of URLs", "points": 1, "guidance": "An allowlist is a good start; a trust chain makes the decision verifiable and revocable rather than manual." },
+            { "value": "adhoc", "label": "Ad hoc — whoever provides the URL", "points": 0, "guidance": "This is precisely the assumption OpenID Federation replaces with verification." }
+          ]
+        },
+        {
+          "id": "own-anchor",
+          "text": "Would you want to run (or already run) your own trust anchor?",
+          "options": [
+            { "value": "own", "label": "Yes — we require our own corporate anchor", "points": 2 },
+            { "value": "hybrid", "label": "Ours plus a public/community anchor", "points": 2 },
+            { "value": "hosted", "label": "Prefer a hosted anchor we don't operate", "points": 1, "guidance": "A hosted anchor is fine — the key is that you can still add your own to the accepted list (bring your own trust)." },
+            { "value": "unsure", "label": "Not sure what that involves", "points": 0, "guidance": "Start local: fedmgr init mints a self-contained anchor on one machine so you can see the model before committing." }
+          ]
+        },
+        {
+          "id": "revocation",
+          "text": "If a trusted tool were compromised, how fast could you withdraw trust everywhere?",
+          "options": [
+            { "value": "instant", "label": "Revoke centrally; verifiers stop admitting it on next check", "points": 2 },
+            { "value": "manual", "label": "Manually update allowlists / redeploy", "points": 1, "guidance": "Manual withdrawal is slow and error-prone; anchor-side revocation consulted at verify time is near-instant." },
+            { "value": "cant", "label": "We couldn't reliably", "points": 0, "guidance": "Revocation that verifiers actually consult on every check is a core reason to adopt a federation." }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "supply-chain",
+      "title": "Supply-chain integrity",
+      "questions": [
+        {
+          "id": "sbom",
+          "text": "Do your build artifacts ship with a Software Bill of Materials (SBOM)?",
+          "options": [
+            { "value": "signed", "label": "Yes — signed SBOMs", "points": 2 },
+            { "value": "unsigned", "label": "SBOMs, but unsigned", "points": 1, "guidance": "An unsigned SBOM can be swapped; sign it (e.g. cosign) so it's bound to a signer." },
+            { "value": "none", "label": "No SBOMs", "points": 0, "guidance": "Start by generating one in CI with syft — it's the raw material for every later trust claim." }
+          ]
+        },
+        {
+          "id": "scan-gate",
+          "text": "Is there a vulnerability-scan gate that can block a release?",
+          "options": [
+            { "value": "hard-gate", "label": "Yes — HIGH/CRITICAL findings block the release", "points": 2 },
+            { "value": "advisory", "label": "We scan, but it's advisory", "points": 1, "guidance": "An advisory scan is a log, not a gate — make a failing scan actually stop issuance." },
+            { "value": "none", "label": "No scanning in the pipeline", "points": 0, "guidance": "A scan gate (e.g. trivy) enforcing zero HIGH/CRITICAL is the letsfederate SLA baseline." }
+          ]
+        },
+        {
+          "id": "binding",
+          "text": "Can a consumer cryptographically bind an attestation to the exact artifact digest they run?",
+          "options": [
+            { "value": "bound", "label": "Yes — attestations reference the artifact digest", "points": 2 },
+            { "value": "sidecar", "label": "We produce attestations but they sit side by side", "points": 1, "guidance": "Bind them: one signed in-toto Statement over the artifact digest ties SBOM + scan + mark into a verifiable chain." },
+            { "value": "no", "label": "No attestations", "points": 0, "guidance": "Digest-bound attestation is what makes a trust mark mean 'this exact image passed', not 'something did'." }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "ai-exposure",
+      "title": "AI & MCP exposure",
+      "questions": [
+        {
+          "id": "mcp-use",
+          "text": "Are AI assistants in your org already calling external MCP tool servers?",
+          "options": [
+            { "value": "gateway", "label": "Yes — through a controlled gateway", "points": 2 },
+            { "value": "direct", "label": "Yes — assistants connect directly", "points": 0, "guidance": "Direct connections skip verification entirely; a gateway (waypoint) is where admission and trust checks belong." },
+            { "value": "not-yet", "label": "Not yet, but planning to", "points": 1, "guidance": "Put the gateway + trust model in place before the first server goes live — it's much harder to retrofit." }
+          ]
+        },
+        {
+          "id": "pqc",
+          "text": "Do you have a post-quantum crypto migration plan?",
+          "options": [
+            { "value": "plan", "label": "Yes — inventory + migration horizon", "points": 2 },
+            { "value": "aware", "label": "Aware of it, no plan yet", "points": 1, "guidance": "Start with a Cryptographic Bill of Materials (CBOM) so you know which algorithms are quantum-vulnerable and by when." },
+            { "value": "no", "label": "Not on our radar", "points": 0, "guidance": "The 2026 federal timeline (key-establishment by 2030, signatures by 2031) makes a CBOM and crypto-agility worth starting now." }
+          ]
+        }
+      ]
+    }
+  ],
+  "tiers": [
+    { "min": 80, "id": "ready", "label": "Federation-ready", "blurb": "You have the identity, trust, and supply-chain foundations. fedmgr is mostly about wiring what you already have into a verifiable chain — start with the trust-chain and digest-bound trust marks." },
+    { "min": 55, "id": "emerging", "label": "Emerging", "blurb": "Strong in places, gaps in others. Pick the lowest-scoring section and close it first — usually revocation or supply-chain binding — then stand up a local anchor to see the whole loop." },
+    { "min": 30, "id": "building", "label": "Building foundations", "blurb": "The pieces are worth assembling deliberately. Begin with a standards-based IdP and SBOMs in CI; those unlock everything downstream. Run fedmgr init locally to see the target state." },
+    { "min": 0, "id": "explorer", "label": "Explorer", "blurb": "Great time to learn the model before committing. Run the local lab, walk one trust chain end to end, and read the bring-your-own-trust arc — no infrastructure required." }
+  ]
+}

@@ -141,6 +141,34 @@ export async function buildCorpus({
   };
   await fsp.mkdir(path.dirname(outFile), { recursive: true });
   await fsp.writeFile(outFile, JSON.stringify(corpus));
+
+  // Publish the dependency-free lib modules the browser shares with Node, so
+  // public/ is self-contained and the runtime uses the exact code the tests
+  // pin (no drift between site/lib and what ships).
+  const siteRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+  const libSrc = path.join(siteRoot, "lib");
+  const libDest = path.join(path.dirname(outFile), "lib");
+  try {
+    await fsp.mkdir(libDest, { recursive: true });
+    for (const f of await fsp.readdir(libSrc)) {
+      if (f.endsWith(".mjs")) await fsp.copyFile(path.join(libSrc, f), path.join(libDest, f));
+    }
+  } catch {
+    /* lib dir optional in synthetic test dirs */
+  }
+
+  // Publish the scorecard bank alongside the site so the browser fetches it
+  // same-origin under public/ (the preview server refuses parent-dir escapes).
+  try {
+    const bankSrc = path.join(contentDir, "scorecard.json");
+    if (fs.existsSync(bankSrc)) {
+      const bankDest = path.join(path.dirname(outFile), "content");
+      await fsp.mkdir(bankDest, { recursive: true });
+      await fsp.copyFile(bankSrc, path.join(bankDest, "scorecard.json"));
+    }
+  } catch {
+    /* scorecard optional */
+  }
   return { rebuilt: true, entries: entries.length, contentHash, outFile };
 }
 

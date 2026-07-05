@@ -117,6 +117,27 @@ An answer with no question.
   );
 });
 
+test("browser atob decode of corpus vectors is byte-identical to the Node Buffer path", async () => {
+  // qa.mjs (browser) decodes base64 via atob+charCodeAt; the build/tests use
+  // Buffer. Pin that they agree exactly, or the browser searches a corrupted
+  // vector space while Node tests stay green.
+  const dir = await makeContentDir();
+  const out = path.join(dir, "corpus.json");
+  await buildCorpus({ contentDir: dir, outFile: out });
+  const corpus = JSON.parse(await fsp.readFile(out, "utf8"));
+
+  const nb = Buffer.from(corpus.vectors, "base64");
+  const nodeF32 = new Float32Array(nb.buffer, nb.byteOffset, nb.length / 4);
+
+  const bin = atob(corpus.vectors);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  const browserF32 = new Float32Array(bytes.buffer);
+
+  assert.equal(browserF32.length, nodeF32.length);
+  for (let i = 0; i < nodeF32.length; i++) assert.equal(browserF32[i], nodeF32[i]);
+});
+
 test("END-TO-END: browser-style load answers a natural-language question", async () => {
   const dir = await makeContentDir();
   const out = path.join(dir, "corpus.json");

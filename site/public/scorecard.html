@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Readiness scorecard — letsfederate</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <nav class="top">
+    <span class="brand">letsfederate</span>
+    <a href="index.html">Home</a>
+    <a href="scorecard.html">Readiness scorecard</a>
+    <a href="index.html#ask">Ask the docs</a>
+    <span class="spacer"></span>
+    <a href="https://github.com/teamktown/fedmgr">fedmgr on GitHub ↗</a>
+  </nav>
+
+  <header style="margin:34px 0 4px">
+    <div class="kicker">2-minute self-assessment</div>
+    <h1 style="font-size:32px">Federation &amp; AI-trust readiness</h1>
+    <p class="lede" id="intro">Ten questions across identity, trust, and supply chain.</p>
+    <div class="privacy">🔒 <b>Runs in your browser.</b> Nothing is sent unless you tick the box at the end.</div>
+  </header>
+
+  <form id="form"></form>
+
+  <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0">
+    <button class="btn" id="score">See my results</button>
+    <span class="hint" id="progress"></span>
+  </div>
+
+  <div id="result"></div>
+
+  <footer>
+    letsfederate · the scorecard is client-side and open; its question bank lives in
+    <code>site/content/scorecard.json</code> and its scoring engine is unit-tested.
+  </footer>
+</div>
+
+<script type="module">
+import { validateBank, score } from "./lib/scorecard.mjs";
+import { submitAnonymous } from "./app/capture.mjs";
+
+const form = document.getElementById("form");
+const answers = {};
+let bank = null;
+
+const bankResp = await fetch("./content/scorecard.json").then(r => r.json());
+const v = validateBank(bankResp);
+if (!v.ok) {
+  form.innerHTML = `<p class="err">Scorecard unavailable: ${v.reasons.join("; ")}</p>`;
+} else {
+  bank = bankResp;
+  document.getElementById("intro").textContent = bank.intro;
+  renderForm();
+}
+
+function renderForm() {
+  for (const s of bank.sections) {
+    for (const q of s.questions) {
+      const div = document.createElement("div");
+      div.className = "q";
+      div.innerHTML = `<div class="sec">${escape(s.title)}</div><div class="qt">${escape(q.text)}</div>`;
+      for (const o of q.options) {
+        const id = `${q.id}__${o.value}`;
+        const label = document.createElement("label");
+        label.className = "opt";
+        label.innerHTML = `<input type="radio" name="${q.id}" value="${o.value}" id="${id}">${escape(o.label)}`;
+        label.querySelector("input").addEventListener("change", () => {
+          answers[q.id] = o.value;
+          div.querySelectorAll(".opt").forEach(el => el.classList.remove("sel"));
+          label.classList.add("sel");
+          updateProgress();
+        });
+        div.appendChild(label);
+      }
+      form.appendChild(div);
+    }
+  }
+  updateProgress();
+}
+
+function totalQuestions() { return bank.sections.reduce((n, s) => n + s.questions.length, 0); }
+function updateProgress() {
+  document.getElementById("progress").textContent =
+    `${Object.keys(answers).length} / ${totalQuestions()} answered`;
+}
+function escape(s){ return String(s).replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])); }
+
+document.getElementById("score").onclick = (e) => {
+  e.preventDefault();
+  const r = score(bank, answers);
+  const tier = bank.tiers.find(t => t.id === r.tier.id);
+  const sectionBars = r.sections.map(s =>
+    `<div class="sectionbar"><div class="lbl"><span>${escape(s.title)}</span><span>${s.points}/${s.max}</span></div>
+     <div class="bar"><i style="width:${s.pct}%"></i></div></div>`).join("");
+  const guidance = r.guidance.length
+    ? `<div class="guidance"><strong>Where to focus next</strong><ul>${r.guidance.map(g=>`<li>${escape(g)}</li>`).join("")}</ul></div>`
+    : "";
+  const unanswered = r.unanswered.length
+    ? `<p class="hint">${r.unanswered.length} unanswered (counted as 0). Answer them for a truer score.</p>` : "";
+  document.getElementById("result").innerHTML = `
+    <div class="result">
+      <div class="tier">${escape(tier.label)}</div>
+      <div class="gauge">${r.pct}%</div>
+      <div class="bar"><i style="width:${r.pct}%"></i></div>
+      <p style="color:#cdd9e5">${escape(tier.blurb)}</p>
+      <div class="sectionbars">${sectionBars}</div>
+      ${guidance}
+      ${unanswered}
+      <div class="guidance">
+        <label class="opt" style="cursor:pointer"><input type="checkbox" id="consent">
+          Share my <b>anonymous</b> answers (no name, no email, no free text) so letsfederate learns whether its guidance is on the mark.</label>
+        <button class="btn ghost" id="submit" style="margin-top:8px" disabled>Submit anonymously</button>
+        <span class="hint" id="submitmsg"></span>
+      </div>
+    </div>`;
+  document.getElementById("result").scrollIntoView({ behavior: "smooth" });
+  const consent = document.getElementById("consent");
+  const submit = document.getElementById("submit");
+  consent.onchange = () => { submit.disabled = !consent.checked; };
+  submit.onclick = async () => {
+    submit.disabled = true;
+    const res = await submitAnonymous({ answers, pct: r.pct, tier: r.tier.id });
+    document.getElementById("submitmsg").textContent = res.captured
+      ? " ✓ thank you — recorded anonymously"
+      : ` (preview mode — would send: ${Object.keys(answers).length} answers, ${r.pct}%, ${r.tier.id})`;
+  };
+};
+</script>
+</body>
+</html>

@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>letsfederate — bring your own trust to AI</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <nav class="top">
+    <span class="brand">letsfederate</span>
+    <a href="index.html">Home</a>
+    <a href="scorecard.html">Readiness scorecard</a>
+    <a href="#ask">Ask the docs</a>
+    <span class="spacer"></span>
+    <a href="https://github.com/teamktown/fedmgr">fedmgr on GitHub ↗</a>
+  </nav>
+
+  <header class="hero" style="margin:40px 0 8px">
+    <div class="kicker">OpenID Federation × MCP</div>
+    <h1>Verify which AI tools to trust.<br>Don't assume them.</h1>
+    <p class="lede">An AI assistant calls external tool servers over MCP. Today it mostly
+    <em>assumes</em> they're legitimate. letsfederate uses <em>OpenID Federation</em> so the assistant —
+    and the human beside it — can <em>verify</em> a trust chain from each tool server up to an anchor
+    <em>you</em> chose, carrying a trust mark that proves it passed your supply-chain gate.</p>
+    <div style="margin-top:18px;display:flex;gap:10px;flex-wrap:wrap">
+      <a class="btn" href="scorecard.html">Take the 2-minute readiness scorecard</a>
+      <a class="btn ghost" href="#ask">Ask the docs anything</a>
+    </div>
+  </header>
+
+  <section class="arcs">
+    <div class="arc">
+      <span class="tag">Deploy OIDF with AI</span>
+      <h3 style="margin-top:6px">A chain you can watch</h3>
+      <p>Stand up an anchor, a trust-mark issuer, and a gateway; enroll an MCP server; watch admission
+      flip from allowed to denied when you revoke. The whole loop on one machine.</p>
+    </div>
+    <div class="arc">
+      <span class="tag">Bring your own trust</span>
+      <h3 style="margin-top:6px">Your anchors, your rules</h3>
+      <p>You choose which anchors your AI stack accepts — your corporate one, a public one, or both. No
+      vendor becomes the chokepoint. A badge anyone can mint is not trust.</p>
+    </div>
+    <div class="arc">
+      <span class="tag">Supply-chain integrity</span>
+      <h3 style="margin-top:6px">A mark that means something</h3>
+      <p>SBOM, signature, and scan bound to the artifact digest — so a trust mark proves <em>this exact
+      image</em> passed the gate, verifiable offline. We sign our own releases too.</p>
+    </div>
+  </section>
+
+  <section class="card" id="ask">
+    <h2 style="margin-top:0">Ask the docs</h2>
+    <p class="hint">Semantic search over our answers, running <b>entirely in your browser</b> via
+    WebAssembly (RuVector RVF). Nothing you type is sent anywhere.</p>
+    <div class="ask-row">
+      <input id="q" type="text" placeholder="e.g. can someone fake a trust mark?" autocomplete="off">
+      <button class="btn" id="go">Ask</button>
+    </div>
+    <div class="chips" id="chips"></div>
+    <div id="out"></div>
+    <div class="privacy">🔒 <b>Private by default</b> — in-browser retrieval, zero backend, nothing leaves this page.</div>
+  </section>
+
+  <footer>
+    <span id="meta">Loading corpus…</span> ·
+    letsfederate is the advocacy home for <a href="https://github.com/teamktown/fedmgr">fedmgr</a>,
+    an OpenID Federation trust backplane for MCP. Static Tier 1 (RVF-WASM); a guided AI assessment
+    tier is opt-in.
+  </footer>
+</div>
+
+<script type="module">
+import { ask, corpusMeta } from "./app/qa.mjs";
+
+const out = document.getElementById("out");
+const input = document.getElementById("q");
+const chips = document.getElementById("chips");
+const examples = [
+  "can someone fake a trust mark?",
+  "how do I connect a cloud AI to my server?",
+  "is fedmgr post-quantum ready?",
+  "what does bring your own trust mean?",
+  "what are you honest about not doing yet?",
+];
+for (const e of examples) {
+  const c = document.createElement("span");
+  c.className = "chip"; c.textContent = e;
+  c.onclick = () => { input.value = e; run(); };
+  chips.appendChild(c);
+}
+
+function render(hits) {
+  if (!hits.length) { out.innerHTML = '<p class="hint">No close match — try rephrasing.</p>'; return; }
+  const [top, ...rest] = hits;
+  const arc = top.entry.arc.replace(/-/g, " ");
+  let html = `<div class="answer">
+    <p class="a-q">${escape(top.entry.question)}</p>
+    <div class="a-body">${escape(top.entry.answer)}</div>
+    <div class="a-meta"><span class="a-arc">${arc}</span><span>similarity ${(top.score).toFixed(2)}</span></div>
+  </div>`;
+  if (rest.length) {
+    html += `<details class="more"><summary>${rest.length} related answer${rest.length>1?"s":""}</summary><ul>`;
+    for (const r of rest) html += `<li><a href="#" data-id="${r.entry.id}">${escape(r.entry.question)}</a> <span class="hint">(${r.entry.arc.replace(/-/g," ")})</span></li>`;
+    html += `</ul></details>`;
+  }
+  out.innerHTML = html;
+  out.querySelectorAll("[data-id]").forEach((a) => {
+    a.onclick = (ev) => { ev.preventDefault(); input.value = hits.find(h=>h.entry.id==a.dataset.id).entry.question; run(); };
+  });
+}
+function escape(s){ return s.replace(/[&<>]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;"}[c])); }
+
+let busy = false;
+async function run() {
+  const q = input.value.trim();
+  if (!q || busy) return;
+  busy = true; out.innerHTML = '<p class="hint">Searching…</p>';
+  try { render(await ask(q, 4)); }
+  catch (e) { out.innerHTML = `<p class="err">${escape(String(e.message||e))}</p>`; }
+  busy = false;
+}
+document.getElementById("go").onclick = run;
+input.addEventListener("keydown", (e) => { if (e.key === "Enter") run(); });
+
+corpusMeta().then((m) => {
+  document.getElementById("meta").textContent =
+    `${m.count} answers · ${m.arcs.length} arcs · ${m.embedder}`;
+}).catch((e) => { document.getElementById("meta").textContent = "corpus load failed: " + e.message; });
+</script>
+</body>
+</html>
