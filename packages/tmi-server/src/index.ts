@@ -183,6 +183,9 @@ app.post(
     const payload = {
       iss: ISSUER,
       sub,
+      // OIDF final claim name. `id` is kept alongside for migration; verifiers
+      // read trust_mark_type first and fall back to id.
+      trust_mark_type: trustmark_id,
       id: trustmark_id,
       iat: now,
       exp: now + ttl_s,
@@ -196,8 +199,13 @@ app.post(
       ...(adopted_from_jws !== undefined ? { adopted_from_jws } : {}),
     };
 
-    // jku points verifiers to our JWKS for signature checking.
-    const trustmark_jws = await kms.signJwt(payload, { jku: JWKS_URL });
+    // typ trust-mark+jwt is REQUIRED by verifiers (finding #3). jku is retained
+    // only as a NON-AUTHORITATIVE convenience hint — the shared verifier ignores
+    // it and resolves the issuer's keys through the trust chain instead.
+    const trustmark_jws = await kms.signJwt(payload, {
+      typ: "trust-mark+jwt",
+      jku: JWKS_URL,
+    });
 
     res.status(201).json({ trustmark_jws, payload });
   })

@@ -83,43 +83,85 @@ test("a downstream that fails to connect is skipped; others still work", async (
 });
 
 // ── Cryptographic admission (requireValidChain) ──────────────────────────────
+//
+// No mock validator: admission runs the REAL @letsfederate/oidf-verify §10
+// engine against a hermetic in-memory federation (real ES256 keys, injectable
+// fetch). This is the "delete fakeValidator; exercise the real engine" fix from
+// the deep re-assessment (test-honesty finding). `good` is a properly enrolled
+// leaf (VALID); `bad` has no path to the pinned anchor (INVALID); `err` makes
+// the fetch throw (validator error → fail-closed deny).
+import { verifyTrustChain } from "@letsfederate/oidf-verify";
+import { makeEntity, entityConfig, subordinateStatement, federation, pin } from "../../oidf-verify/test/harness.mjs";
 
-function fakeValidator(byEntity) {
-  return {
+async function realCryptoFixture() {
+  const ta = await makeEntity(ANCHOR);
+  const good = await makeEntity("https://trust.letsfederate.org/mcp/good");
+  const bad = await makeEntity("https://trust.letsfederate.org/mcp/bad");
+  const fed = federation();
+  fed.setConfig(ta.entityId, await entityConfig(ta, { authorityHints: [] }));
+  // `good` is enrolled: self-config + a subordinate statement binding its key.
+  fed.setConfig(good.entityId, await entityConfig(good, { authorityHints: [ta.entityId] }));
+  fed.setSubordinate(ta.entityId, good.entityId, await subordinateStatement(ta, good));
+  // `bad` self-asserts but the TA never vouched for it (no subordinate stmt).
+  fed.setConfig(bad.entityId, await entityConfig(bad, { authorityHints: [ta.entityId] }));
+  const anchor = pin(ta);
+  // A validator that pins the anchor and uses the hermetic fetch — the real engine.
+  const errFetch = async (url) => {
+    if (String(url).includes("/mcp/err")) throw new Error("TA unreachable");
+    return fed.fetchFn(url);
+  };
+  const validator = {
     validateChain: async (entityId) => {
-      const v = byEntity[entityId];
-      if (v instanceof Error) throw v;
-      return v ?? { valid: false, state: "INVALID", message: "unknown entity" };
+      const r = await verifyTrustChain(entityId, { trustAnchors: [anchor], fetchFn: errFetch });
+      return { valid: r.state === "VALID", state: r.state, message: r.message };
     },
   };
+  return { validator };
 }
-const dsc = (name) => ({ ...ds(name), trustAnchorUrl: "http://localhost:8090" });
+
+const dsc = (name) => ({ ...ds(name), trustAnchorUrl: ANCHOR });
 const cryptoPolicy = { acceptedAnchors: [ANCHOR], requireValidChain: true };
 
 test("crypto admission: VALID chain admits and records chainState", async () => {
   const f = fakeConnector({ good: ["a"] });
-  const validator = fakeValidator({ "https://trust.letsfederate.org/mcp/good": { valid: true, state: "VALID", message: "ok" } });
+  const { validator } = await realCryptoFixture();
   const wp = new Waypoint({ downstreams: [dsc("good")], policy: cryptoPolicy }, f.connector, { trustValidator: validator });
   await wp.start();
   assert.deepEqual(wp.listTools().map((t) => t.name), ["good__a"]);
   assert.equal(wp.admissions().find((a) => a.name === "good").chainState, "VALID");
 });
 
-test("crypto admission: WARN/INVALID chain DENIES (fail-closed) even if policy accepts the anchor", async () => {
+test("crypto admission: INVALID chain DENIES (fail-closed) even if policy accepts the anchor", async () => {
   const f = fakeConnector({ bad: ["a"] });
-  const validator = fakeValidator({ "https://trust.letsfederate.org/mcp/bad": { valid: false, state: "WARN", message: "no authority_hints" } });
+  const { validator } = await realCryptoFixture();
   const wp = new Waypoint({ downstreams: [dsc("bad")], policy: cryptoPolicy }, f.connector, { trustValidator: validator });
   await wp.start();
   assert.equal(wp.listTools().length, 0);
   const a = wp.admissions().find((x) => x.name === "bad");
   assert.equal(a.admit, false);
-  assert.equal(a.chainState, "WARN");
+  assert.equal(a.chainState, "INVALID");
+});
+
+test("crypto admission: unreachable entity → INVALID via the real engine → denied", async () => {
+  // The §10 engine treats an unreachable/unfetchable entity as INVALID
+  // (fail-closed) rather than admitting it.
+  const f = fakeConnector({ err: ["a"] });
+  const { validator } = await realCryptoFixture();
+  const wp = new Waypoint({ downstreams: [dsc("err")], policy: cryptoPolicy }, f.connector, { trustValidator: validator });
+  await wp.start();
+  assert.equal(wp.listTools().length, 0);
+  assert.equal(wp.admissions().find((x) => x.name === "err").admit, false);
 });
 
 test("crypto admission: validator THROWS → denied (fail-closed), never connected", async () => {
+  // Defense in depth: if the validator itself dies, mux must deny, not admit.
   const f = fakeConnector({ err: ["a"] });
-  const validator = fakeValidator({ "https://trust.letsfederate.org/mcp/err": new Error("TA unreachable") });
-  const wp = new Waypoint({ downstreams: [dsc("err")], policy: cryptoPolicy }, f.connector, { trustValidator: validator });
+  const throwingValidator = {
+    validateChain: async () => {
+      throw new Error("TA unreachable");
+    },
+  };
+  const wp = new Waypoint({ downstreams: [dsc("err")], policy: cryptoPolicy }, f.connector, { trustValidator: throwingValidator });
   await wp.start();
   assert.equal(wp.listTools().length, 0);
   assert.match(wp.admissions().find((x) => x.name === "err").reasons.join(" "), /validation error/);

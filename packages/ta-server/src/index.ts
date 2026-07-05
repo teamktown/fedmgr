@@ -100,6 +100,28 @@ const DB_PATH =
   process.env["TA_DB_PATH"] ?? path.resolve("ta.db");
 const TRUST_POLICY = trustPolicyFromEnv();
 
+/**
+ * TA_TRUST_MARK_ISSUERS — JSON object `{ "<trust_mark_type>": ["<issuer id>"] }`
+ * published in the TA entity configuration's top-level `trust_mark_issuers`
+ * claim (OIDF §5.1.1). This is how the anchor authorizes which TMI may mint
+ * which mark type; verifiers use it instead of trusting a mark's own `jku`.
+ */
+const TRUST_MARK_ISSUERS: Record<string, string[]> = (() => {
+  const raw = process.env["TA_TRUST_MARK_ISSUERS"];
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw) as Record<string, string[]>;
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) return parsed;
+    throw new Error("must be a JSON object of type → issuer-id array");
+  } catch (err) {
+    process.stderr.write(
+      `[ta-server] [TRUST:FAIL] TA_TRUST_MARK_ISSUERS is not valid JSON: ${String(err)}\n` +
+      '  Example: TA_TRUST_MARK_ISSUERS=\'{"https://letsfederate.org/tm/mcp":["https://tmi.example"]}\'\n'
+    );
+    process.exit(78); // EX_CONFIG
+  }
+})();
+
 if (!ENTITY_ID.startsWith("http")) {
   process.stderr.write(
     `[ta-server] [TRUST:FAIL] TA_ENTITY_ID must be an HTTP(S) URL, got: "${ENTITY_ID}"\n` +
@@ -298,6 +320,7 @@ app.get(
           federationListEndpoint: `${ENTITY_ID}/federation_list`,
           trustMarkStatusEndpoint: `${ENTITY_ID}/trust-mark-status`,
         }),
+        trustMarkIssuers: TRUST_MARK_ISSUERS,
       },
       kms
     );

@@ -6,7 +6,8 @@
     "composite": true
   },
   "references": [
-    { "path": "../fedmgr-mcp" }
+    { "path": "../fedmgr-mcp" },
+    { "path": "../oidf-verify" }
   ],
   "include": [
     "src/**/*"

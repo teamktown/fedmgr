@@ -366,13 +366,20 @@ export function createEnrollmentRouter(
       );
 
       res.status(200).json({
-        entity_id:               enrollment.entityId,
-        status:                  "active",
-        signed_entity_statement: signedStatement,
+        entity_id:                    enrollment.entityId,
+        status:                       "active",
+        // Canonical name — this JWT is the SUBORDINATE STATEMENT (iss=TA,
+        // sub=you), not your own entity configuration. You still self-publish
+        // your entity configuration at <you>/.well-known/openid-federation.
+        signed_subordinate_statement: signedStatement,
+        // Deprecated alias (was misleadingly named); kept for one release.
+        signed_entity_statement:      signedStatement,
         message:
           `[TRUST:VALID] ${enrollment.entityId} is now an active subordinate of ${entityId}. ` +
-          "The signed_entity_statement is your subordinate statement JWT — " +
-          "verify it with: fedmgr trustmark check --sub " + enrollment.entityId,
+          "The signed_subordinate_statement is the TA's statement ABOUT you (it binds your keys); " +
+          "you must ALSO self-host your own entity configuration at " +
+          `${enrollment.entityId}/.well-known/openid-federation. ` +
+          "Verify with: fedmgr trustmark check --sub " + enrollment.entityId,
       });
     }
   );

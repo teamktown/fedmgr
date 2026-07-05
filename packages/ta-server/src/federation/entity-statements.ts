@@ -27,6 +27,14 @@ export type EntityStatementConfig = {
   ttlSeconds?: number;
   /** Additional metadata blocks to include. */
   metadata?: Record<string, unknown>;
+  /**
+   * Top-level `trust_mark_issuers` claim (OIDF §5.1.1). Published by a Trust
+   * Anchor to declare which issuer entity IDs may mint each trust mark type:
+   * `{ "<trust_mark_type>": ["<issuer entity id>", ...] }`. This is what lets a
+   * verifier authorize a trust mark's (type, issuer) pair without trusting the
+   * mark's own `jku`.
+   */
+  trustMarkIssuers?: Record<string, string[]>;
 };
 
 /**
@@ -51,6 +59,10 @@ export async function signEntityStatement(
       ? { authority_hints: config.authorityHints }
       : {}),
     ...(config.metadata ? { metadata: config.metadata } : {}),
+    // trust_mark_issuers is a TOP-LEVEL claim per spec, not metadata.
+    ...(config.trustMarkIssuers && Object.keys(config.trustMarkIssuers).length > 0
+      ? { trust_mark_issuers: config.trustMarkIssuers }
+      : {}),
   };
 
   return kms.signJwt(payload, {
