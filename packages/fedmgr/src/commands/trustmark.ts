@@ -17,18 +17,69 @@
  *   let verifiers trace back to the original issuer's chain.
  */
 import { type Command } from "commander";
+import fs from "node:fs";
 import { importJWK, jwtVerify, decodeProtectedHeader, decodeJwt } from "jose";
 import {
-  validateTrustmark,
-  validateTrustChain,
   applyPolicy,
   formatTrustMessage,
   assertSafeUrl,
   UrlSafetyError,
   type TrustPolicy,
+  type TrustResult,
 } from "@letsfederate/kms";
+import {
+  verifyTrustChain,
+  verifyTrustMark,
+  resolvePinnedAnchor,
+  type ChainResult,
+  type TrustMarkResult,
+  type PinnedAnchor,
+} from "@letsfederate/oidf-verify";
 
 const DEFAULT_TMI = "http://localhost:8080";
+
+/** Adapt a §10-verifier result into the TrustResult shape used for formatting/policy. */
+function toTrustResult(r: ChainResult | TrustMarkResult): TrustResult {
+  const isMark = "issuer" in r;
+  return {
+    state: r.state,
+    subject: r.subject,
+    message: r.message,
+    ...(r.trustAnchor ? { trustAnchor: r.trustAnchor } : {}),
+    ...(isMark && (r as TrustMarkResult).issuer ? { issuer: (r as TrustMarkResult).issuer } : {}),
+    ...(isMark && (r as TrustMarkResult).trustMarkType
+      ? { trustmarkId: (r as TrustMarkResult).trustMarkType }
+      : {}),
+    ...("chainDepth" in r && r.chainDepth !== undefined ? { chainDepth: r.chainDepth } : {}),
+    ...(r.state !== "VALID"
+      ? { recommendedAction: "Ensure the entity/mark chains to your pinned trust anchor with an intact key binding, and (for marks) that the issuer is in the anchor's trust_mark_issuers." }
+      : {}),
+  };
+}
+
+/**
+ * Resolve the pinned trust anchor for a CLI trust decision: a --anchor-jwks
+ * file (hard pin, preferred) else trust-on-first-use against the anchor URL.
+ */
+async function resolveCliAnchor(anchorUrl: string, anchorJwksFile?: string): Promise<PinnedAnchor> {
+  let pinnedJwks: { keys: unknown[] } | undefined;
+  if (anchorJwksFile) {
+    try {
+      pinnedJwks = JSON.parse(fs.readFileSync(anchorJwksFile, "utf8")) as { keys: unknown[] };
+    } catch (err) {
+      throw new Error(`[TRUST:FAIL] cannot read --anchor-jwks ${anchorJwksFile}: ${String(err)}`);
+    }
+  }
+  return resolvePinnedAnchor({
+    entityId: anchorUrl,
+    ...(pinnedJwks ? { pinnedJwks: pinnedJwks as PinnedAnchor["jwks"] } : {}),
+    onTofu: (id) =>
+      process.stderr.write(
+        `[TRUST:WARN] trust anchor ${id} not hard-pinned — trusting on first use. ` +
+        "Pass --anchor-jwks <file> for a hard pin.\n"
+      ),
+  });
+}
 const DEFAULT_TRUSTMARK_ID =
   "https://letsfederate.org/trustmarks/AssessedAndPasses_minQuality_v1";
 
@@ -197,6 +248,10 @@ export function registerTrustmarkCommands(program: Command): void {
       "Trustmark JWS to validate (optional — validates JWS then chain)"
     )
     .option(
+      "--anchor-jwks <file>",
+      "Hard-pin the trust anchor keys from a JWKS JSON file (recommended)"
+    )
+    .option(
       "--policy <mode>",
       "Trust policy: strict (exit 1 on INVALID) | permissive | audit",
       "strict"
@@ -207,60 +262,60 @@ export function registerTrustmarkCommands(program: Command): void {
         sub: string;
         ta: string;
         jws?: string;
+        anchorJwks?: string;
         policy: string;
         json?: boolean;
       }) => {
         const policy = (opts.policy as TrustPolicy) ?? "strict";
 
-        // ── Step 1: validate JWS if provided ────────────────────────────
+        let anchor: PinnedAnchor;
+        try {
+          anchor = await resolveCliAnchor(opts.ta, opts.anchorJwks);
+        } catch (err) {
+          process.stderr.write(`${(err as Error).message}\n`);
+          process.exit(1);
+        }
+
+        // ── Step 1: verify the trust mark (chain-rooted) if provided ─────
         if (opts.jws) {
-          const jwsResult = await validateTrustmark(opts.jws);
+          const jwsResult = toTrustResult(
+            await verifyTrustMark(opts.jws, { trustAnchors: [anchor] })
+          );
           if (opts.json) {
             process.stdout.write(JSON.stringify(jwsResult, null, 2) + "\n");
           } else {
             process.stderr.write(formatTrustMessage(jwsResult) + "\n");
             if (jwsResult.recommendedAction) {
-              process.stderr.write(
-                `  Recommended: ${jwsResult.recommendedAction}\n`
-              );
+              process.stderr.write(`  Recommended: ${jwsResult.recommendedAction}\n`);
             }
           }
-
           if (jwsResult.state === "INVALID") {
             if (policy === "strict") process.exit(1);
             if (policy === "permissive")
-              process.stderr.write(
-                "  [TRUST:POLICY] Continuing in permissive mode.\n"
-              );
-          }
-          if (jwsResult.state === "WARN" && policy === "strict") {
-            process.exit(2);
+              process.stderr.write("  [TRUST:POLICY] Continuing in permissive mode.\n");
           }
         }
 
-        // ── Step 2: validate the OIDF trust chain ────────────────────────
-        const chainResult = await validateTrustChain(opts.sub, opts.ta);
+        // ── Step 2: verify the OIDF §10 trust chain ──────────────────────
+        const chainResult = toTrustResult(
+          await verifyTrustChain(opts.sub, { trustAnchors: [anchor] })
+        );
 
         if (opts.json) {
           process.stdout.write(JSON.stringify(chainResult, null, 2) + "\n");
         } else {
           process.stderr.write(formatTrustMessage(chainResult) + "\n");
           if (chainResult.recommendedAction) {
-            process.stderr.write(
-              `  Recommended: ${chainResult.recommendedAction}\n`
-            );
+            process.stderr.write(`  Recommended: ${chainResult.recommendedAction}\n`);
           }
         }
 
         try {
           applyPolicy(chainResult, policy);
         } catch {
-          process.exit(chainResult.state === "WARN" ? 2 : 1);
+          process.exit(1);
         }
-
-        if (chainResult.state === "VALID") process.exit(0);
-        if (chainResult.state === "WARN") process.exit(2);
-        process.exit(1);
+        process.exit(chainResult.state === "VALID" ? 0 : 1);
       }
     );
 
@@ -280,6 +335,8 @@ export function registerTrustmarkCommands(program: Command): void {
       "Entity ID of the subject (usually same as in source JWS)"
     )
     .option("--tmi <url>", "Your TMI server base URL", DEFAULT_TMI)
+    .option("--ta <url>", "Trust anchor the source mark's issuer must chain to", "https://letsfederate.org")
+    .option("--anchor-jwks <file>", "Hard-pin the trust anchor keys from a JWKS JSON file (recommended)")
     .option(
       "--id <url>",
       "Your trustmark type URI",
@@ -296,35 +353,34 @@ export function registerTrustmarkCommands(program: Command): void {
         source: string;
         sub: string;
         tmi: string;
+        ta: string;
+        anchorJwks?: string;
         id: string;
         ttl: string;
         evidence?: string;
         json?: boolean;
       }) => {
-        // ── Validate the source trustmark first ──────────────────────────
+        // ── Validate the source trustmark first — chain-rooted, not jku ───
         process.stderr.write(
-          "[trustmark adopt] Validating source trustmark before adoption...\n"
+          "[trustmark adopt] Verifying source trustmark (chain-rooted) before adoption...\n"
         );
-        const sourceResult = await validateTrustmark(opts.source);
+        let sourceResult: TrustResult;
+        try {
+          const anchor = await resolveCliAnchor(opts.ta, opts.anchorJwks);
+          sourceResult = toTrustResult(await verifyTrustMark(opts.source, { trustAnchors: [anchor] }));
+        } catch (err) {
+          process.stderr.write(`[TRUST:FAIL] ${(err as Error).message}\n`);
+          process.exit(1);
+        }
 
         if (sourceResult.state === "INVALID") {
           process.stderr.write(
             formatTrustMessage(sourceResult) + "\n" +
-            "  [TRUST:FAIL] Cannot adopt an invalid trustmark.\n" +
-            "  Recommended: Obtain a valid trustmark for the source entity first.\n"
+            "  [TRUST:FAIL] Cannot adopt an unverifiable trustmark (issuer must chain to the anchor).\n"
           );
           process.exit(1);
         }
-
-        if (sourceResult.state === "WARN") {
-          process.stderr.write(
-            formatTrustMessage(sourceResult) + "\n" +
-            "  [TRUST:WARN] Source trustmark has warnings — proceeding with adoption.\n" +
-            "  Recommended: Consider re-issuing the source trustmark before adopting.\n"
-          );
-        } else {
-          process.stderr.write(formatTrustMessage(sourceResult) + "\n");
-        }
+        process.stderr.write(formatTrustMessage(sourceResult) + "\n");
 
         // ── Extract source claims for the adopted_from fields ────────────
         let sourceIss = "(unknown)";

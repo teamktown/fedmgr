@@ -155,12 +155,15 @@ import { Pkcs11Provider, type Pkcs11Config } from "./providers/pkcs11.js";
 import { OpenBaoTransitProvider, type OpenBaoTransitConfig } from "./providers/openbao.js";
 
 // ---------------------------------------------------------------------------
-// Trust Validator — validate trustmark JWS tokens and OIDF trust chains.
+// Trust policy + result formatting.
+//
+// The trust-DECISION engine moved to @letsfederate/oidf-verify (§10 key
+// binding, pinned anchors, no jku). The weak validateTrustmark/validateTrustChain
+// were REMOVED — this module now exposes only the policy/formatting layer, which
+// is verifier-agnostic.
 // ---------------------------------------------------------------------------
 
 export {
-  validateTrustmark,
-  validateTrustChain,
   applyPolicy,
   trustPolicyFromEnv,
   formatTrustMessage,
@@ -168,8 +171,6 @@ export {
   type TrustState,
   type TrustPolicy,
   type TrustResult,
-  type ValidateTrustmarkOptions,
-  type ValidateChainOptions,
 } from "./trust-validator.js";
 
 export { assertSafeUrl, UrlSafetyError } from "./validate-url.js";

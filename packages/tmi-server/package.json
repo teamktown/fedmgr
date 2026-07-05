@@ -16,7 +16,8 @@
   "dependencies": {
     "@letsfederate/kms": "*",
     "express": "^4.19.2",
-    "zod": "^3.23.8"
+    "zod": "^3.23.8",
+    "@letsfederate/oidf-verify": "*"
   },
   "devDependencies": {
     "@types/express": "^4.17.21",

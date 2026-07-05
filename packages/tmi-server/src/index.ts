@@ -39,12 +39,17 @@ import { asyncHandler } from "./utils/async-handler.js";
 import { IssueRequestSchema } from "./schemas.js";
 import {
   SoftKmsProvider,
-  validateTrustmark,
   applyPolicy,
   trustPolicyFromEnv,
   formatTrustMessage,
   TrustPolicyError,
+  type TrustResult,
 } from "@letsfederate/kms";
+import {
+  verifyTrustMark,
+  resolvePinnedAnchor,
+  type TrustMarkResult,
+} from "@letsfederate/oidf-verify";
 import {
   signEntityStatement,
   tmiMetadata,
@@ -252,13 +257,70 @@ app.get("/health", (_req: Request, res: Response) => {
 // Startup — validate own trustmark then begin listening
 // ---------------------------------------------------------------------------
 
+/**
+ * Verify the TMI's own trust mark the correct way: resolve its issuer through a
+ * pinned trust anchor (§10) and require trust_mark_issuers authorization — never
+ * the mark's jku. The anchor is TMI_AUTHORITY_HINTS[0], hard-pinned via
+ * TMI_ANCHOR_JWKS when set, else trust-on-first-use (logged). Returns a
+ * TrustResult so the existing policy layer applies unchanged.
+ */
+async function verifySelfTrustmark(jws: string): Promise<TrustResult> {
+  const anchorId = AUTHORITY_HINTS[0];
+  if (!anchorId) {
+    return {
+      state: "INVALID",
+      subject: "(self)",
+      message:
+        "[TRUST:FAIL] cannot verify self-trustmark: no TMI_AUTHORITY_HINTS trust anchor to root the chain in",
+      recommendedAction: 'Set TMI_AUTHORITY_HINTS=["https://your-trust-anchor"] (and TMI_ANCHOR_JWKS to hard-pin its keys).',
+    };
+  }
+  let pinnedJwks: { keys: unknown[] } | undefined;
+  const raw = process.env["TMI_ANCHOR_JWKS"];
+  if (raw) {
+    try {
+      pinnedJwks = JSON.parse(raw) as { keys: unknown[] };
+    } catch {
+      process.stderr.write("[tmi-server] [TRUST:WARN] TMI_ANCHOR_JWKS is not valid JSON — ignoring\n");
+    }
+  }
+  try {
+    const anchor = await resolvePinnedAnchor({
+      entityId: anchorId,
+      ...(pinnedJwks ? { pinnedJwks: pinnedJwks as { keys: never } } : {}),
+      onTofu: (id) =>
+        process.stderr.write(
+          `[tmi-server] [TRUST:WARN] anchor ${id} not hard-pinned — trusting on first use (set TMI_ANCHOR_JWKS)\n`
+        ),
+    });
+    const r: TrustMarkResult = await verifyTrustMark(jws, { trustAnchors: [anchor] });
+    return {
+      state: r.state,
+      subject: r.subject,
+      message: r.message,
+      ...(r.issuer ? { issuer: r.issuer } : {}),
+      ...(r.trustMarkType ? { trustmarkId: r.trustMarkType } : {}),
+      ...(r.trustAnchor ? { trustAnchor: r.trustAnchor } : {}),
+      ...(r.state !== "VALID"
+        ? { recommendedAction: "The self-trustmark's issuer must chain to TMI_AUTHORITY_HINTS and be authorized in its trust_mark_issuers." }
+        : {}),
+    };
+  } catch (err) {
+    return {
+      state: "INVALID",
+      subject: "(self)",
+      message: `[TRUST:FAIL] self-trustmark verification error: ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
+}
+
 async function startServer(): Promise<void> {
   // ── Self-trustmark validation ──────────────────────────────────────────
   if (SELF_TRUSTMARK_JWS) {
     process.stderr.write(
-      "[tmi-server] Validating self-trustmark (SELF_TRUSTMARK_JWS)...\n"
+      "[tmi-server] Validating self-trustmark (SELF_TRUSTMARK_JWS) — chain-rooted...\n"
     );
-    const result = await validateTrustmark(SELF_TRUSTMARK_JWS);
+    const result = await verifySelfTrustmark(SELF_TRUSTMARK_JWS);
     process.stderr.write(formatTrustMessage(result) + "\n");
     if (result.recommendedAction) {
       process.stderr.write(`  Recommended: ${result.recommendedAction}\n`);

@@ -5,7 +5,14 @@
     "rootDir": "src"
   },
   "references": [
-    { "path": "../kms" }
+    {
+      "path": "../kms"
+    },
+    {
+      "path": "../oidf-verify"
+    }
   ],
-  "include": ["src/**/*"]
+  "include": [
+    "src/**/*"
+  ]
 }
