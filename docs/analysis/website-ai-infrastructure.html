@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>letsfederate.org — AI infrastructure, compared on paper</title>
+<style>
+  :root{
+    --bg:#0b0f14; --panel:#121821; --panel2:#161d28; --ink:#e6edf3; --muted:#9fb0c3;
+    --line:#22303f; --accent:#4dd0a7; --accent2:#5aa9ff; --warn:#f5c451; --bad:#ff6b6b;
+    --radius:14px; --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 600px at 70% -10%,#132030 0,var(--bg) 55%);
+    color:var(--ink);font:16px/1.6 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;}
+  .wrap{max-width:1000px;margin:0 auto;padding:48px 24px 80px;}
+  .kicker{color:var(--accent);font:600 13px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;}
+  h1{font-size:32px;margin:.35em 0 .15em;letter-spacing:-.01em;}
+  h2{font-size:22px;margin:1.8em 0 .5em;border-bottom:1px solid var(--line);padding-bottom:.35em;}
+  h3{font-size:17px;margin:1.4em 0 .4em;color:var(--accent2);}
+  .sub{color:var(--muted);font-size:16.5px;max-width:76ch;}
+  p{max-width:80ch}
+  code{font-family:var(--mono);background:#0e141c;border:1px solid var(--line);padding:2px 6px;border-radius:6px;font-size:.88em;}
+  pre{background:#0e141c;border:1px solid var(--line);border-radius:10px;padding:14px 16px;overflow-x:auto;
+    font:13px/1.55 var(--mono);color:#cfe0f0;}
+  pre code{background:none;border:none;padding:0}
+  table{border-collapse:collapse;width:100%;margin:14px 0;font-size:14.5px;}
+  th,td{border:1px solid var(--line);padding:9px 12px;text-align:left;vertical-align:top;}
+  th{background:var(--panel2);font-weight:600;}
+  .good{color:var(--accent);font-weight:600}
+  .mid{color:var(--warn);font-weight:600}
+  .poor{color:var(--bad);font-weight:600}
+  .card{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line);
+    border-radius:var(--radius);padding:20px 22px;margin:16px 0;}
+  .card.rec{border-color:var(--accent)}
+  .tag{display:inline-block;font:600 11px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;
+    padding:5px 9px;border-radius:999px;border:1px solid var(--line);color:var(--muted);margin-right:8px;}
+  .tag.grounded{color:var(--accent);border-color:#1f4a3c;background:#0e1a16;}
+  .tag.rec{color:var(--accent);border-color:#1f4a3c;background:#0e1a16;}
+  ul,ol{max-width:80ch}
+  li{margin:.3em 0}
+  .footnote{color:var(--muted);font-size:13.5px;border-top:1px solid var(--line);margin-top:40px;padding-top:16px;}
+  a{color:var(--accent2)}
+  .flow{font:13px/1.7 var(--mono);color:#cfe0f0;background:#0e141c;border:1px solid var(--line);
+    border-radius:10px;padding:14px 16px;overflow-x:auto;white-space:pre;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="kicker">letsfederate · fedmgr · website plane</div>
+  <h1>letsfederate.org — AI infrastructure, compared on paper</h1>
+  <p class="sub">How the advocacy site answers questions, guides assessments, captures what visitors
+  tell us, and <em>gets better from it</em> — three candidate architectures scored against your actual
+  stack (Cloudflare front, Workers, Rackspace-spot k8s, Hetzner, OpenTofu) before any infrastructure
+  is committed. Written 2026-07-05.</p>
+
+  <h2>0 · What the site's AI layer must actually do</h2>
+  <ol>
+    <li><strong>Answer questions consistently</strong> about OpenID Federation, MCP trust, and fedmgr —
+      guiding visitors to <em>key answers</em>, not free-styling.</li>
+    <li><strong>Run guided journeys</strong> — "assess whether OIDF fits you" → the scorecard — for each
+      audience (local dev · enterprise platform team · federation/IdP operator).</li>
+    <li><strong>Capture anonymously</strong> what visitors answered (scorecard) and asked (Q&amp;A), so we
+      learn whether our thesis is on the mark.</li>
+    <li><strong>Improve from that capture</strong> via a pipeline we can afford and audit — the content
+      loop is the product's own supply-chain story applied to its website.</li>
+  </ol>
+
+  <h2>1 · The three candidates</h2>
+
+  <div class="card">
+    <span class="tag grounded">grounded in rUv source</span>
+    <h3 style="margin-top:8px">A — Static-first: RVF-WASM in the browser</h3>
+    <p><code>@ruvector/rvf-wasm</code> (npm v0.1.7) runs vector search <em>entirely in the browser</em> —
+    "~46&nbsp;KB control plane, 5.5&nbsp;KB query-only microkernel, in-memory store with HNSW, no backend
+    required" (<code>ruvector/npm/packages/rvf-wasm/README.md</code>). The corpus is minted in CI and
+    shipped as a static asset; the page ingests it on load and answers queries locally.</p>
+    <p><strong>What it is:</strong> retrieval over a <em>curated</em> answer corpus — semantic FAQ, not a
+    chatbot. <strong>What it is not:</strong> generative, stateful, or self-improving. It cannot capture
+    anything by itself (it never phones home — which is also its privacy superpower).</p>
+    <p><strong>The honest catch — query embeddings.</strong> The corpus is embedded at build time
+    (free, local ONNX — see §2), but the <em>visitor's question</em> must be embedded in the browser too.
+    Three real options, in ascending quality/cost:</p>
+    <ul>
+      <li><em>Hash embedder</em> — fedvec already ships one (<code>packages/fedvec/src/hash-embedder.ts</code>):
+        zero download, deterministic, works air-gapped. Crude lexical matching; fine for a FAQ where
+        questions reuse the corpus vocabulary.</li>
+      <li><em>transformers.js MiniLM</em> — true semantic parity with the build-time embedder
+        (all-MiniLM-L6-v2, 384-dim), ~25&nbsp;MB one-time model download, cached; still zero backend.</li>
+      <li><em>Workers AI embedding call</em> — a 5-line Cloudflare Worker embeds the query server-side
+        for fractions of a cent; tiny backend, but it also becomes the capture point (see C).</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h3 style="margin-top:8px">B — Dify + Langfuse from day one</h3>
+    <p>Self-hosted Dify (RAG chat + agent flows over our corpus) with Langfuse tracing every
+    conversation. You're proficient in both — that de-risks the ops story substantially.</p>
+    <ul>
+      <li><strong>Strengths:</strong> generative answers, multi-turn guided assessment, full conversation
+        capture, and Langfuse's evals/datasets close the improvement loop <em>natively</em> — traces →
+        annotate → datasets → prompt/content iteration. Highest capture fidelity of the three.</li>
+      <li><strong>Costs:</strong> a running service (k8s on Rackspace spot or a Hetzner VM), Postgres +
+        Redis + vector store to operate, LLM API spend per conversation, an auth/abuse story for a
+        public endpoint, and an availability story — <em>spot instances preempt</em>, so the public
+        site's core Q&amp;A must not die when the pod does.</li>
+      <li><strong>Brand risk:</strong> an advocacy site about verifiable trust that sends every visitor
+        question to a third-party LLM needs a very clear privacy notice; it's answerable, but it's work.</li>
+    </ul>
+  </div>
+
+  <div class="card rec">
+    <span class="tag rec">recommended</span>
+    <h3 style="margin-top:8px">C — Hybrid: static RVF tier + Dify/Langfuse guided tier, one corpus</h3>
+    <p>Two tiers, one git-versioned content corpus, split by job:</p>
+    <ul>
+      <li><strong>Tier 1 — "Ask the docs" (static, free, always up):</strong> RVF-WASM retrieval on
+        Cloudflare Pages. Instant, private, survives spot preemption, works offline — and it
+        <em>dogfoods</em> the same RVF tech fedmgr uses (<code>packages/fedvec</code>), which is itself
+        an advocacy point.</li>
+      <li><strong>Tier 2 — "Guided assessment" (Dify, deliberate):</strong> the scorecard's conversational
+        deep-dive and anything generative, proxied through a Cloudflare Worker to Dify on
+        Hetzner/Rackspace, every trace landing in Langfuse. Explicitly opt-in ("this tier talks to an
+        AI service"), which converts the privacy question into a trust demonstration.</li>
+      <li><strong>The Worker is the seam:</strong> query-embedding assist for Tier 1, capture endpoint
+        for the scorecard (anonymous aggregate → D1), and the proxy/rate-limiter for Tier 2. One small
+        deployable, three jobs.</li>
+    </ul>
+  </div>
+
+  <h2>2 · The economical mint pipeline — your skepticism, answered head-on</h2>
+  <p>The question was: <em>"RVF doesn't sound sufficient… how can it improve based on user interaction
+  unless we have a very economical (git pipeline?) way to mint an rvf?"</em> Two-part answer:</p>
+
+  <h3>2a · The mint is already economical — we built it, in this repo</h3>
+  <p><code>packages/fedvec</code> is the pattern: <code>fastembed</code> (local ONNX all-MiniLM-L6-v2,
+  384-dim — <strong>no API, no cost, runs in any CI runner</strong>) → <code>@ruvector/rvf</code> mints the
+  single-file HNSW store, with a JSON sidecar mapping vector ids → entries. Two properties matter for CI:</p>
+  <ul>
+    <li><strong>Content-hash gated:</strong> <code>FederationIndex.reindexIfChanged()</code> hashes
+      (embedder-id + documents) and no-ops when nothing changed — unchanged content costs ~0 build seconds.</li>
+    <li><strong>Reopen-safe metric:</strong> vectors are L2-normalized and stored under the <code>l2</code>
+      metric (squared-L2 on unit vectors ≡ cosine), because RVF 0.2.x's <code>cosine</code> metric doesn't
+      survive close/reopen — already handled in fedvec, carried into the site pipeline.</li>
+  </ul>
+  <div class="flow">content/*.md  ──┐        (git = the only source of truth)
+                ├─ CI on merge:
+                │    1. chunk + front-matter → corpus.json          (deterministic)
+                │    2. fastembed (local ONNX, $0) → vectors        (content-hash gated: no-op if unchanged)
+                │    3. mint corpus assets for the browser          (vectors + text sidecar)
+                │    4. syft SBOM → cosign sign → publish            (the site's answers get fedmgr's own
+                │       alongside the static deploy                   provenance treatment — verifiable corpus)
+                │    5. POST same corpus → Dify knowledge base API   (Tier 2 stays in sync, same commit SHA)
+                └─ Cloudflare Pages deploy</div>
+  <p>Cost of a full remint: MiniLM embeds a few hundred Q&amp;A entries in seconds of CPU — it fits inside
+  free CI minutes. There is no per-query cost afterward. And step 4 is the on-brand kicker:
+  <strong>the answer corpus itself ships with signed provenance</strong> — "verify what the website
+  tells you" becomes a live demo of the product thesis.</p>
+
+  <h3>2b · How it "improves from user interaction" — an editorial loop, not online learning</h3>
+  <p>Honestly: RVF never learns online, and for an advocacy site you don't want it to — an index that
+  mutates from anonymous input is an integrity liability. The improvement loop is <em>git-mediated</em>:</p>
+  <div class="flow">visitors ─→ captures ────────────────┐
+   · scorecard answers (anon aggregate → D1)             │   weekly triage:
+   · Tier-1 queries w/ low retrieval score ("misses")    ├─→ what did people ask that we answer badly?
+   · Tier-2 Dify conversations (Langfuse traces/evals)   │   where does the scorecard say we're off the mark?
+                                                         ▼
+                                  edit content/*.md → PR → CI remints → deploy
+                                  (versioned · reviewable · provenance-signed · reversible)</div>
+  <p>Langfuse is the analytical brain of the loop (you already run it); the D1 aggregate and the Tier-1
+  "miss log" (queries whose best hit scored below threshold — capturable via the same Worker, still
+  anonymous) feed the same triage. Every improvement is a commit — auditable trust, again.</p>
+
+  <h2>3 · Scored comparison</h2>
+  <table>
+    <tr><th>Dimension</th><th>A · Static RVF</th><th>B · Dify+Langfuse only</th><th>C · Hybrid</th></tr>
+    <tr><td>Cost to run / query</td><td class="good">$0</td><td class="mid">LLM spend per convo</td><td class="good">$0 default · paid only on opt-in tier</td></tr>
+    <tr><td>Ops burden</td><td class="good">none (static)</td><td class="poor">k8s + PG + Redis + LLM keys + abuse handling</td><td class="mid">static + 1 Worker + Dify you already know</td></tr>
+    <tr><td>Availability under spot preemption</td><td class="good">unaffected</td><td class="poor">site's AI goes down</td><td class="good">Tier 1 unaffected; Tier 2 degrades gracefully</td></tr>
+    <tr><td>Answer quality ceiling</td><td class="mid">curated retrieval only</td><td class="good">generative, multi-turn</td><td class="good">both, matched to job</td></tr>
+    <tr><td>Consistency / "guide to key answers"</td><td class="good">perfect (curated corpus)</td><td class="mid">needs prompt discipline + evals</td><td class="good">curated by default, generative where supervised</td></tr>
+    <tr><td>Capture fidelity (are we on the mark?)</td><td class="poor">none without a Worker</td><td class="good">full traces + evals</td><td class="good">scorecard→D1 + misses + Langfuse traces</td></tr>
+    <tr><td>Improvement loop</td><td class="mid">git editorial only</td><td class="good">Langfuse-native</td><td class="good">git editorial <em>fed by</em> Langfuse + captures</td></tr>
+    <tr><td>Privacy posture</td><td class="good">nothing leaves the browser</td><td class="mid">every question → LLM</td><td class="good">private by default, opt-in AI tier</td></tr>
+    <tr><td>Brand alignment (dogfood + provenance)</td><td class="good">RVF dogfood, signed corpus</td><td class="mid">generic RAG stack</td><td class="good">both stories, live</td></tr>
+    <tr><td>Time to first launch</td><td class="good">days</td><td class="mid">weeks (hardening a public LLM endpoint)</td><td class="good">days (Tier 1) → Tier 2 when ready</td></tr>
+  </table>
+
+  <h2>4 · Where things persist</h2>
+  <table>
+    <tr><th>Data</th><th>Store</th><th>Why</th></tr>
+    <tr><td>Content truth (Q&amp;A, journeys, scorecard bank)</td><td>git (<code>site/content/</code>)</td><td>versioned, reviewable, provenance-signable</td></tr>
+    <tr><td>Minted retrieval index</td><td>static asset, per-deploy</td><td>immutable, tied to a commit SHA</td></tr>
+    <tr><td>Scorecard captures (anonymous aggregate)</td><td>Cloudflare D1 via the Worker</td><td>serverless, cheap, queryable; no PII by design</td></tr>
+    <tr><td>Tier-1 retrieval misses</td><td>same D1 (query text only, no identity)</td><td>feeds triage; disclosed in the privacy note</td></tr>
+    <tr><td>Tier-2 conversations + evals</td><td>Langfuse (self-hosted, Hetzner/Rackspace)</td><td>your existing analytical home for LLM traffic</td></tr>
+    <tr><td>Dify knowledge base</td><td>Dify (same cluster)</td><td>derived, rebuilt from git — never edited in place</td></tr>
+  </table>
+
+  <h2>5 · IaC sketch (OpenTofu)</h2>
+  <pre><code>modules/
+  cloudflare-site/      # pages project, custom domain (letsfederate.org), worker, d1, rate-limit rules
+  dify-stack/           # helm_release: dify + langfuse + postgres(pvc) + redis  → rackspace-spot k8s
+  hetzner-fallback/     # single hcloud VM + volume, docker compose variant of the same stack
+# spot-preemption note: postgres on a PVC/volume that outlives nodes, or managed PG;
+# Tier 2 is stateless above the DB, so preemption = brief degradation, never data loss.
+# Tier 1 never notices.</code></pre>
+
+  <h2>6 · Recommendation &amp; phasing</h2>
+  <ol>
+    <li><strong>Phase 1 (this session's prototype):</strong> static site + RVF-WASM "ask the docs" +
+      client-side scorecard. Capture endpoint designed Worker-ready, stubbed locally.</li>
+    <li><strong>Phase 2:</strong> deploy the Worker (capture → D1, query-embedding assist, privacy note),
+      wire the miss-log. Site is now learning <em>whether we're on the mark</em> with zero LLM spend.</li>
+    <li><strong>Phase 3:</strong> stand up Dify + Langfuse via OpenTofu on your k8s/Hetzner, connect the
+      CI corpus-sync, launch the opt-in guided assessment tier.</li>
+  </ol>
+  <p>Decision this defers to you: <em>when</em> to start Phase 3 — nothing in Phases 1–2 blocks on it,
+  and every phase reuses the same corpus and capture schema.</p>
+
+  <h2>7 · Honest caveats</h2>
+  <ul>
+    <li><code>rvf-wasm</code>'s store is in-memory: the page re-ingests the shipped corpus on load.
+      At FAQ scale (10²–10³ entries × 384-dim) that's a few MB and milliseconds — fine; at 10⁵+ it isn't
+      this architecture.</li>
+    <li>Hash-embedder Tier 1 is lexical, not semantic — good enough to launch, and the corpus build
+      already uses MiniLM, so upgrading the query side (transformers.js or Worker) needs no remint.</li>
+    <li>Workers AI / D1 couple the capture plane to Cloudflare. Acceptable (front door is Cloudflare
+      anyway); the content truth stays portable in git.</li>
+    <li>Scorecard capture is consent-noted and anonymous by design — no accounts, no emails, aggregate
+      analysis only (your chosen posture).</li>
+  </ul>
+
+  <p class="footnote">Grounded sources: <code>ruvector/npm/packages/rvf-wasm/README.md</code> (browser WASM,
+  no backend), <code>ruvector/crates/rvf/rvf-cli/src</code> (create/ingest/query/verify-witness CLI),
+  <code>packages/fedvec/src/federation-index.ts</code> (mint pipeline, hash-gating, l2-metric workaround),
+  <code>packages/fedvec/src/embedder.ts</code> (HashEmbedder / FastEmbedder MiniLM-384).
+  Part of the <a href="index.html">trust workbench</a>.</p>
+</div>
+</body>
+</html>
