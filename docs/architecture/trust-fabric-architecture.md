@@ -51,7 +51,7 @@ flowchart TB
   end
 
   subgraph cli["fedmgr CLI (control plane)"]
-    cliTs["@letsfederate/fedmgr-cli (TS)<br/>keys · oci · trustmark"]
+    cliTs["@letsfederate/fedmgr (TS)<br/>keys · oci · trustmark"]
     cliJs["src/fedmgr (legacy JS)<br/>registry.json · list · inspect<br/>federation-admin · OAuth gateway"]
   end
 
@@ -85,7 +85,7 @@ flowchart TB
 | `kms` | signing, chain/trustmark validation, SSRF guard | lib | mature, tested |
 | `ta-server` | Trust Anchor: statements, federation_list/fetch, enrollment, registry | control | substantial |
 | `tmi-server` | Trust Mark Issuer | control | substantial |
-| `fedmgr-cli` (TS) | keys / OCI / trustmark signing | control | partial |
+| `fedmgr` (TS) | keys / OCI / trustmark signing | control | partial |
 | `src/fedmgr` (JS) | **canonical registry**, list/inspect, OAuth gateway | control | legacy, owns truth |
 | `fedmgr-mcp` | MCP tools + `oidf-trust` extension (patient zero) | data/MCP | working |
 | `waypoint` | runtime trust multiplexer / PEP | data | **stdio only**, no status/registry-hydration |
@@ -230,7 +230,7 @@ sequenceDiagram
 | `ta-server` | **75%** | statements, federation_list/fetch, trust-mark-status, enrollment, mgmt, sqlite; bootstrap fragility, no signed registry export |
 | `tmi-server` | **70%** | issue + schemas + status; adoption/revocation lifecycle thin |
 | `fedmgr-mcp` (+ oidf-trust ext) | **70%** | tools incl. validate_mcp_invocation + extension + OTel; extension not client-enforceable |
-| `fedmgr-cli` (TS) + `src/fedmgr` (JS) | **50%** | registry/list/inspect (JS) + signing (TS) exist but **unconverged**; no signed registry |
+| `fedmgr` (TS) + `src/fedmgr` (JS) | **50%** | registry/list/inspect (JS) + signing (TS) exist but **unconverged**; no signed registry |
 | `waypoint` | **45%** | multiplexer + accepted-anchor + **cryptographic admission** proven; **no HTTP transport, no status, no registry hydration, no heartbeat/audit** |
 | Trust mechanisms (chain/mark/digest/revocation/audit) | **55%** | chain ✓, trustmark ✓, digest-binding ✓; **revocation re-check ✗, audit ledger ✗** |
 | Signing / distribution (patient zero) | **55%** | CI cosign+SBOM+provenance ✓; **OIDF trust mark over releases ✗, public TA hosting ✗** |

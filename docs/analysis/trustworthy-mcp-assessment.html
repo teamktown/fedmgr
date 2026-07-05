@@ -121,7 +121,7 @@
     <div class="body">
       <p class="muted">These are the genuine product‑intent decisions I can't make for you. They gate the rank‑ordered plan below. Jot answers inline.</p>
 
-      <div class="q"><span class="qid">Q1 · npm identity</span> — What is the ONE canonical thing a new user installs? Today there's a broken root <code>fedmgr</code> (its <code>main: "index.js"</code> doesn't exist), a <em>legacy</em> <code>@letsfederate/fedmgr</code> built from <code>src/fedmgr/</code>, and the maintained <code>@letsfederate/fedmgr-cli</code>. Pick the front door: <code>fedmgr-cli</code>? <code>waypoint</code>? a meta <code>@letsfederate/fedmgr</code> umbrella?
+      <div class="q"><span class="qid">Q1 · npm identity</span> — What is the ONE canonical thing a new user installs? Today there's a broken root <code>fedmgr</code> (its <code>main: "index.js"</code> doesn't exist), a <em>legacy</em> <code>@letsfederate/fedmgr</code> built from <code>src/fedmgr/</code>, and the maintained <code>@letsfederate/fedmgr</code>. Pick the front door: <code>fedmgr</code>? <code>waypoint</code>? a meta <code>@letsfederate/fedmgr</code> umbrella?
         <div class="why">Blocks R2. Determines README, install docs, and what we deprecate.</div>
         <div class="answer">Your answer…</div>
       </div>
@@ -174,13 +174,13 @@
         <tr><td><code>ta-server</code></td><td>Trust Anchor: entity/subordinate statements, <code>/federation_list</code>, <code>/federation_fetch</code>, enrollment (proof‑of‑key), <code>/trust-mark-status</code>, <code>/federation_search</code></td><td><span class="chip c-med">Partial</span> Express app, embed‑first</td></tr>
         <tr><td><code>tmi-server</code></td><td>Trust Mark Issuer: <code>POST /trustmarks/issue</code> (digest‑bound), bearer‑gated</td><td><span class="chip c-med">Partial</span> Express app</td></tr>
         <tr><td><code>fedmgr-mcp</code></td><td>MCP server: 13 tools incl. the critical <code>validate_mcp_invocation</code> fail‑closed verdict; advertises <code>org.letsfederate/oidf-trust</code> at handshake</td><td><span class="chip c-med">Partial</span> deep‑imports <code>ta-server</code></td></tr>
-        <tr><td><code>fedmgr-cli</code></td><td><code>fedmgr</code> CLI: keys / trustmark / oci / search</td><td><span class="chip c-good">Yes</span></td></tr>
+        <tr><td><code>fedmgr</code></td><td><code>fedmgr</code> CLI: keys / trustmark / oci / search</td><td><span class="chip c-good">Yes</span></td></tr>
         <tr><td><code>waypoint</code></td><td>MCP multiplexer / gateway: admits downstream MCPs by accepted‑anchor policy + chain verification; HTTP/SSE + OAuth edge</td><td><span class="chip c-good">Yes</span> (routing still PoC)</td></tr>
         <tr><td><code>fedvec</code></td><td>Semantic search over federation entities (RuVector <code>.rvf</code>, offline embeddings) — new</td><td><span class="chip c-good">Yes</span></td></tr>
       </table>
       <p><strong>End‑to‑end trust flow:</strong> enroll (proof‑of‑key, origin‑bound) → TA signs subordinate statement → TMI issues digest‑bound trust mark → verifier walks the chain to the anchor (<code>validateTrustChain</code>) → <code>validate_mcp_invocation</code> checks signatures of subordinate + entity + invocation token, that <code>aud</code> includes the endpoint, and that the required trust mark is present. Clean DAG, no circular deps.</p>
 
-      <div class="callout bad"><strong>The npm story is broken/ambiguous.</strong> Root <code>package.json</code> is <code>name:"fedmgr" v1.0.0</code> with <code>main:"index.js"</code> — but <code>index.js</code> does not exist. There are two "fedmgr" libraries: the <em>legacy</em> <code>@letsfederate/fedmgr</code> (built from <code>src/fedmgr/</code>, what <code>Dockerfile.fedmgr</code> installs and runs) and the maintained <code>@letsfederate/fedmgr-cli</code> (<code>packages/fedmgr-cli</code>). An adopter typing <code>npm i @letsfederate/fedmgr</code> gets the old monolith. → <strong>Q1.</strong></p></div>
+      <div class="callout bad"><strong>The npm story is broken/ambiguous.</strong> Root <code>package.json</code> is <code>name:"fedmgr" v1.0.0</code> with <code>main:"index.js"</code> — but <code>index.js</code> does not exist. There are two "fedmgr" libraries: the <em>legacy</em> <code>@letsfederate/fedmgr</code> (built from <code>src/fedmgr/</code>, what <code>Dockerfile.fedmgr</code> installs and runs) and the maintained <code>@letsfederate/fedmgr</code> (<code>packages/fedmgr</code>). An adopter typing <code>npm i @letsfederate/fedmgr</code> gets the old monolith. → <strong>Q1.</strong></p></div>
 
       <h4>The demos (three stacks, very uneven)</h4>
       <table>
@@ -207,7 +207,7 @@
         <tr><td>kms</td><td>25</td><td>17</td><td><span class="chip c-med">8 skipped</span> — PKCS#11/HSM (needs SoftHSM)</td></tr>
         <tr><td>waypoint</td><td>23</td><td>23</td><td>policy, mux, crypto admission, HTTP/OAuth</td></tr>
         <tr><td>tmi-server</td><td>10</td><td>10</td><td>issue schema, signing</td></tr>
-        <tr><td>fedmgr-cli</td><td>8</td><td>8</td><td>commands</td></tr>
+        <tr><td>fedmgr</td><td>8</td><td>8</td><td>commands</td></tr>
         <tr><td>fedvec</td><td>5</td><td>5</td><td>real RVF round‑trip + ranking</td></tr>
         <tr><td><strong>Total</strong></td><td><strong>164</strong></td><td><strong>156</strong></td><td><strong>0 failing · 8 skipped (HSM)</strong> · full workspace build green</td></tr>
       </table>

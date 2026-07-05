@@ -1,4 +1,4 @@
-# Increment B — `fedmgr-cli` Commands
+# Increment B — `fedmgr` Commands
 
 **RALPH phase:** Actions + Lints/Tests
 **Status:** ✅ Complete
@@ -8,11 +8,11 @@
 
 ## What Was Built
 
-A typed CLI package (`@letsfederate/fedmgr-cli`) wiring together the full
+A typed CLI package (`@letsfederate/fedmgr`) wiring together the full
 key → trustmark → OCI attestation workflow.
 
 ```
-packages/fedmgr-cli/
+packages/fedmgr/
 ├── src/
 │   ├── bin.ts                    # shebang entry point
 │   ├── index.ts                  # commander root + command registration
@@ -149,7 +149,7 @@ fedmgr oci verify-trustmark \
 | Package | Tests | Pass |
 |---|---|---|
 | `@letsfederate/kms` | 7 | 7 |
-| `@letsfederate/fedmgr-cli` | 8 | 8 |
+| `@letsfederate/fedmgr` | 8 | 8 |
 | **Total** | **15** | **15** |
 
 ---

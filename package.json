@@ -2,7 +2,7 @@
   "name": "fedmgr",
   "version": "1.0.0",
   "private": true,
-  "description": "fedmgr — OpenID Federation trust backplane for MCP. Private workspace root; the published front door is @letsfederate/fedmgr (packages/fedmgr-cli).",
+  "description": "fedmgr — OpenID Federation trust backplane for MCP. Private workspace root; the published front door is @letsfederate/fedmgr (packages/fedmgr).",
   "workspaces": [
     "packages/*"
   ],

@@ -430,7 +430,7 @@ SSRF fixes land.
 
 **Deleted the two duplicates** (`packages/fedmgr-mcp/src/validate-url.ts`,
 `packages/ta-server/src/utils/validate-url.ts`) and repointed their imports to
-`@letsfederate/kms`. fedmgr-cli already imported from kms. Preserved ta-server's
+`@letsfederate/kms`. fedmgr already imported from kms. Preserved ta-server's
 client-facing `[TRUST:FAIL]` enrollment-error signal by prefixing at its response
 boundary (the shared validator stays prefix-free — presentation is the caller's job).
 
@@ -440,7 +440,7 @@ IPv4 ranges, 127.x dev-only, IPv6 link-local, public allow). `localhost.` was re
 against the pre-merge kms validator, green after.
 
 **Verification:** whole-workspace `tsc -b` clean; kms guard 7/7; regressions all
-green — kms (0 fail), fedmgr-mcp 18/18, ta-server 59/59, fedmgr-cli 8/8. No dangling
+green — kms (0 fail), fedmgr-mcp 18/18, ta-server 59/59, fedmgr 8/8. No dangling
 references to the deleted copies remain.
 
 ---

@@ -18,7 +18,7 @@ deployment/hardening work left to pursue.
   subordinates from the `FederationStore` and ranks them. Env:
   `TA_VEC_PATH` (index location), `TA_VEC_EMBEDDER=hash|minilm`.
 - **`search_federation`** MCP tool (`packages/fedmgr-mcp`).
-- **`fedmgr search "<query>"`** CLI command (`packages/fedmgr-cli`).
+- **`fedmgr search "<query>"`** CLI command (`packages/fedmgr`).
 - Tests: `packages/fedvec` unit suite (real RVF round-trip) +
   `packages/ta-server/test/federation-search.test.mjs` (real HTTP + store + rvf).
 

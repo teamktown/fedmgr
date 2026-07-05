@@ -1,7 +1,7 @@
 {
-  "name": "@letsfederate/fedmgr-cli",
+  "name": "@letsfederate/fedmgr",
   "version": "0.0.1",
-  "description": "CLI for fedmgr — key management, trustmark issuance, and OCI attestation",
+  "description": "fedmgr — one front door for MCP trust: init a local trust ecosystem, manage keys, issue trustmarks, attest OCI artifacts, and search a federation.",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -26,7 +26,7 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/teamktown/fedmgr.git",
-    "directory": "packages/fedmgr-cli"
+    "directory": "packages/fedmgr"
   },
   "scripts": {
     "build": "tsc -b",

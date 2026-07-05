@@ -156,13 +156,13 @@ have both a timeout (`AbortController`) and a response size cap.
 
 ### What is it?
 
-`jose` was used in `fedmgr-cli` but not listed in `package.json#dependencies`.
+`jose` was used in `fedmgr` but not listed in `package.json#dependencies`.
 It worked accidentally because `@letsfederate/kms` depended on it, but that's a
 hoisting accident — not guaranteed across npm/pnpm/Yarn versions.
 
 ### Fix
 
-`jose` is now explicitly listed in `@letsfederate/fedmgr-cli` dependencies.
+`jose` is now explicitly listed in `@letsfederate/fedmgr` dependencies.
 
 **Pattern to follow:** Every package that `import`s a module must declare it
 directly in its own `package.json#dependencies`. Do not rely on transitive hoisting.

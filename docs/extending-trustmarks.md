@@ -88,7 +88,7 @@ app.post("/trustmarks/issue/certified-mcp-v1", async (req, res) => { ... });
 
 ### Step 4 — Add to the CLI
 
-In `packages/fedmgr-cli/src/commands/trustmark.ts`, add the type URI to the
+In `packages/fedmgr/src/commands/trustmark.ts`, add the type URI to the
 `--id` option's choices or documentation:
 ```typescript
 .addHelpText('after', `
@@ -177,6 +177,6 @@ audit_report: z.string().url().optional(),
 |---|---|
 | `packages/tmi-server/src/index.ts` | `IssueRequestSchema` — add new type schemas here |
 | `packages/tmi-server/src/federation/entity-statements.ts` | `tmiMetadata()` — declare trust_mark_issuers |
-| `packages/fedmgr-cli/src/commands/trustmark.ts` | CLI `--id` option help text |
+| `packages/fedmgr/src/commands/trustmark.ts` | CLI `--id` option help text |
 | `docs/decisions.md` | Decision 3 — schema freeze policy |
 | `packages/schemas/` | JSON Schema files (Increment F) |

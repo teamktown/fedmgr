@@ -26,7 +26,7 @@ fedmgr/
 │   ├── kms/             @letsfederate/kms           — KMS interface + SoftKMS provider
 │   ├── tmi-server/      @letsfederate/tmi-server     — Trustmark Issuer HTTP service
 │   ├── ta-server/       @letsfederate/ta-server      — Trust Anchor HTTP service
-│   └── fedmgr-cli/      @letsfederate/fedmgr-cli     — CLI (keys/trustmark/oci)
+│   └── fedmgr/      @letsfederate/fedmgr     — CLI (keys/trustmark/oci)
 │
 ├── src/                 Legacy CommonJS code (pre-uplift, to be migrated)
 │   ├── fedmgr/          — existing federation manager
@@ -137,7 +137,7 @@ Entity statement payload:
 
 **Content-Type**: `application/entity-statement+jwt` (OIDF spec §4.3)
 
-### 3.4 `@letsfederate/fedmgr-cli` — CLI
+### 3.4 `@letsfederate/fedmgr` — CLI
 
 ```
 fedmgr keys init softkms [--dir] [--force]
@@ -244,7 +244,7 @@ npm test -ws --if-present
 
 Package                   Tests   Pass
 @letsfederate/kms           7      7    (SoftKMS sign, JWKS safety, kid continuity)
-@letsfederate/fedmgr-cli    8      8    (command structure, --sub required)
+@letsfederate/fedmgr    8      8    (command structure, --sub required)
 @letsfederate/tmi-server   10     10    (entity statement claims, typ, exp>iat, authority_hints)
 @letsfederate/ta-server    12     12    (subordinate registry, federation_fetch signing, chain verify)
 ─────────────────────────────────────

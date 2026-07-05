@@ -115,7 +115,7 @@ jobs:
 
       - name: Generate SBOM per publishable package
         run: |
-          for pkg in kms fedmgr-cli tmi-server ta-server; do
+          for pkg in kms fedmgr tmi-server ta-server; do
             cyclonedx-npm \
               --package-lock-only \
               --output-format JSON \

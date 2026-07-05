@@ -126,7 +126,7 @@ The script:
 | Package | Tests | Pass |
 |---|---|---|
 | `@letsfederate/kms` | 7 | 7 |
-| `@letsfederate/fedmgr-cli` | 8 | 8 |
+| `@letsfederate/fedmgr` | 8 | 8 |
 | `@letsfederate/tmi-server` | 10 | 10 |
 | **Total** | **25** | **25** |
 

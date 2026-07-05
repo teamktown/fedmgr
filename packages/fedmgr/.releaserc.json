@@ -19,7 +19,7 @@
       "@semantic-release/git",
       {
         "assets": ["CHANGELOG.md", "package.json"],
-        "message": "chore(release): @letsfederate/fedmgr-cli@${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
+        "message": "chore(release): @letsfederate/fedmgr@${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
       }
     ],
     [

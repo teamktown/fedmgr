@@ -176,7 +176,7 @@ jobs:
       # If TMI_PRIV_JWE is not set, this step is skipped (trustmark not attached).
       - name: Setup fedmgr CLI
         if: ${{ secrets.TMI_PRIV_JWE != '' }}
-        run: npm ci && npm run build -w @letsfederate/fedmgr-cli
+        run: npm ci && npm run build -w @letsfederate/fedmgr
 
       - name: Decrypt TMI key to tmpfs
         if: ${{ secrets.TMI_PRIV_JWE != '' }}
@@ -212,7 +212,7 @@ jobs:
           TMI_PID=$!
           sleep 2
 
-          JWS=$(node packages/fedmgr-cli/dist/bin.js trustmark issue \
+          JWS=$(node packages/fedmgr/dist/bin.js trustmark issue \
             --sub "$IMAGE_REF" \
             --tmi "http://localhost:18080" \
             --image-digest "$DIGEST" \
@@ -227,7 +227,7 @@ jobs:
         env:
           DIGEST: ${{ steps.build.outputs.digest }}
         run: |
-          node packages/fedmgr-cli/dist/bin.js oci attach-trustmark \
+          node packages/fedmgr/dist/bin.js oci attach-trustmark \
             --image "${{ steps.tag.outputs.image }}@${DIGEST}" \
             --jws "$(cat trustmark-${{ matrix.service }}.jws)"
 

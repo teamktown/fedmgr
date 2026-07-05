@@ -63,9 +63,9 @@
   <table>
     <tr><th>#</th><th>Question</th><th>Decision</th></tr>
     <tr><td class="q">Q1</td><td>npm identity / front door</td>
-        <td>One umbrella command, openssl-style: <code>npx @letsfederate/fedmgr &lt;verb&gt;</code>. We rename the
-        existing <code>@letsfederate/fedmgr-cli</code> → <code>@letsfederate/fedmgr</code> (the name is freed by
-        deleting the monolith, which already squats it). One package, one binary.</td></tr>
+        <td>One umbrella command, openssl-style: <code>npx @letsfederate/fedmgr &lt;verb&gt;</code>. We renamed the
+        old <code>@letsfederate/fedmgr-cli</code> → <code>@letsfederate/fedmgr</code> (the name was freed by
+        deleting the monolith, which squatted it). One package, one binary. <span class="st done">done</span></td></tr>
     <tr><td class="q">Q2</td><td>delete the monolith?</td>
         <td>Yes — verified the new base doesn't depend on it. Annotated tag <code>pre-monolith-removal</code>
         marks the return point <span class="st done">done</span>, then it's deleted.</td></tr>

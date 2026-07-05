@@ -97,7 +97,7 @@ docker compose config            # validates compose syntax
 
 ## Next: Increment B
 
-Add `fedmgr-cli` commands:
+Add `fedmgr` commands:
 - `fedmgr keys init softkms`
 - `fedmgr trustmark issue`
 - `fedmgr oci attach-trustmark`

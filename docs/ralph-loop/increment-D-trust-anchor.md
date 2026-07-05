@@ -138,7 +138,7 @@ fedmgr trustmark verify --jws "$JWS"
 | Package | Tests | Pass |
 |---|---|---|
 | `@letsfederate/kms` | 7 | 7 |
-| `@letsfederate/fedmgr-cli` | 8 | 8 |
+| `@letsfederate/fedmgr` | 8 | 8 |
 | `@letsfederate/tmi-server` | 10 | 10 |
 | `@letsfederate/ta-server` | 12 | 12 |
 | **Total** | **37** | **37** |
