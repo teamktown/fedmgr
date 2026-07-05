@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>What we're working on — fedmgr</title>
+<style>
+  :root{
+    --bg:#0b0f14; --panel:#121821; --panel2:#161d28; --ink:#e6edf3; --muted:#9fb0c3;
+    --line:#22303f; --accent:#4dd0a7; --accent2:#5aa9ff; --warn:#f5c451; --bad:#ff6b6b;
+    --radius:14px; --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 600px at 70% -10%,#132030 0,var(--bg) 55%);
+    color:var(--ink);font:16px/1.6 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;}
+  .wrap{max-width:1000px;margin:0 auto;padding:40px 24px 80px;}
+  a{color:var(--accent2);text-decoration:none} a:hover{text-decoration:underline}
+  .back{font:600 13px/1 var(--mono);color:var(--muted)}
+  .kicker{color:var(--accent);font:600 13px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;margin-top:18px}
+  h1{font-size:30px;margin:.3em 0 .1em}
+  .sub{color:var(--muted);max-width:74ch}
+  h2{font-size:20px;margin:38px 0 6px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+  h3{font-size:15px;margin:20px 0 6px;color:var(--accent)}
+  .card{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line);
+    border-radius:var(--radius);padding:18px 20px;margin:14px 0}
+  .mission{border-left:3px solid var(--accent)}
+  ul{margin:8px 0 8px 2px;padding-left:20px} li{margin:5px 0}
+  code{font-family:var(--mono);background:#0e141c;border:1px solid var(--line);padding:2px 6px;border-radius:6px;font-size:.88em}
+  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:14.5px}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font:600 12px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase}
+  .q{color:var(--accent2);font-weight:700;font-family:var(--mono)}
+  .st{font:600 11px/1 var(--mono);padding:4px 8px;border-radius:6px;white-space:nowrap}
+  .done{color:#0b1a14;background:var(--accent)} .prog{color:#1a1405;background:var(--warn)}
+  .todo{color:var(--muted);border:1px solid var(--line)}
+  .steps{counter-reset:s;list-style:none;padding-left:0}
+  .steps li{position:relative;padding:12px 12px 12px 46px;border:1px solid var(--line);border-radius:10px;margin:9px 0;background:var(--panel)}
+  .steps li::before{counter-increment:s;content:counter(s);position:absolute;left:12px;top:12px;width:24px;height:24px;
+    border-radius:50%;background:#0e1a16;border:1px solid #1f4a3c;color:var(--accent);
+    font:700 13px/24px var(--mono);text-align:center}
+  .gate{color:var(--bad);font:600 12px/1 var(--mono)}
+  .muted{color:var(--muted)}
+  footer{margin-top:40px;color:var(--muted);font-size:13px;border-top:1px solid var(--line);padding-top:18px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="index.html">← workbench</a>
+  <div class="kicker">Working on now · snapshot 2026-07-05</div>
+  <h1>What we're building</h1>
+  <p class="sub">Turning fedmgr from two overlapping codebases into one clean, self-verifying trust tool with a
+  single front door. Below: the decisions we locked in, the plan in flight, and how we're keeping it legible
+  to both an AI assistant and a human.</p>
+
+  <div class="card mission">
+    <strong>The mission in one line.</strong> When an AI assistant reaches for an MCP tool server, it should be
+    able to <em>cryptographically verify</em> that server belongs to a federation you trust — chain of trust
+    TMI&nbsp;→&nbsp;TA, a signed trustmark, an SBOM, and provenance — instead of taking it on faith. fedmgr is the
+    tool that mints, manages, and enforces that trust.
+  </div>
+
+  <h2>Decisions locked in (your Q1–Q5)</h2>
+  <table>
+    <tr><th>#</th><th>Question</th><th>Decision</th></tr>
+    <tr><td class="q">Q1</td><td>npm identity / front door</td>
+        <td>One umbrella command, openssl-style: <code>npx @letsfederate/fedmgr &lt;verb&gt;</code>. We rename the
+        existing <code>@letsfederate/fedmgr-cli</code> → <code>@letsfederate/fedmgr</code> (the name is freed by
+        deleting the monolith, which already squats it). One package, one binary.</td></tr>
+    <tr><td class="q">Q2</td><td>delete the monolith?</td>
+        <td>Yes — verified the new base doesn't depend on it. Annotated tag <code>pre-monolith-removal</code>
+        marks the return point <span class="st done">done</span>, then it's deleted.</td></tr>
+    <tr><td class="q">Q3</td><td>pedigree / provenance</td>
+        <td><code>init</code> mints a self-signing local ecosystem: a <strong>validate-before-run</strong>
+        fail-fast (checksum our own files — honest about npm's no-code-signing gap), a local registry, and a
+        demo that signs + SBOMs + attests its own artifacts.</td></tr>
+    <tr><td class="q">Q4</td><td>first deployment target</td>
+        <td>The person running <code>init</code>. It mints <em>their</em> local environment — no external infra
+        assumed.</td></tr>
+    <tr><td class="q">Q5</td><td>enforcement model</td>
+        <td><code>init</code> builds <strong>waypoint</strong>, runs the <strong>SSC</strong> scanner suite on it,
+        and <span class="gate">refuses to issue a trustmark until zero HIGH/CRITICAL</span> — your SLA, enforced.
+        Own-CA supported; container hardening tuned <em>after</em> it runs.</td></tr>
+  </table>
+
+  <h2>Phase 1 — clean base <span class="muted">(in flight)</span></h2>
+  <div class="card">
+    <table>
+      <tr><td><span class="st done">done</span></td><td>Tag <code>pre-monolith-removal</code> + commit the fedvec Docker fix, SSC import, assessment docs</td></tr>
+      <tr><td><span class="st prog">now</span></td><td>Delete the legacy monolith (<code>src/</code>, <code>server.js</code>, root compose + 4 Dockerfiles, <code>scripts/tests/</code>) and reduce root <code>package.json</code> to a pure workspace root</td></tr>
+      <tr><td><span class="st prog">now</span></td><td>Rename CLI → <code>@letsfederate/fedmgr</code>, verify <code>npx</code> front door</td></tr>
+      <tr><td><span class="st prog">now</span></td><td>Adapt SSC to this repo (fix <code>REPO_ROOT</code>, repoint scanners at TS packages + <code>Dockerfile.*</code>, fix README paths)</td></tr>
+      <tr><td><span class="st todo">next</span></td><td>Run the full package test suite — confirm green — rebuild the lab healthy</td></tr>
+    </table>
+  </div>
+
+  <h2>Phase 2 — <code>fedmgr init</code>: mint a trust ecosystem</h2>
+  <p class="sub">Each step is a fail-fast gate; if it can't be proven, <code>init</code> stops rather than pretend.</p>
+  <ol class="steps">
+    <li><strong>Validate before run.</strong> Hash our own installed files against a shipped manifest; abort on mismatch. <span class="muted">(Self-consistency, not authorship — the authorship gap rides npm/sigstore provenance, documented plainly.)</span></li>
+    <li><strong>Mint a local CA.</strong> Root CA into <code>~/.letsfederate/ca/</code> via step-cli. <code>--accept-ca</code> stub to run the provider's CA once we can distribute one safely.</li>
+    <li><strong>Stand up the minimal ecosystem.</strong> Local OCI registry + Trust Anchor + Trustmark Issuer, keys auto-generated.</li>
+    <li><strong>Self-provenance demo.</strong> Build waypoint → SBOM → sign with the local CA/cosign → push to the local registry → attach the trustmark as an attestation. The ecosystem proves the trust loop <em>on itself</em>.</li>
+    <li><strong>Enforce the SLA.</strong> Run SSC <code>scan-all</code> against waypoint; <span class="gate">no trustmark while any HIGH/CRITICAL exists.</span></li>
+  </ol>
+
+  <h2>Observability — legible to LLM &amp; human</h2>
+  <div class="card">
+    <ul>
+      <li><strong>Dual-format logs.</strong> Syslog-style decorated lines for people, structured JSON for machines/LLMs, one global <code>LOG_LEVEL</code>.</li>
+      <li><strong>OpenTelemetry-friendly.</strong> OTel <em>API</em> in the code (near-zero cost, no forced exporter); a heavier collector/Grafana sink stays an opt-in compose profile.</li>
+      <li><strong>Single pane, lightweight.</strong> <code>docker compose logs</code> as the floor; our own <code>fedmgr logs</code> / <code>fedmgr doctor</code> console as the default pane — minimal deps, minimal support surface.</li>
+      <li><strong>Mission-aligned traces.</strong> Span names map to trust operations: <code>mint-ca · build · sbom · sign · push · trustmark · verify</code> — so an assistant can reason about exactly where trust was established or broke.</li>
+    </ul>
+  </div>
+
+  <footer>
+    Live snapshot, hand-updated as we go. For the full teardown that produced these decisions, see the
+    <a href="trustworthy-mcp-assessment.html">trustworthy-MCP assessment</a>.
+  </footer>
+</div>
+</body>
+</html>
