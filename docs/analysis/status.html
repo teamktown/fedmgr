@@ -82,15 +82,16 @@
         Own-CA supported; container hardening tuned <em>after</em> it runs.</td></tr>
   </table>
 
-  <h2>Phase 1 — clean base <span class="muted">(in flight)</span></h2>
+  <h2>Phase 1 — clean base <span class="st done">complete ✓</span></h2>
   <div class="card">
     <table>
       <tr><td><span class="st done">done</span></td><td>Tag <code>pre-monolith-removal</code> + commit the fedvec Docker fix, SSC import, assessment docs</td></tr>
-      <tr><td><span class="st prog">now</span></td><td>Delete the legacy monolith (<code>src/</code>, <code>server.js</code>, root compose + 4 Dockerfiles, <code>scripts/tests/</code>) and reduce root <code>package.json</code> to a pure workspace root</td></tr>
-      <tr><td><span class="st prog">now</span></td><td>Rename CLI → <code>@letsfederate/fedmgr</code>, verify <code>npx</code> front door</td></tr>
-      <tr><td><span class="st prog">now</span></td><td>Adapt SSC to this repo (fix <code>REPO_ROOT</code>, repoint scanners at TS packages + <code>Dockerfile.*</code>, fix README paths)</td></tr>
-      <tr><td><span class="st todo">next</span></td><td>Run the full package test suite — confirm green — rebuild the lab healthy</td></tr>
+      <tr><td><span class="st done">done</span></td><td>Deleted the legacy monolith (<code>src/</code>, <code>server.js</code>, root compose + 4 Dockerfiles, <code>scripts/tests/</code>) — 76 files, −28k lines — and reduced root <code>package.json</code> to a pure private workspace root</td></tr>
+      <tr><td><span class="st done">done</span></td><td>Renamed CLI → <code>@letsfederate/fedmgr</code> (name + dir); <code>fedmgr</code> front door verified</td></tr>
+      <tr><td><span class="st done">done</span></td><td>Adapted SSC to this repo (fixed <code>REPO_ROOT</code>, Bandit auto-skips no-Python, Hadolint lints all <code>Dockerfile.*</code>, reports → <code>SSC/reports/</code>, README fixed)</td></tr>
+      <tr><td><span class="st done">done</span></td><td>Full suite <strong>156 tests green</strong>, 0 fail; lab rebuilt — TA + TMI healthy, <code>federation_search</code> live in-container</td></tr>
     </table>
+    <p class="muted" style="margin:10px 0 0">Bonus catch: a clean reinstall repaired ~20+ <code>node_modules</code> files left NUL-corrupted by the earlier disk-full event.</p>
   </div>
 
   <h2>Phase 2 — <code>fedmgr init</code>: mint a trust ecosystem</h2>
