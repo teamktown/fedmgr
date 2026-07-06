@@ -1,9 +1,7 @@
 # fedmgr Architecture
 
-> **Supersedes** `architecture-april2025.md`.
-> Last updated: feat/uplift-tdd, Increment C.
-> Source of truth: `plans/arch-prd-chatgpt-candidate-20250620.md` +
-> `plans/arch-codereview-20250620.md`.
+> The current architecture of the workspace. For the operational trust model
+> (issuance, hosting, §10 verification) see `adr/0002-oidf-operational-model-issuance-and-verification.md`.
 
 ---
 

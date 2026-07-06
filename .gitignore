@@ -143,6 +143,8 @@ test-data/
 *.db
 *.db-wal
 *.db-shm
+test-results/*.json
+test-results/*.xml
 test-results/*.junit.xml
 test-results/*.tap
 test-results/*.log

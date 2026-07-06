@@ -1,7 +1,8 @@
 # Testing Guide — fedmgr
 
-> Last updated: feat/uplift-tdd, Increment F
-> Test counts: **54** ta-server · **15** kms · **130** legacy · **8** HSM integration (gate: `SOFTHSM2_MODULE`)
+> The suite runs per-package via `node --test`. For the current counts run
+> `npm test` (exact numbers drift with every change, so they are not pinned here).
+> HSM integration tests are gated behind `SOFTHSM2_MODULE`.
 
 ---
 

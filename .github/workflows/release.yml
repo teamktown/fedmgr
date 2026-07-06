@@ -1,5 +1,10 @@
 name: Release
 
+# Publishes the REUSABLE LIBRARIES and the CLI to npm via semantic-release.
+# Deployable services (ta-server, tmi-server, waypoint) are NOT npm packages —
+# they ship as container images (see containers.yml). Libraries publish first,
+# then the CLI (which depends on them).
+
 on:
   push:
     branches: [main]
@@ -23,122 +28,58 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "22.x"
+          node-version: "24.x"
           cache: npm
       - run: npm ci
       - run: npm run build -ws --if-present
-      - run: ./scripts/test-report.sh
+      - run: npm test
 
-  # ── @letsfederate/kms — released first (others depend on it) ─────────────
-  release-kms:
-    name: Release @letsfederate/kms
+  # ── Stage 1: reusable libraries (no internal @letsfederate deps) ──────────
+  release-libs:
+    name: "Release lib: ${{ matrix.pkg }}"
     needs: pre-release-check
     runs-on: ubuntu-latest
+    strategy:
+      max-parallel: 1          # sequential: shared git tags/changelog commits
+      matrix:
+        pkg: [kms, obs, oidf-verify, ssc-attest]
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0      # full history for commit-analyzer
+          fetch-depth: 0       # full history for commit-analyzer
           persist-credentials: false
-
       - uses: actions/setup-node@v4
         with:
-          node-version: "22.x"
+          node-version: "24.x"
           registry-url: "https://registry.npmjs.org"
           cache: npm
-
       - run: npm ci
-
-      - name: Build kms
-        run: npm run build -w @letsfederate/kms
-
-      - name: Semantic release — @letsfederate/kms
-        working-directory: packages/kms
+      - run: npm run build -w @letsfederate/${{ matrix.pkg }}
+      - name: Semantic release — @letsfederate/${{ matrix.pkg }}
+        working-directory: packages/${{ matrix.pkg }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
           NPM_CONFIG_PROVENANCE: "true"
         run: npx semantic-release-monorepo
 
-  # ── Dependent packages — released after kms ───────────────────────────────
-  release-tmi-server:
-    name: Release @letsfederate/tmi-server
-    needs: release-kms
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22.x"
-          registry-url: "https://registry.npmjs.org"
-          cache: npm
-
-      - run: npm ci
-
-      - name: Build tmi-server
-        run: npm run build -w @letsfederate/tmi-server
-
-      - name: Semantic release — @letsfederate/tmi-server
-        working-directory: packages/tmi-server
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NPM_CONFIG_PROVENANCE: "true"
-        run: npx semantic-release-monorepo
-
-  release-ta-server:
-    name: Release @letsfederate/ta-server
-    needs: release-kms
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22.x"
-          registry-url: "https://registry.npmjs.org"
-          cache: npm
-
-      - run: npm ci
-
-      - name: Build ta-server
-        run: npm run build -w @letsfederate/ta-server
-
-      - name: Semantic release — @letsfederate/ta-server
-        working-directory: packages/ta-server
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NPM_CONFIG_PROVENANCE: "true"
-        run: npx semantic-release-monorepo
-
+  # ── Stage 2: the CLI (depends on the libraries above) ─────────────────────
   release-fedmgr:
     name: Release @letsfederate/fedmgr
-    needs: release-kms
+    needs: release-libs
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
           persist-credentials: false
-
       - uses: actions/setup-node@v4
         with:
-          node-version: "22.x"
+          node-version: "24.x"
           registry-url: "https://registry.npmjs.org"
           cache: npm
-
       - run: npm ci
-
-      - name: Build fedmgr
-        run: npm run build -w @letsfederate/fedmgr
-
+      - run: npm run build -w @letsfederate/fedmgr
       - name: Semantic release — @letsfederate/fedmgr
         working-directory: packages/fedmgr
         env:

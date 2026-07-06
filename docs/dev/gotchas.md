@@ -6,7 +6,7 @@ lab, or the SSC suite. Each entry is a **guard**: the trap, then the rule.
 ## Build / test / run (the happy path)
 ```bash
 npm run build            # tsc -b across all packages
-npm test                 # per-package `node --test` (156 tests) — the real suite
+npm test                 # per-package `node --test` — the whole workspace suite
 ./examples/lab/up.sh     # build + start registry + TA + TMI, wait for health
 ./examples/lab/down.sh   # stop & clean
 npm run scan             # SSC/scripts/scan-all.sh (needs scanners installed)

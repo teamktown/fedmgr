@@ -12,11 +12,17 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md"
   ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "scripts": {
     "build": "tsc -b",
     "test": "node --test test/*.test.mjs",
+    "prepublishOnly": "npm run build && npm test",
     "pretest": "npm run build --silent"
   },
   "dependencies": {
