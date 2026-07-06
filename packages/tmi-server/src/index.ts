@@ -50,6 +50,8 @@ import {
   resolvePinnedAnchor,
   type TrustMarkResult,
 } from "@letsfederate/oidf-verify";
+import { evaluateSscGate } from "./ssc-gate.js";
+import type { JWK } from "jose";
 import {
   signEntityStatement,
   tmiMetadata,
@@ -85,6 +87,32 @@ const AUTHORITY_HINTS: string[] = (() => {
 const TRUST_POLICY = trustPolicyFromEnv();
 const SELF_TRUSTMARK_JWS = process.env["SELF_TRUSTMARK_JWS"];
 const TMI_ISSUE_TOKEN = process.env["TMI_ISSUE_TOKEN"];
+
+// ── Supply-chain gate on issuance ─────────────────────────────────────────
+// An artifact-bound trust mark (one carrying image_digest) attests that the
+// image passed the zero-HIGH/CRITICAL SLA. The TMI enforces that by requiring a
+// signed SSC statement (see @letsfederate/ssc-attest) and refusing to sign when
+// the gate did not pass. Set TMI_REQUIRE_SSC_EVIDENCE=false ONLY for a demo TMI.
+const REQUIRE_SSC_EVIDENCE = (process.env["TMI_REQUIRE_SSC_EVIDENCE"] ?? "true").toLowerCase() !== "false";
+const SSC_SIGNER_JWKS: { keys: unknown[] } | null = (() => {
+  const raw = process.env["TMI_SSC_SIGNER_JWKS"];
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as { keys?: unknown[] };
+    if (!Array.isArray(parsed.keys)) throw new Error("missing keys[]");
+    return parsed as { keys: unknown[] };
+  } catch (err) {
+    process.stderr.write(`[tmi-server] [TRUST:FAIL] TMI_SSC_SIGNER_JWKS is not valid JWKS JSON: ${String(err)}\n`);
+    process.exit(78);
+  }
+})();
+if (REQUIRE_SSC_EVIDENCE && !SSC_SIGNER_JWKS) {
+  process.stderr.write(
+    "[tmi-server] [TRUST:WARN] TMI_SSC_SIGNER_JWKS not set — artifact-bound trustmark issuance " +
+    "(requests with image_digest) will be REFUSED until the SSC signer keys are pinned. " +
+    "Set TMI_SSC_SIGNER_JWKS, or TMI_REQUIRE_SSC_EVIDENCE=false for a demo TMI.\n"
+  );
+}
 
 if (!TMI_ISSUE_TOKEN) {
   process.stderr.write(
@@ -178,11 +206,41 @@ app.post(
       image_digest,
       repo,
       evidence,
+      ssc_evidence,
       ttl_s,
       adopted_from_iss,
       adopted_from_id,
       adopted_from_jws,
     } = parsed.data;
+
+    // ── SSC gate: an artifact-bound mark requires a passing, signed SSC
+    //    statement for THIS digest. This is the zero-HIGH/CRITICAL SLA enforced
+    //    in code (not merely logged). Fail-closed.
+    const gate = await evaluateSscGate({
+      ...(image_digest ? { imageDigest: image_digest } : {}),
+      ...(ssc_evidence ? { sscEvidence: ssc_evidence } : {}),
+      require: REQUIRE_SSC_EVIDENCE,
+      signerJwks: SSC_SIGNER_JWKS as { keys: JWK[] } | null,
+    });
+    if (!gate.allow) {
+      if (gate.reasons) {
+        process.stderr.write(
+          `[tmi-server] [TRUST:FAIL] SSC gate BLOCKED issuance for ${image_digest}: ${gate.reasons.join("; ")}\n`
+        );
+      }
+      res.status(gate.status ?? 403).json({
+        error: gate.error,
+        message: gate.message,
+        ...(gate.reasons ? { reasons: gate.reasons } : {}),
+      });
+      return;
+    }
+    if (image_digest && REQUIRE_SSC_EVIDENCE) {
+      process.stderr.write(
+        `[tmi-server] [TRUST:VALID] SSC gate passed for ${image_digest} (0 critical / 0 high) — issuing.\n`
+      );
+    }
+
     const now = Math.floor(Date.now() / 1000);
 
     const payload = {

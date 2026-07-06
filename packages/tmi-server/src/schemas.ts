@@ -34,6 +34,14 @@ export const IssueRequestSchema = z.object({
   repo: z.string().url().optional(),
   /** Evidence URL (optional — link to audit report, scan results, etc.). */
   evidence: z.string().url().optional(),
+  /**
+   * Signed supply-chain evidence (a @letsfederate/ssc-attest JWS) binding the
+   * image_digest to its SBOM + scan verdict + zero-HIGH/CRITICAL gate. REQUIRED
+   * for artifact-bound marks (when image_digest is set) unless the TMI is
+   * explicitly run with TMI_REQUIRE_SSC_EVIDENCE=false. The TMI verifies it
+   * against TMI_SSC_SIGNER_JWKS and refuses issuance if the gate did not pass.
+   */
+  ssc_evidence: z.string().optional(),
   /** Token validity in seconds (60s–24h). */
   ttl_s: z.number().int().min(60).max(86400).default(3600),
   /** Adoption: entity ID of the original trustmark issuer. */

@@ -3,12 +3,25 @@
   "compilerOptions": {
     "outDir": "dist",
     "rootDir": "src",
-    "types": ["node"]
+    "types": [
+      "node"
+    ]
   },
   "references": [
-    { "path": "../kms" },
-    { "path": "../obs" },
-    { "path": "../oidf-verify" }
+    {
+      "path": "../kms"
+    },
+    {
+      "path": "../obs"
+    },
+    {
+      "path": "../oidf-verify"
+    },
+    {
+      "path": "../ssc-attest"
+    }
   ],
-  "include": ["src/**/*"]
+  "include": [
+    "src/**/*"
+  ]
 }

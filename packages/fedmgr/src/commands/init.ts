@@ -253,20 +253,24 @@ export function registerInitCommands(program: Command): void {
             low: scan.low,
           });
           if (verdict.blocked) {
-            log.warn("TRUST MARK BLOCKED — SLA (zero HIGH/CRITICAL) not met", {
+            // Fail closed: a blocked gate STOPS init (it previously only logged,
+            // so the SLA gated nothing — deep-reassessment supply-chain finding).
+            log.error("TRUST MARK BLOCKED — SLA (zero HIGH/CRITICAL) not met; aborting", {
               reasons: verdict.reasons,
               top: scan.findings
                 .filter((f) => f.severity === "CRITICAL" || f.severity === "HIGH")
                 .slice(0, 5)
                 .map((f) => `${f.severity} ${f.id} ${f.pkg}@${f.version}`),
             });
-          } else {
-            log.info("SSC gate PASSED — safe to issue a trust mark");
+            process.exit(1);
           }
+          log.info("SSC gate PASSED — safe to issue a trust mark");
         }).catch((err) => {
-          log.error("ssc-gate scan failed", {
+          // A scan that could not complete is not a pass — fail closed.
+          log.error("ssc-gate scan failed — aborting (cannot confirm the SLA)", {
             error: err instanceof Error ? err.message : String(err),
           });
+          process.exit(1);
         });
       }
       log.info("init complete", { note: "run 'fedmgr doctor' to check readiness" });
