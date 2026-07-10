@@ -18,7 +18,7 @@
 
 set -euo pipefail
 
-KEYS_DIR="${KEYS_DIR:-packages/tmi-server/keys}"
+KEYS_DIR="${KEYS_DIR:-services/tmi-server/keys}"
 PASS_FILE="${KEYS_DIR}/.pass"
 PRIV_JWE="${KEYS_DIR}/tmi.priv.jwe"
 PUB_JWK="${KEYS_DIR}/tmi.pub.jwk"
@@ -68,5 +68,5 @@ export TMI_PUBLIC_JWK="${PUB_JWK}"
 
 if [[ "${1:-}" == "--start" ]]; then
   echo "[tmi-decrypt] Starting tmi-server..."
-  node packages/tmi-server/dist/index.js
+  node services/tmi-server/dist/index.js
 fi

@@ -8,7 +8,7 @@ WORKDIR /build
 COPY package.json package-lock.json tsconfig.base.json ./
 COPY packages/kms/package.json        packages/kms/
 COPY packages/fedvec/package.json     packages/fedvec/
-COPY packages/ta-server/package.json  packages/ta-server/
+COPY services/ta-server/package.json  services/ta-server/
 
 # --ignore-scripts skips ALL native postinstall builds (avoids pkcs11js, which we
 # don't need here). better-sqlite3 IS needed by the TA, so we rebuild just that one
@@ -21,7 +21,7 @@ RUN npm rebuild better-sqlite3
 
 COPY packages/kms/      packages/kms/
 COPY packages/fedvec/   packages/fedvec/
-COPY packages/ta-server/ packages/ta-server/
+COPY services/ta-server/ services/ta-server/
 
 # ta-server references @letsfederate/fedvec (semantic federation_search), which
 # in turn pulls @ruvector/rvf (native glibc prebuilt — matches node:22-slim) and
@@ -44,10 +44,10 @@ WORKDIR /app
 COPY --from=builder --chown=ta:ta /build/node_modules             ./node_modules
 COPY --from=builder --chown=ta:ta /build/packages/kms/dist        ./packages/kms/dist
 COPY --from=builder --chown=ta:ta /build/packages/fedvec/dist     ./packages/fedvec/dist
-COPY --from=builder --chown=ta:ta /build/packages/ta-server/dist  ./packages/ta-server/dist
+COPY --from=builder --chown=ta:ta /build/services/ta-server/dist  ./services/ta-server/dist
 COPY --from=builder --chown=ta:ta /build/packages/kms/package.json       ./packages/kms/package.json
 COPY --from=builder --chown=ta:ta /build/packages/fedvec/package.json    ./packages/fedvec/package.json
-COPY --from=builder --chown=ta:ta /build/packages/ta-server/package.json ./packages/ta-server/package.json
+COPY --from=builder --chown=ta:ta /build/services/ta-server/package.json ./services/ta-server/package.json
 
 RUN mkdir -p /app/keys && chown ta:ta /app/keys
 
@@ -64,4 +64,4 @@ EXPOSE 8090
 HEALTHCHECK --interval=15s --timeout=5s --start-period=15s \
     CMD node -e "fetch('http://localhost:'+process.env.PORT+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
-CMD ["node", "packages/ta-server/dist/index.js"]
+CMD ["node", "services/ta-server/dist/index.js"]

@@ -1,6 +1,7 @@
 {
   "name": "@letsfederate/waypoint",
   "version": "0.0.1",
+  "private": true,
   "description": "Waypoint — a trust-enforcing MCP multiplexer. One MCP server the client points at; it gates downstream MCP servers by OpenID Federation accepted-anchor policy and only forwards tools from the ones that pass.",
   "type": "module",
   "main": "dist/index.js",

@@ -669,10 +669,10 @@ async function toolInitializeLocalCa(): Promise<string> {
   const repoRoot = new URL("../../../../", import.meta.url).pathname;
 
   const keyPaths = [
-    { label: "TA private key", rel: "packages/ta-server/keys/private.jwk.enc" },
-    { label: "TA public key", rel: "packages/ta-server/keys/public.jwk" },
-    { label: "TMI private key", rel: "packages/tmi-server/keys/private.jwk.enc" },
-    { label: "TMI public key", rel: "packages/tmi-server/keys/public.jwk" },
+    { label: "TA private key", rel: "services/ta-server/keys/private.jwk.enc" },
+    { label: "TA public key", rel: "services/ta-server/keys/public.jwk" },
+    { label: "TMI private key", rel: "services/tmi-server/keys/private.jwk.enc" },
+    { label: "TMI public key", rel: "services/tmi-server/keys/public.jwk" },
   ];
 
   const statusLines: string[] = [];
@@ -699,7 +699,7 @@ async function toolInitializeLocalCa(): Promise<string> {
     "",
     "1. Generate Trust Anchor keys:",
     "   npm run ta:keys:init",
-    "   (Runs: bash scripts/tmi-keys-init.sh packages/ta-server/keys)",
+    "   (Runs: bash scripts/tmi-keys-init.sh services/ta-server/keys)",
     "",
     "2. Generate Trust Mark Issuer keys:",
     "   npm run tmi:keys:init",

@@ -201,7 +201,7 @@ This requires the TMI signing key accessible in CI:
 
 | Secret name | Value | How to create |
 |---|---|---|
-| `TMI_PRIV_JWE` | `base64 packages/tmi-server/keys/tmi.priv.jwe` | `npm run tmi:keys:init` then encode |
+| `TMI_PRIV_JWE` | `base64 services/tmi-server/keys/tmi.priv.jwe` | `npm run tmi:keys:init` then encode |
 | `TMI_JWE_PASSPHRASE` | The passphrase used during key init | Used at init time |
 | `TMI_ISSUER` | `https://tmi.letsfederate.org` | Your TMI deployment URL |
 | `TMI_JWKS_URL` | `https://tmi.letsfederate.org/.well-known/jwks.json` | Derived from TMI_ISSUER |
@@ -209,7 +209,7 @@ This requires the TMI signing key accessible in CI:
 
 ```bash
 # Encode TMI key for GitHub secret:
-base64 -w0 packages/tmi-server/keys/tmi.priv.jwe
+base64 -w0 services/tmi-server/keys/tmi.priv.jwe
 # Paste the output as TMI_PRIV_JWE in GitHub Settings → Secrets
 ```
 

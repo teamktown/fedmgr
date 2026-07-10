@@ -19,15 +19,21 @@ WORKDIR /build
 # Install all deps (including devDeps for TypeScript)
 COPY package.json package-lock.json tsconfig.base.json ./
 COPY packages/kms/package.json         packages/kms/
-COPY packages/tmi-server/package.json  packages/tmi-server/
+COPY packages/oidf-verify/package.json packages/oidf-verify/
+COPY packages/ssc-attest/package.json  packages/ssc-attest/
+COPY services/tmi-server/package.json  services/tmi-server/
 
 RUN npm ci --ignore-scripts
 
 # Copy source and build
-COPY packages/kms/       packages/kms/
-COPY packages/tmi-server/ packages/tmi-server/
+COPY packages/kms/         packages/kms/
+COPY packages/oidf-verify/ packages/oidf-verify/
+COPY packages/ssc-attest/  packages/ssc-attest/
+COPY services/tmi-server/  services/tmi-server/
 
 RUN npm run build -w @letsfederate/kms
+RUN npm run build -w @letsfederate/oidf-verify
+RUN npm run build -w @letsfederate/ssc-attest
 RUN npm run build -w @letsfederate/tmi-server
 
 # Prune to production deps only
@@ -43,9 +49,13 @@ WORKDIR /app
 # Copy only production artifacts
 COPY --from=builder --chown=tmi:tmi /build/node_modules   ./node_modules
 COPY --from=builder --chown=tmi:tmi /build/packages/kms/dist          ./packages/kms/dist
-COPY --from=builder --chown=tmi:tmi /build/packages/tmi-server/dist   ./packages/tmi-server/dist
+COPY --from=builder --chown=tmi:tmi /build/packages/oidf-verify/dist  ./packages/oidf-verify/dist
+COPY --from=builder --chown=tmi:tmi /build/packages/ssc-attest/dist   ./packages/ssc-attest/dist
+COPY --from=builder --chown=tmi:tmi /build/services/tmi-server/dist   ./services/tmi-server/dist
 COPY --from=builder --chown=tmi:tmi /build/packages/kms/package.json          ./packages/kms/package.json
-COPY --from=builder --chown=tmi:tmi /build/packages/tmi-server/package.json   ./packages/tmi-server/package.json
+COPY --from=builder --chown=tmi:tmi /build/packages/oidf-verify/package.json  ./packages/oidf-verify/package.json
+COPY --from=builder --chown=tmi:tmi /build/packages/ssc-attest/package.json   ./packages/ssc-attest/package.json
+COPY --from=builder --chown=tmi:tmi /build/services/tmi-server/package.json   ./services/tmi-server/package.json
 
 # Keys directory — public JWK bind-mounted at runtime; private JWK on tmpfs.
 RUN mkdir -p /app/keys && chown tmi:tmi /app/keys
@@ -63,4 +73,4 @@ EXPOSE 8080
 HEALTHCHECK --interval=15s --timeout=5s --start-period=10s \
     CMD node -e "fetch('http://localhost:'+process.env.PORT+'/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 
-CMD ["node", "packages/tmi-server/dist/index.js"]
+CMD ["node", "services/tmi-server/dist/index.js"]

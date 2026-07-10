@@ -3,13 +3,11 @@
   "compilerOptions": {
     "outDir": "dist",
     "rootDir": "src",
-    "composite": true
+    "types": ["node"]
   },
   "references": [
-    { "path": "../fedmgr-mcp" },
-    { "path": "../oidf-verify" }
+    { "path": "../../packages/fedvec" },
+    { "path": "../../packages/kms" }
   ],
-  "include": [
-    "src/**/*"
-  ]
+  "include": ["src/**/*"]
 }

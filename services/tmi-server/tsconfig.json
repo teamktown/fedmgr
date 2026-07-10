@@ -6,13 +6,13 @@
   },
   "references": [
     {
-      "path": "../kms"
+      "path": "../../packages/kms"
     },
     {
-      "path": "../oidf-verify"
+      "path": "../../packages/oidf-verify"
     },
     {
-      "path": "../ssc-attest"
+      "path": "../../packages/ssc-attest"
     }
   ],
   "include": [

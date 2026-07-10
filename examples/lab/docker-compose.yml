@@ -66,7 +66,7 @@ services:
     user: "0:0"
     volumes:
       - type: bind
-        source: ../../packages/ta-server/keys
+        source: ../../services/ta-server/keys
         target: /keys
         read_only: true
       - ta-secrets:/run/secrets
@@ -88,13 +88,13 @@ services:
   ta-server:
     build:
       context: ../..
-      dockerfile: Dockerfile.ta-server
+      dockerfile: services/ta-server/Dockerfile
     container_name: trust-lab-ta
     ports:
       - "8090:8090"
     volumes:
       - type: bind
-        source: ../../packages/ta-server/keys/ta.pub.jwk
+        source: ../../services/ta-server/keys/ta.pub.jwk
         target: /app/keys/ta.pub.jwk
         read_only: true
       - ta-secrets:/run/secrets:ro
@@ -140,7 +140,7 @@ services:
     user: "0:0"
     volumes:
       - type: bind
-        source: ../../packages/tmi-server/keys
+        source: ../../services/tmi-server/keys
         target: /keys
         read_only: true
       - tmi-secrets:/run/secrets
@@ -162,13 +162,13 @@ services:
   tmi-server:
     build:
       context: ../..
-      dockerfile: Dockerfile.tmi-server
+      dockerfile: services/tmi-server/Dockerfile
     container_name: trust-lab-tmi
     ports:
       - "8080:8080"
     volumes:
       - type: bind
-        source: ../../packages/tmi-server/keys/tmi.pub.jwk
+        source: ../../services/tmi-server/keys/tmi.pub.jwk
         target: /app/keys/tmi.pub.jwk
         read_only: true
       - tmi-secrets:/run/secrets:ro

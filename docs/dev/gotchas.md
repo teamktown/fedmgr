@@ -19,8 +19,8 @@ The published front door is **`@letsfederate/fedmgr`** (`packages/fedmgr/`,
 Adding a `tsc -b` project reference from one package to another builds fine on
 the host but **silently breaks the Docker image** if the Dockerfile never
 copies/builds the new dependency (symptom: `TS5083` at build, or a missing
-route at runtime). When package A starts importing package B, update
-`Dockerfile.A`:
+route at runtime). When service A starts importing package B, update
+`services/A/Dockerfile`:
 - COPY `packages/B/package.json` before `npm ci`
 - COPY `packages/B/` and `npm run build -w @letsfederate/B` **before** building A
 - ship `packages/B/dist` (+ `package.json`) in the runtime stage

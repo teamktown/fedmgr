@@ -109,12 +109,12 @@ server {
 The Trust Anchor needs an EC P-256 key pair. The private key is encrypted at rest (PBES2 JWE).
 
 ```bash
-# [ORG] TA keys go in packages/ta-server/keys/
+# [ORG] TA keys go in services/ta-server/keys/
 npm run ta:keys:init
 # Prompts for a passphrase — store it in a password manager.
 # Creates:
-#   packages/ta-server/keys/ta.priv.jwe   ← encrypted private key (safe to commit)
-#   packages/ta-server/keys/ta.pub.jwk    ← plaintext public key (safe to commit)
+#   services/ta-server/keys/ta.priv.jwe   ← encrypted private key (safe to commit)
+#   services/ta-server/keys/ta.pub.jwk    ← plaintext public key (safe to commit)
 
 # [DEV] Same command — your personal TA key
 npm run ta:keys:init
@@ -130,11 +130,11 @@ npm run ta:keys:init
 ### Step A4: Generate TMI Keys
 
 ```bash
-# [ORG] TMI keys go in packages/tmi-server/keys/
+# [ORG] TMI keys go in services/tmi-server/keys/
 npm run tmi:keys:init
 # Creates:
-#   packages/tmi-server/keys/tmi.priv.jwe
-#   packages/tmi-server/keys/tmi.pub.jwk
+#   services/tmi-server/keys/tmi.priv.jwe
+#   services/tmi-server/keys/tmi.pub.jwk
 
 # [DEV] Same command
 npm run tmi:keys:init
@@ -315,7 +315,7 @@ npm audit signatures
 
 ```bash
 # 1. Build the image
-docker build -t ghcr.io/teamktown/ta-server:1.0.0 -f Dockerfile.ta-server .
+docker build -t ghcr.io/teamktown/ta-server:1.0.0 -f services/ta-server/Dockerfile .
 
 # 2. Push
 docker push ghcr.io/teamktown/ta-server:1.0.0
@@ -548,7 +548,7 @@ Once you have a trustmark JWS for the server itself, inject it at startup:
 # tmi-server validates its own trustmark at startup:
 SELF_TRUSTMARK_JWS="eyJ..." \
 TRUST_POLICY=strict \
-  node packages/tmi-server/dist/index.js
+  node services/tmi-server/dist/index.js
 
 # Success:
 # [tmi-server] Validating self-trustmark (SELF_TRUSTMARK_JWS)...
@@ -623,7 +623,7 @@ curl "http://localhost:8090/trust-mark-status?sub=https://compromised.example.co
 
 When rotating TA or TMI keys:
 
-1. Generate new keys: `npm run tmi:keys:init --dir packages/tmi-server/keys/rotation-YYYY-MM-DD`
+1. Generate new keys: `npm run tmi:keys:init --dir services/tmi-server/keys/rotation-YYYY-MM-DD`
 2. Deploy new keys to tmpfs: update `tmi-decrypt.sh` to use new JWE
 3. Restart TMI — it serves new public key from JWKS endpoint
 4. Re-issue all trustmarks (old signatures invalid against new key)

@@ -20,8 +20,8 @@ gen_keys() { # dir pub jwe
 }
 
 echo "[lab] ensuring TA/TMI keys exist"
-gen_keys packages/tmi-server/keys tmi.pub.jwk tmi.priv.jwe
-gen_keys packages/ta-server/keys  ta.pub.jwk  ta.priv.jwe
+gen_keys services/tmi-server/keys tmi.pub.jwk tmi.priv.jwe
+gen_keys services/ta-server/keys  ta.pub.jwk  ta.priv.jwe
 
 echo "[lab] building + starting (this builds two Node images on first run)"
 docker compose -f "$COMPOSE" up --build -d

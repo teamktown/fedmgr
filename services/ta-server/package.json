@@ -1,6 +1,7 @@
 {
   "name": "@letsfederate/ta-server",
   "version": "0.0.1",
+  "private": true,
   "description": "Trust Anchor server — OIDF entity configuration, federation_list, and federation_fetch endpoints",
   "type": "module",
   "main": "dist/index.js",
@@ -35,14 +36,10 @@
     "CHANGELOG.md",
     "README.md"
   ],
-  "publishConfig": {
-    "access": "public",
-    "provenance": true
-  },
   "repository": {
     "type": "git",
     "url": "https://github.com/teamktown/fedmgr.git",
-    "directory": "packages/ta-server"
+    "directory": "services/ta-server"
   },
   "engines": {
     "node": ">=24.0.0 <27.0.0"

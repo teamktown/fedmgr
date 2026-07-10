@@ -14,11 +14,11 @@
 #
 # Usage:
 #   bash scripts/tmi-keys-init.sh [keys-dir]
-#   Default keys-dir: packages/tmi-server/keys
+#   Default keys-dir: services/tmi-server/keys
 
 set -euo pipefail
 
-KEYS_DIR="${1:-packages/tmi-server/keys}"
+KEYS_DIR="${1:-services/tmi-server/keys}"
 PASS_FILE="${KEYS_DIR}/.pass"
 PUB_JWK="${KEYS_DIR}/tmi.pub.jwk"
 PRIV_JWE="${KEYS_DIR}/tmi.priv.jwe"

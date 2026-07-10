@@ -5,11 +5,13 @@
   "description": "fedmgr — OpenID Federation trust backplane for MCP. Private workspace root; the published front door is @letsfederate/fedmgr (packages/fedmgr).",
   "workspaces": [
     "packages/*",
+    "services/*",
     "site"
   ],
   "scripts": {
     "build": "npm run build -ws --if-present",
-    "test": "npm run test -ws --if-present",
+    "test": "npm run test:structure && npm run test -ws --if-present",
+    "test:structure": "node --test test/*.test.mjs",
     "test:packages": "npm run test -ws --if-present",
     "test:convergence": "npm test -w @letsfederate/kms -- --runInBand && npm test -w @letsfederate/fedmgr-mcp -- --runInBand",
     "scan": "SSC/scripts/scan-all.sh",
@@ -19,7 +21,7 @@
     "tmi:keys:init": "bash scripts/tmi-keys-init.sh",
     "tmi:dev": "npm run dev -w @letsfederate/tmi-server",
     "tmi:start": "bash scripts/tmi-decrypt.sh --start",
-    "ta:keys:init": "bash scripts/tmi-keys-init.sh packages/ta-server/keys",
+    "ta:keys:init": "bash scripts/tmi-keys-init.sh services/ta-server/keys",
     "ta:dev": "npm run dev -w @letsfederate/ta-server",
     "mcp:dev": "npm run dev -w @letsfederate/fedmgr-mcp",
     "mcp:start": "npm run start -w @letsfederate/fedmgr-mcp"

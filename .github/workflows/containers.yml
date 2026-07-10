@@ -108,7 +108,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: Dockerfile.${{ matrix.service }}
+          file: services/${{ matrix.service }}/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
@@ -204,11 +204,11 @@ jobs:
         run: |
           # Start a one-shot local TMI process with the decrypted key
           TMI_PRIV_JWK_PATH="$TMI_KEY" \
-          TMI_PUB_JWK_PATH="packages/${{ matrix.service }}/keys/tmi.pub.jwk" \
+          TMI_PUB_JWK_PATH="services/${{ matrix.service }}/keys/tmi.pub.jwk" \
           TMI_ISSUER="$TMI_ISSUER" \
           TMI_JWKS_URL="$TMI_JWKS_URL" \
           TMI_PORT=18080 \
-            node packages/tmi-server/dist/index.js &
+            node services/tmi-server/dist/index.js &
           TMI_PID=$!
           sleep 2
 

@@ -11,7 +11,7 @@ import fs from "node:fs";
 import path from "node:path";
 import crypto from "node:crypto";
 
-const DEFAULT_KEYS_DIR = "packages/tmi-server/keys";
+const DEFAULT_KEYS_DIR = "services/tmi-server/keys";
 
 export function registerKeysCommands(program: Command): void {
   const keys = program.command("keys").description("Key management operations");

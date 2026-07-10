@@ -14,13 +14,13 @@ deployment/hardening work left to pursue.
     - `FastEmbedder` — local ONNX `all-MiniLM-L6-v2` (384-dim) via `fastembed`.
   - `entityToText` — deterministic flattening of an entity's id + OIDF metadata.
 - **`GET /federation_search?q=&k=`** on the Trust Anchor
-  (`packages/ta-server/src/federation/federation-search.ts`) — indexes active
+  (`services/ta-server/src/federation/federation-search.ts`) — indexes active
   subordinates from the `FederationStore` and ranks them. Env:
   `TA_VEC_PATH` (index location), `TA_VEC_EMBEDDER=hash|minilm`.
 - **`search_federation`** MCP tool (`packages/fedmgr-mcp`).
 - **`fedmgr search "<query>"`** CLI command (`packages/fedmgr`).
 - Tests: `packages/fedvec` unit suite (real RVF round-trip) +
-  `packages/ta-server/test/federation-search.test.mjs` (real HTTP + store + rvf).
+  `services/ta-server/test/federation-search.test.mjs` (real HTTP + store + rvf).
 
 ### Design principle
 

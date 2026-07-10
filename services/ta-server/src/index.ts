@@ -26,8 +26,8 @@
  *
  * Key policy (same as tmi-server):
  *   TA_PRIVATE_JWK must point to a tmpfs-decrypted file at runtime.
- *   Use scripts/tmi-keys-init.sh --dir packages/ta-server/keys and
- *   scripts/tmi-decrypt.sh (with KEYS_DIR=packages/ta-server/keys).
+ *   Use scripts/tmi-keys-init.sh --dir services/ta-server/keys and
+ *   scripts/tmi-decrypt.sh (with KEYS_DIR=services/ta-server/keys).
  *
  * Config (env):
  *   PORT              default 8090

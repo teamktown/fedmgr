@@ -283,7 +283,7 @@ silently because nothing tests them together.
 ### ✅ Done — 2026-06-11
 
 **Structural fix (single source of truth).** Extracted the TMI request schema into
-`packages/tmi-server/src/schemas.ts` (`IssueRequestSchema` + `IssueRequest` type) —
+`services/tmi-server/src/schemas.ts` (`IssueRequestSchema` + `IssueRequest` type) —
 its own side-effect-free module, because `tmi-server/index.ts` self-starts an HTTP
 server on import and so cannot be imported just to reuse a schema. `index.ts` now
 imports the schema from there. The fedmgr-mcp contract test imports the **same**
@@ -386,14 +386,14 @@ when admin auth is required but `ADMIN_TOKEN` is unset, the admin plane is seale
 serving federation. An admin-plane misconfig must not become a full federation
 outage. "Required" = `NODE_ENV=production` **or** `TA_REQUIRE_ADMIN_AUTH` truthy.
 
-**Fix (`packages/ta-server/src/management/index.ts`).**
+**Fix (`services/ta-server/src/management/index.ts`).**
 - Added `adminAuthRequired()` (exported) + `isTruthy()` env helpers.
 - Reworked `adminAuth({ adminToken, authRequired })`: token set → 401 without a
   valid bearer; no token + required → **503** (sealed); no token + not required →
   allow (dev). Factory now logs three states (`enabled` / `[TRUST:FAIL]` sealed /
   `[TRUST:WARN]` open-dev).
 
-**Tests first (`packages/ta-server/test/management-auth.test.mjs`, supertest, 5 cases):**
+**Tests first (`services/ta-server/test/management-auth.test.mjs`, supertest, 5 cases):**
 production-no-token → 503 (GET + revoke), `TA_REQUIRE_ADMIN_AUTH`-no-token → 503,
 token set → 401/401/200, dev → 200, and `adminAuthRequired()` env matrix. Verified
 red via a throwaway probe against the stashed old source (returned 200 where the
@@ -429,7 +429,7 @@ strict increase in protection, never a decrease) and documented it as the one pl
 SSRF fixes land.
 
 **Deleted the two duplicates** (`packages/fedmgr-mcp/src/validate-url.ts`,
-`packages/ta-server/src/utils/validate-url.ts`) and repointed their imports to
+`services/ta-server/src/utils/validate-url.ts`) and repointed their imports to
 `@letsfederate/kms`. fedmgr already imported from kms. Preserved ta-server's
 client-facing `[TRUST:FAIL]` enrollment-error signal by prefixing at its response
 boundary (the shared validator stays prefix-free — presentation is the caller's job).

@@ -75,11 +75,11 @@ fedmgr/
 
 # Single package:
 cd packages/kms && npm test
-cd packages/ta-server && npm test
+cd services/ta-server && npm test
 
 # Single package with JUnit output:
 cd packages/kms       && npm run test:report
-cd packages/ta-server && npm run test:report
+cd services/ta-server && npm run test:report
 
 # Root (Jest legacy + security):
 npm test
@@ -164,7 +164,7 @@ cat test-results/summary.log
 
 ```bash
 # Single file:
-cd packages/ta-server
+cd services/ta-server
 node --test --test-reporter=spec test/chain-verifier.test.mjs
 
 # Filter by name pattern:
@@ -359,7 +359,7 @@ JUnit XML as CI artifacts — don't commit them.
 
 **Q: How do I run only one test file?**
 ```bash
-cd packages/ta-server
+cd services/ta-server
 node --test --test-reporter=spec test/chain-verifier.test.mjs
 ```
 
@@ -381,7 +381,7 @@ replace with a database-backed registry. The `SubordinateRegistry` base class is
 **Q: What does `entity_type=intermediate` do in `GET /federation_list`?**
 A: Returns only entities whose registry entry has a
 `metadata.federation_entity.federation_fetch_endpoint` — i.e. entities that themselves have
-subordinates. Detected by `isIntermediate()` in `packages/ta-server/src/federation/subordinate-statements.ts`.
+subordinates. Detected by `isIntermediate()` in `services/ta-server/src/federation/subordinate-statements.ts`.
 
 **Q: How is `FileSubordinateRegistry` activated?**
 A: Set `TA_REGISTRY_PATH=/path/to/registry.json` when starting `ta-server`. Unset → in-memory

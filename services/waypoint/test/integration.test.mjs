@@ -14,7 +14,7 @@ import { Waypoint } from "../dist/mux.js";
 import { sdkConnector } from "../dist/connector.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
-const FEDMGR_BIN = path.resolve(HERE, "../../fedmgr-mcp/dist/bin.js");
+const FEDMGR_BIN = path.resolve(HERE, "../../../packages/fedmgr-mcp/dist/bin.js");
 const ANCHOR = "https://trust.letsfederate.org";
 
 const fedmgr = {

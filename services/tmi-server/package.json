@@ -1,6 +1,7 @@
 {
   "name": "@letsfederate/tmi-server",
   "version": "0.0.1",
+  "private": true,
   "description": "Trustmark Issuer service — issues signed OIDF trustmarks, serves JWKS",
   "type": "module",
   "main": "dist/index.js",
@@ -30,14 +31,10 @@
     "CHANGELOG.md",
     "README.md"
   ],
-  "publishConfig": {
-    "access": "public",
-    "provenance": true
-  },
   "repository": {
     "type": "git",
     "url": "https://github.com/teamktown/fedmgr.git",
-    "directory": "packages/tmi-server"
+    "directory": "services/tmi-server"
   },
   "engines": {
     "node": ">=24.0.0 <27.0.0"

@@ -227,11 +227,11 @@ run_tool osv-scanner "$OSV_OUT" \
 run_tool syft "$SYFT_OUT" \
   syft "dir:." --output cyclonedx-json --quiet || true
 
-# This repo ships multiple Dockerfiles (Dockerfile.ta-server, .tmi-server, …)
-# and no single root "Dockerfile". Lint every Dockerfile* we ship.
+# Dockerfiles live beside their services (services/*/Dockerfile) plus example
+# images under examples/. Lint every Dockerfile* we ship (depth ≤ 3).
 HADO_TARGETS=()
 while IFS= read -r df; do HADO_TARGETS+=("$df"); done < <(
-  find "$REPO_ROOT" -maxdepth 2 -type f -name 'Dockerfile*' -not -path '*/node_modules/*' | sort)
+  find "$REPO_ROOT" -maxdepth 3 -type f -name 'Dockerfile*' -not -path '*/node_modules/*' | sort)
 if [ "${#HADO_TARGETS[@]}" -gt 0 ]; then
   run_tool hadolint "$HADOLINT_OUT" \
     hadolint --format json "${HADO_TARGETS[@]}" || true

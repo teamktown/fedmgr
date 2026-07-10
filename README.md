@@ -17,9 +17,9 @@ This is an npm-workspaces TypeScript monorepo (Node ≥ 24). The pieces:
 | `packages/fedmgr` | the umbrella CLI (`fedmgr <verb>`) — the front door |
 | `packages/oidf-verify` | the OpenID Federation **§10 verifier** — every trust decision routes through it (pinned anchors, per-hop key binding, no `jku`) |
 | `packages/ssc-attest` | signed supply-chain evidence — binds artifact digest + SBOM + scan verdict + gate into one in-toto statement |
-| `packages/ta-server` | Trust Anchor — subordinate registry, proof-of-key enrollment, `federation_fetch` |
-| `packages/tmi-server` | Trust Mark Issuer — issues marks, gated on passing SSC evidence |
-| `packages/waypoint` | trust-enforcing MCP gateway — admits a downstream only if it chains to your anchor |
+| `services/ta-server` | Trust Anchor — subordinate registry, proof-of-key enrollment, `federation_fetch` |
+| `services/tmi-server` | Trust Mark Issuer — issues marks, gated on passing SSC evidence |
+| `services/waypoint` | trust-enforcing MCP gateway — admits a downstream only if it chains to your anchor |
 | `packages/kms` | pluggable signing (SoftKMS / PKCS#11 / OpenBao) + trust policy |
 | `packages/obs` | structured logging + OpenTelemetry |
 | `packages/fedvec` | local semantic search over federation entities (RuVector RVF) |

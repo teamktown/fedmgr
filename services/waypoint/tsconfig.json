@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "composite": true
+  },
+  "references": [
+    { "path": "../../packages/fedmgr-mcp" },
+    { "path": "../../packages/oidf-verify" }
+  ],
+  "include": [
+    "src/**/*"
+  ]
+}

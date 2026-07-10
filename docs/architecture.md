@@ -38,8 +38,8 @@ fedmgr/
 │   ├── tmi-decrypt.sh   — Decrypt JWE → tmpfs; wipe on EXIT
 │   └── oidf-cert.sh     — OIDF conformance test harness runner
 │
-├── Dockerfile.tmi-server — Multi-stage build for tmi-server
-├── Dockerfile.ta-server  — Multi-stage build for ta-server
+├── services/tmi-server/Dockerfile — Multi-stage build for tmi-server
+├── services/ta-server/Dockerfile  — Multi-stage build for ta-server
 ├── docs/
 │   ├── architecture.md         — This file
 │   ├── decisions.md            — Locked architecture decisions
@@ -173,11 +173,11 @@ Services:
 
 **Key flow in Docker:**
 ```
-packages/ta-server/keys/
+services/ta-server/keys/
   ta.priv.jwe (PBES2)  ──→ ta-decrypt ──→ /run/secrets/ta.priv.jwk  (RAM only)
   ta.pub.jwk  (plain)  ──→ bind-mount :ro → /app/keys/ta.pub.jwk
 
-packages/tmi-server/keys/
+services/tmi-server/keys/
   tmi.priv.jwe (PBES2) ──→ tmi-decrypt ──→ /run/secrets/tmi.priv.jwk (RAM only)
   tmi.pub.jwk  (plain) ──→ bind-mount :ro → /app/keys/tmi.pub.jwk
 ```

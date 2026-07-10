@@ -7,10 +7,10 @@ This walkthrough describes the converged implementation after adopting the `feat
 | Concept | Package / file | OpenID Federation mapping |
 | --- | --- | --- |
 | Signing provider | `packages/kms/src/index.ts` and `packages/kms/src/providers/openbao.ts` | Signs entity statements, subordinate statements, trust marks, and invocation JWTs without exposing private keys. |
-| Trust Anchor | `packages/ta-server/src/index.ts` | Serves `/.well-known/openid-federation`, `/.well-known/jwks.json`, `/federation_list`, `/federation_fetch`, and `/trust-mark-status`. |
-| Entity statement | `packages/ta-server/src/federation/entity-statements.ts` | Self-signed JWT where `iss == sub` and metadata/JWKS describe the entity. |
-| Subordinate statement | `packages/ta-server/src/federation/subordinate-statements.ts` | TA-signed JWT where `iss` is the TA and `sub` is the MCP/TMI/subordinate entity. |
-| Trust mark status | `packages/ta-server/src/federation/trust-mark-status.ts` | OIDF trust-mark-status endpoint semantics. |
+| Trust Anchor | `services/ta-server/src/index.ts` | Serves `/.well-known/openid-federation`, `/.well-known/jwks.json`, `/federation_list`, `/federation_fetch`, and `/trust-mark-status`. |
+| Entity statement | `services/ta-server/src/federation/entity-statements.ts` | Self-signed JWT where `iss == sub` and metadata/JWKS describe the entity. |
+| Subordinate statement | `services/ta-server/src/federation/subordinate-statements.ts` | TA-signed JWT where `iss` is the TA and `sub` is the MCP/TMI/subordinate entity. |
+| Trust mark status | `services/ta-server/src/federation/trust-mark-status.ts` | OIDF trust-mark-status endpoint semantics. |
 | MCP operations | `packages/fedmgr-mcp/src/openid-ops.ts` | MCP-native provisioning and invocation-token checks layered on top of OIDF primitives. |
 | MCP tool surface | `packages/fedmgr-mcp/src/index.ts` | Claude/MCP clients call tools such as `provision_mcp_trust_circle`, `check_trust_chain`, and `verify_trustmark`. |
 

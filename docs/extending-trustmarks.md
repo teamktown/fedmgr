@@ -10,7 +10,7 @@ create new trustmark types. Read this before modifying the trustmark schema.
 The v1 trustmark payload is defined in:
 
 ```
-packages/tmi-server/src/index.ts      — IssueRequestSchema (zod)
+services/tmi-server/src/index.ts      — IssueRequestSchema (zod)
 packages/schemas/trustmark-v1.json    — (planned, Increment F)
 ```
 
@@ -52,7 +52,7 @@ https://letsfederate.org/trustmarks/CertifiedForMCPUse_v1
 
 Create a Zod schema in:
 ```
-packages/tmi-server/src/schemas/<type-name>-v1.ts
+services/tmi-server/src/schemas/<type-name>-v1.ts
 ```
 
 Example:
@@ -72,7 +72,7 @@ export const CertifiedForMCPUse_v1 = z.object({
 
 ### Step 3 — Register the schema in the issue endpoint
 
-In `packages/tmi-server/src/index.ts`, extend the `IssueRequestSchema`
+In `services/tmi-server/src/index.ts`, extend the `IssueRequestSchema`
 discriminated union or add a type-specific route:
 
 ```typescript
@@ -101,7 +101,7 @@ In `packages/fedmgr/src/commands/trustmark.ts`, add the type URI to the
 ### Step 5 — Write TDD tests (RED → GREEN → HARDEN)
 
 ```
-packages/tmi-server/test/trustmark-<type-name>.test.mjs
+services/tmi-server/test/trustmark-<type-name>.test.mjs
 ```
 
 Test:
@@ -114,7 +114,7 @@ Test:
 ### Step 6 — Document the OIDF entity statement
 
 If the new type requires an OIDF trust mark declaration in the TMI entity
-statement, update `packages/tmi-server/src/federation/entity-statements.ts`:
+statement, update `services/tmi-server/src/federation/entity-statements.ts`:
 
 ```typescript
 export function tmiMetadata(jwksUri: string): Record<string, unknown> {
@@ -175,8 +175,8 @@ audit_report: z.string().url().optional(),
 
 | File | Purpose |
 |---|---|
-| `packages/tmi-server/src/index.ts` | `IssueRequestSchema` — add new type schemas here |
-| `packages/tmi-server/src/federation/entity-statements.ts` | `tmiMetadata()` — declare trust_mark_issuers |
+| `services/tmi-server/src/index.ts` | `IssueRequestSchema` — add new type schemas here |
+| `services/tmi-server/src/federation/entity-statements.ts` | `tmiMetadata()` — declare trust_mark_issuers |
 | `packages/fedmgr/src/commands/trustmark.ts` | CLI `--id` option help text |
 | `docs/decisions.md` | Decision 3 — schema freeze policy |
 | `packages/schemas/` | JSON Schema files (Increment F) |

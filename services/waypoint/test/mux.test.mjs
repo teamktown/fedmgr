@@ -91,7 +91,7 @@ test("a downstream that fails to connect is skipped; others still work", async (
 // leaf (VALID); `bad` has no path to the pinned anchor (INVALID); `err` makes
 // the fetch throw (validator error → fail-closed deny).
 import { verifyTrustChain } from "@letsfederate/oidf-verify";
-import { makeEntity, entityConfig, subordinateStatement, federation, pin } from "../../oidf-verify/test/harness.mjs";
+import { makeEntity, entityConfig, subordinateStatement, federation, pin } from "../../../packages/oidf-verify/test/harness.mjs";
 
 async function realCryptoFixture() {
   const ta = await makeEntity(ANCHOR);

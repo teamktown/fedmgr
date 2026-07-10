@@ -113,14 +113,15 @@ jobs:
           mkdir -p sbom-output
           cyclonedx-npm --output-format JSON --output-file sbom-output/fedmgr-sbom.json
 
-      - name: Generate SBOM per publishable package
+      - name: Generate SBOM per shipped unit (npm packages + container services)
         run: |
-          for pkg in kms fedmgr tmi-server ta-server; do
+          for dir in packages/kms packages/fedmgr services/tmi-server services/ta-server; do
+            pkg=$(basename "$dir")
             cyclonedx-npm \
               --package-lock-only \
               --output-format JSON \
               --output-file sbom-output/${pkg}-sbom.json \
-              packages/${pkg}/package.json || true
+              ${dir}/package.json || true
           done
 
       - name: Upload SBOM artifacts
