@@ -9,6 +9,7 @@
     "site"
   ],
   "scripts": {
+    "postinstall": "node scripts/patch-fastembed.cjs",
     "build": "npm run build -ws --if-present",
     "test": "npm run test:structure && npm run test -ws --if-present",
     "test:structure": "node --test test/*.test.mjs",
@@ -45,7 +46,16 @@
     "semantic-release-monorepo": "^8.0.2"
   },
   "overrides": {
-    "serialize-javascript": "^7.0.4"
+    "serialize-javascript": "^7.0.4",
+    "fast-uri": "^3.1.2",
+    "hono": "^4.12.25",
+    "tar": "^7.5.11",
+    "express": {
+      "path-to-regexp": "^0.1.13"
+    },
+    "router": {
+      "path-to-regexp": "^8.4.0"
+    }
   },
   "engines": {
     "node": ">=24.0.0 <27.0.0"

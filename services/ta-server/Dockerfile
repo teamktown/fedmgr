@@ -19,6 +19,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends python3 make g+
 RUN npm ci --ignore-scripts
 RUN npm rebuild better-sqlite3
 
+# --ignore-scripts also skips the root postinstall, which adapts fastembed to
+# the security-pinned tar >= 7 (see scripts/patch-fastembed.cjs). Run it
+# explicitly — without it, FastEmbedder (TA_VEC_EMBEDDER=minilm) breaks at
+# model download.
+COPY scripts/patch-fastembed.cjs scripts/
+RUN node scripts/patch-fastembed.cjs
+
 COPY packages/kms/      packages/kms/
 COPY packages/fedvec/   packages/fedvec/
 COPY services/ta-server/ services/ta-server/
