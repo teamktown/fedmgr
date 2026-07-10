@@ -5,7 +5,7 @@
  * with the real SDK connector against an actual MCP server.
  */
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { StdioClientTransport, getDefaultEnvironment } from "@modelcontextprotocol/sdk/client/stdio.js";
 import type { Tool } from "@modelcontextprotocol/sdk/types.js";
 import type { DownstreamConfig } from "./types.js";
 
@@ -24,7 +24,11 @@ export interface Connector {
 export const sdkConnector: Connector = {
   async connect(d: DownstreamConfig): Promise<DownstreamConnection> {
     const client = new Client({ name: "waypoint", version: "0.0.1" }, { capabilities: {} });
-    const transport = new StdioClientTransport({ command: d.command, args: d.args ?? [] });
+    const transport = new StdioClientTransport({
+      command: d.command,
+      args: d.args ?? [],
+      ...(d.env ? { env: { ...getDefaultEnvironment(), ...d.env } } : {}),
+    });
     await client.connect(transport);
     return {
       name: d.name,

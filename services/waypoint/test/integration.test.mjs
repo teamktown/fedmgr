@@ -51,3 +51,25 @@ test("REAL: denies fedmgr-mcp under a non-accepted anchor; exposes nothing, neve
     await wp.close();
   }
 });
+
+test("REAL: DownstreamConfig.env reaches the spawned downstream (SDK strips parent env)", async () => {
+  const envEcho = {
+    name: "envecho",
+    command: "node",
+    args: [path.resolve(HERE, "fixtures/env-echo-server.mjs")],
+    env: { WAYPOINT_PROBE: "sesame" },
+    entityId: `${ANCHOR}/mcp/env-echo`,
+    trustAnchor: ANCHOR,
+  };
+  const wp = new Waypoint({ downstreams: [envEcho], policy: { acceptedAnchors: [ANCHOR] } }, sdkConnector);
+  await wp.start();
+  try {
+    const r = await wp.callTool("envecho__echo_env", { key: "WAYPOINT_PROBE" });
+    assert.equal(r.content[0].text, "sesame");
+    // and the parent env is NOT blindly inherited: an unset probe stays unset
+    const r2 = await wp.callTool("envecho__echo_env", { key: "WAYPOINT_ABSENT" });
+    assert.equal(r2.content[0].text, "<unset>");
+  } finally {
+    await wp.close();
+  }
+});

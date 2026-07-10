@@ -22,6 +22,7 @@ Claude Code ──MCP──▶ waypoint ──▶ fedmgr   (anchor accepted → 
   "downstreams": [
     { "name": "fedmgr", "command": "node",
       "args": ["/abs/path/packages/fedmgr-mcp/dist/bin.js"],
+      "env": { "NODE_ENV": "development" },
       "entityId": "https://trust.letsfederate.org/mcp/fedmgr-mcp",
       "trustAnchor": "https://trust.letsfederate.org" }
   ],

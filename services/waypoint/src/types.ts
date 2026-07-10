@@ -18,6 +18,13 @@ export interface DownstreamConfig {
   command: string;
   /** Arguments for the executable. */
   args?: string[];
+  /**
+   * Extra environment for the spawned downstream, merged over the MCP SDK's
+   * safe default set (HOME, PATH, …). The SDK strips the parent env by design,
+   * so anything a downstream needs (e.g. NODE_ENV=development for lab http:
+   * endpoints) must be declared here — explicit beats inherited for a PEP.
+   */
+  env?: Record<string, string>;
   /** The downstream's OIDF entity id (HTTPS URL). */
   entityId: string;
   /** The trust anchor this downstream chains to (entity id, HTTPS URL). */
