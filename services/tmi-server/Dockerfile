@@ -7,7 +7,7 @@
 #
 # KEY POLICY:
 #   - No private key material in any image layer.
-#   - Decrypted key is mounted at runtime via tmpfs (see examples/lab/).
+#   - Decrypted key is mounted at runtime via tmpfs (see deploy/lab/).
 #   - TMI_PRIVATE_JWK must point to /run/secrets/tmi.priv.jwk (tmpfs mount).
 #   - TMI_PUBLIC_JWK must point to /app/keys/tmi.pub.jwk (bind-mount, read-only).
 # ---------------------------------------------------------------------------

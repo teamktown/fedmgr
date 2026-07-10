@@ -6,7 +6,7 @@
 # and waits for health. Idempotent: safe to re-run.
 set -euo pipefail
 cd "$(dirname "$0")/../.."   # repo root
-COMPOSE="examples/lab/docker-compose.yml"
+COMPOSE="deploy/lab/docker-compose.yml"
 STEP_IMG="smallstep/step-cli:latest"
 
 gen_keys() { # dir pub jwe
@@ -45,4 +45,4 @@ echo "[lab] TA subordinates: $(curl -fsS http://localhost:8090/federation_list 2
 echo "[lab] Next:"
 echo "        ./examples/01-trust-circle/round-trip.sh    # sign+SBOM+trustmark round trip (needs cosign, syft, jq)"
 echo "        see docs/walkthroughs/trust-lab-quickstart.md  # incl. how to drive it from Claude Code"
-echo "[lab] Stop & clean: ./examples/lab/down.sh"
+echo "[lab] Stop & clean: ./deploy/lab/down.sh"

@@ -323,7 +323,7 @@ failed to mount ...: mount source: "overlay", fstype: overlay, err: invalid argu
 Root cause: Docker uses overlayfs; the devcontainer host already uses overlayfs; nested
 overlay mounts are not supported without kernel `userxattr` mount option or a different
 storage driver. **Workaround: use native SoftHSM2 (§4.2).** The Docker Compose file
-(`examples/lab/docker-compose.softhsm-test.yml`) works on:
+(`deploy/lab/docker-compose.softhsm-test.yml`) works on:
 - Bare Linux with `overlay2` driver
 - macOS Docker Desktop (uses a Linux VM)
 - GitHub Actions (ubuntu-latest, non-nested)

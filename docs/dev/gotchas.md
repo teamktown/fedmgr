@@ -7,8 +7,8 @@ lab, or the SSC suite. Each entry is a **guard**: the trap, then the rule.
 ```bash
 npm run build            # tsc -b across all packages
 npm test                 # per-package `node --test` — the whole workspace suite
-./examples/lab/up.sh     # build + start registry + TA + TMI, wait for health
-./examples/lab/down.sh   # stop & clean
+./deploy/lab/up.sh     # build + start registry + TA + TMI, wait for health
+./deploy/lab/down.sh   # stop & clean
 npm run scan             # SSC/scripts/scan-all.sh (needs scanners installed)
 ```
 The published front door is **`@letsfederate/fedmgr`** (`packages/fedmgr/`,
@@ -25,7 +25,7 @@ route at runtime). When service A starts importing package B, update
 - COPY `packages/B/` and `npm run build -w @letsfederate/B` **before** building A
 - ship `packages/B/dist` (+ `package.json`) in the runtime stage
 
-**Verify by running**, not by host build: `./examples/lab/up.sh` then curl a
+**Verify by running**, not by host build: `./deploy/lab/up.sh` then curl a
 real endpoint (e.g. `curl localhost:8090/federation_search?q=x`). This is how
 the fedvec→ta-server regression was caught after host `npm run build` passed.
 

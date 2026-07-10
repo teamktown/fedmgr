@@ -7,13 +7,13 @@
 #   4. Runs the 8 integration tests in packages/kms/test/pkcs11.test.mjs
 #
 # Build from repo root:
-#   docker build -f examples/lab/Dockerfile.softhsm-test -t fedmgr-pkcs11-test .
+#   docker build -f deploy/lab/Dockerfile.softhsm-test -t fedmgr-pkcs11-test .
 #
 # Run (standalone):
 #   docker run --rm fedmgr-pkcs11-test
 #
 # Or via Compose:
-#   docker compose -f examples/lab/docker-compose.softhsm-test.yml up --exit-code-from test
+#   docker compose -f deploy/lab/docker-compose.softhsm-test.yml up --exit-code-from test
 
 FROM node:22-slim
 

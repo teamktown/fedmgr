@@ -35,7 +35,7 @@ node --test packages/fedmgr-mcp/test/oidf-trust-extension.test.mjs \
 Start the lab first, then run the round trip:
 
 ```bash
-./examples/lab/up.sh            # TA + TMI + registry (one command)
+./deploy/lab/up.sh            # TA + TMI + registry (one command)
 ./examples/01-trust-circle/round-trip.sh
 ```
 

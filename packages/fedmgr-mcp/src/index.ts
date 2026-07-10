@@ -707,7 +707,7 @@ async function toolInitializeLocalCa(): Promise<string> {
     "",
     "3. Start the full lab environment (Docker required):",
     "   npm run lab:up",
-    "   (Runs: docker compose -f examples/lab/docker-compose.yml up --build)",
+    "   (Runs: docker compose -f deploy/lab/docker-compose.yml up --build)",
     "",
     "4. Verify services are healthy:",
     "   curl http://localhost:8090/health   # Trust Anchor",

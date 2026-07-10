@@ -1,6 +1,6 @@
 # Cloudflare Tunnel sidecar for waypoint — outbound-only, no inbound ports.
 #
-#   CF_TUNNEL_TOKEN=eyJ... docker compose -f examples/tunnels/docker-compose.cloudflared.yml up -d
+#   CF_TUNNEL_TOKEN=eyJ... docker compose -f deploy/tunnels/docker-compose.cloudflared.yml up -d
 #
 # In the Cloudflare Zero Trust dashboard, create the tunnel, copy its token, and
 # map a public hostname (waypoint.<your-domain>) to the ORIGIN below. Then add a

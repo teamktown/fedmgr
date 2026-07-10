@@ -191,7 +191,7 @@ the following must be deployed:
 
 - `letsfederate.org` must have a valid TLS certificate (Let's Encrypt is fine)
 - The TA server and TMI server can run on the same host with different subdomains
-- Use the compose lab (`examples/lab/docker-compose.yml`) as the local model;
+- Use the compose lab (`deploy/lab/docker-compose.yml`) as the local model;
   the production setup adds a reverse proxy (nginx/Caddy) in front
 
 ### Key material for CI trustmark issuance

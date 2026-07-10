@@ -40,8 +40,8 @@ LOG_FORMAT=json fedmgr doctor             # force structured logs (default: text
 
 ## The trust lab (what `init` stands up)
 ```bash
-./examples/lab/up.sh      # build + start registry + Trust Anchor + Trustmark Issuer, wait healthy
-./examples/lab/down.sh    # stop & clean
+./deploy/lab/up.sh      # build + start registry + Trust Anchor + Trustmark Issuer, wait healthy
+./deploy/lab/down.sh    # stop & clean
 curl -s localhost:8090/health                       # Trust Anchor
 curl -s localhost:8080/health                       # Trustmark Issuer
 curl -s 'localhost:8090/federation_search?q=trust'  # semantic search (fedvec)

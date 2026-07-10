@@ -19,7 +19,7 @@ home dir (injectable for tests).
 
 ## Minting — `mintLocalCa(paths?, opts?)`
 - Uses the `smallstep/step-cli` **container** (no host `step` dependency —
-  consistent with `examples/lab`). Runs as the host uid so files are
+  consistent with `deploy/lab`). Runs as the host uid so files are
   host-owned, not root.
 - `step certificate create "letsfederate local root CA" root_ca.crt root_ca.key
   --profile root-ca --password-file .pass` → EC P-256, self-signed, CA:TRUE.

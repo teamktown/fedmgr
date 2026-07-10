@@ -68,7 +68,7 @@ PKCS#11 integration tests run against a natively-installed SoftHSM2 library
   because nested overlayfs mounts are not supported without the `userxattr` kernel option.
 - Native SoftHSM2 is faster (no container build time), simpler (no volume mounts), and
   environment-agnostic (bare Linux, macOS, GitHub Actions, devcontainers all work).
-- The Docker Compose file (`examples/lab/docker-compose.softhsm-test.yml`) remains valid for
+- The Docker Compose file (`deploy/lab/docker-compose.softhsm-test.yml`) remains valid for
   bare-Linux hosts and GitHub Actions (non-nested), but is **not** the primary test path.
 
 **Constraints:**

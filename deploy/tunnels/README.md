@@ -21,7 +21,7 @@ Entra/Google/Okta/OIDC/SAML, plus service tokens for non-human callers.
 # 1. In the Cloudflare Zero Trust dashboard: create a tunnel, copy its token,
 #    and map a public hostname (waypoint.<your-domain>) -> http://host.docker.internal:8077
 # 2. Put the token in the environment and run the sidecar:
-CF_TUNNEL_TOKEN=eyJ... docker compose -f examples/tunnels/docker-compose.cloudflared.yml up -d
+CF_TUNNEL_TOKEN=eyJ... docker compose -f deploy/tunnels/docker-compose.cloudflared.yml up -d
 ```
 Then, in the CF Zero Trust dashboard, add an **Access** application on that
 hostname with your IdP + (for the machine caller) a **service token**. No inbound
@@ -33,7 +33,7 @@ want to own the whole control plane.
 
 ```bash
 # Using the hosted zrok.io (or your self-hosted controller):
-ZROK_ENABLE_TOKEN=... docker compose -f examples/tunnels/docker-compose.zrok.yml up -d
+ZROK_ENABLE_TOKEN=... docker compose -f deploy/tunnels/docker-compose.zrok.yml up -d
 # reserved/custom-domain shares + OAuth: see https://docs.zrok.io
 ```
 

@@ -46,7 +46,7 @@ if [ "$missing" -ne 0 ]; then
   cat >&2 <<'EOF'
 
 This round trip needs: docker, cosign, syft, jq (and a running lab with the local
-OCI registry + TA + TMI from examples/lab/docker-compose.yml, plus SoftHSM for the
+OCI registry + TA + TMI from deploy/lab/docker-compose.yml, plus SoftHSM for the
 signing key). Install them, start the lab, then re-run. Aborting rather than
 producing an unsigned/under-verified result.
 EOF

@@ -4,7 +4,7 @@ These assets travel inside the published `@letsfederate/fedmgr` package so
 `fedmgr init` can stand up a local trust ecosystem.
 
 ## Status (honest)
-- **From a checkout:** `fedmgr init` finds `examples/lab/` and builds the TA/TMI
+- **From a checkout:** `fedmgr init` finds `deploy/lab/` and builds the TA/TMI
   images from source — works today.
 - **Standalone (`npx @letsfederate/fedmgr init` with no checkout):** needs
   **pre-built images** pulled from a registry, because an npm tarball can't

@@ -1,4 +1,4 @@
-# examples/lab/docker-compose.yml
+# deploy/lab/docker-compose.yml
 #
 # Local Trust Lab — brings up:
 #   registry   — OCI registry (distribution/distribution) on :5000
@@ -11,11 +11,11 @@
 #   Public JWKs are bind-mounted read-only from the host.
 #
 # Easiest start (generates keys if missing, builds, waits for health):
-#   ./examples/lab/up.sh            # stop & clean: ./examples/lab/down.sh
+#   ./deploy/lab/up.sh            # stop & clean: ./deploy/lab/down.sh
 #
 # Manual start (keys must already exist — up.sh generates them via the step-cli
 # image, no host `step` CLI needed):
-#   docker compose -f examples/lab/docker-compose.yml up --build -d
+#   docker compose -f deploy/lab/docker-compose.yml up --build -d
 #
 # Environment variables (override via .env or shell):
 #   TA_ENTITY_ID   — public URL of the TA  (default http://localhost:8090)

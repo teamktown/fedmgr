@@ -25,7 +25,7 @@ trust.letsfederate.org  ← canonical Trust Anchor identity (entity id)
 ## 1. Start the lab (one command)
 
 ```bash
-./examples/lab/up.sh
+./deploy/lab/up.sh
 ```
 
 This generates EC P-256 keys (encrypted at rest — no host `step` CLI needed),
@@ -41,7 +41,7 @@ You should see:
 
 The last line means the TA already vouches for the TMI — a real trust chain.
 
-Stop and clean up anytime with `./examples/lab/down.sh`.
+Stop and clean up anytime with `./deploy/lab/down.sh`.
 
 ## 2. The container round trip
 

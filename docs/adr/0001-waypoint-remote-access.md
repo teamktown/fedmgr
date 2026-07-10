@@ -79,7 +79,7 @@ recommendation per persona:
   stable `waypoint.corp.example`; zrok if a fully org-owned control plane is
   mandatory.
 
-Ship a **docker-compose tunnel sidecar** (`examples/tunnels/`, Cloudflare + zrok)
+Ship a **docker-compose tunnel sidecar** (`deploy/tunnels/`, Cloudflare + zrok)
 as the "keep it clean and easy" bootstrap.
 
 **Prerequisite regardless of exposure choice:** implement the MCP OAuth

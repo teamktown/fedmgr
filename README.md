@@ -42,8 +42,8 @@ CLI verbs: `init` · `doctor` · `keys` · `entity` · `trustmark` · `oci` · `
 **Stand up a local trust lab** (Trust Anchor + Trust Mark Issuer + registry in Docker):
 
 ```sh
-./examples/lab/up.sh          # brings the lab up with health checks
-./examples/lab/down.sh        # tears it down
+./deploy/lab/up.sh          # brings the lab up with health checks
+./deploy/lab/down.sh        # tears it down
 ```
 
 ## Where to start reading

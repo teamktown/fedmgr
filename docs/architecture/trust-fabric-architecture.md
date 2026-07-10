@@ -212,7 +212,7 @@ sequenceDiagram
   Note over U,WP: Optionally verify fedmgr/waypoint code pedigree via trust.letsfederate.org
 ```
 
-- **Self-host (primary):** `./examples/lab/up.sh` → your TA/TMI/registry in minutes; full agency.
+- **Self-host (primary):** `./deploy/lab/up.sh` → your TA/TMI/registry in minutes; full agency.
 - **Trust-our-pedigree (secondary):** verify the signed components you run against
   `trust.letsfederate.org` (cosign + trust mark) — independent of runtime trust.
 - **Enterprise:** central org TA; managed/MDM config pins clients to waypoint; signed registry

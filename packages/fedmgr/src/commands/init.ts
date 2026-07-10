@@ -45,7 +45,7 @@ interface InitOpts {
 function findRepoRoot(): string | null {
   let dir = process.cwd();
   for (let i = 0; i < 8; i++) {
-    if (existsSync(resolve(dir, "examples/lab/up.sh"))) return dir;
+    if (existsSync(resolve(dir, "deploy/lab/up.sh"))) return dir;
     const parent = dirname(dir);
     if (parent === dir) break;
     dir = parent;
@@ -159,8 +159,8 @@ export function registerInitCommands(program: Command): void {
         });
       } else {
         await withSpan(TRUST_SPANS.build, async () => {
-          log.info("standing up local ecosystem", { via: "examples/lab/up.sh" });
-          const r = spawnSync("bash", [resolve(repoRoot, "examples/lab/up.sh")], {
+          log.info("standing up local ecosystem", { via: "deploy/lab/up.sh" });
+          const r = spawnSync("bash", [resolve(repoRoot, "deploy/lab/up.sh")], {
             stdio: "inherit",
             cwd: repoRoot,
           });

@@ -9,7 +9,7 @@
 #
 # Usage:
 #   # Start the lab first:
-#   docker compose -f examples/lab/docker-compose.yml up -d
+#   docker compose -f deploy/lab/docker-compose.yml up -d
 #
 #   # Then run cert tests:
 #   bash scripts/oidf-cert.sh [--entity <url>] [--plan <plan-id>]
@@ -34,7 +34,7 @@ RESULTS_DIR="${PWD}/reports/oidf-cert"
 echo "[oidf-cert] Checking TMI health at ${TMI_ISSUER}/health..."
 if ! curl -sf "${TMI_ISSUER}/health" >/dev/null; then
   echo "ERROR: TMI server not reachable at ${TMI_ISSUER}" >&2
-  echo "       Start with: docker compose -f examples/lab/docker-compose.yml up -d" >&2
+  echo "       Start with: docker compose -f deploy/lab/docker-compose.yml up -d" >&2
   exit 1
 fi
 

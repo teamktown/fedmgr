@@ -4,7 +4,7 @@
 # NO checkout: pull pre-built TA/TMI images instead of building from source.
 #
 # ⚠️  The images below are NOT published yet (no operational registry). Until
-#     they are, use the checkout path (examples/lab/, built from source).
+#     they are, use the checkout path (deploy/lab/, built from source).
 #     `fedmgr doctor` will tell you what's available.
 #
 # Override the image refs via env once a registry exists:

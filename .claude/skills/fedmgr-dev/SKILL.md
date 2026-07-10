@@ -7,7 +7,7 @@ description: Working in the fedmgr repo — building, testing, running the trust
 
 fedmgr is an OpenID Federation trust backplane for MCP: a TypeScript workspace
 (`packages/*`) whose published front door is **`@letsfederate/fedmgr`**
-(`packages/fedmgr/`, `bin: fedmgr`). The lab (`examples/lab/`) runs a local
+(`packages/fedmgr/`, `bin: fedmgr`). The lab (`deploy/lab/`) runs a local
 OCI registry + Trust Anchor (TA) + Trustmark Issuer (TMI).
 
 **Before you act, read `docs/dev/gotchas.md`** — it is the canonical list of
@@ -27,7 +27,7 @@ guards. The two that bite hardest:
 ```bash
 npm run build            # tsc -b across packages
 npm test                 # the real suite (per-package node --test)
-./examples/lab/up.sh     # build + start TA/TMI/registry, wait for health
+./deploy/lab/up.sh     # build + start TA/TMI/registry, wait for health
 npm run scan             # SSC scan (installs scanners on consent only)
 ```
 

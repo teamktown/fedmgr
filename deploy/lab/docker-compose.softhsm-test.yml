@@ -8,11 +8,11 @@
 #   npm run build --workspace packages/kms
 #
 #   # Run the test:
-#   docker compose -f examples/lab/docker-compose.softhsm-test.yml up \
+#   docker compose -f deploy/lab/docker-compose.softhsm-test.yml up \
 #     --build --exit-code-from test
 #
 #   # Clean up:
-#   docker compose -f examples/lab/docker-compose.softhsm-test.yml down --rmi local
+#   docker compose -f deploy/lab/docker-compose.softhsm-test.yml down --rmi local
 #
 # The container:
 #   1. Installs SoftHSM2 + pkcs11js native addon
@@ -30,7 +30,7 @@ services:
   test:
     build:
       context: ../..
-      dockerfile: examples/lab/Dockerfile.softhsm-test
+      dockerfile: deploy/lab/Dockerfile.softhsm-test
     container_name: fedmgr-pkcs11-test
     environment:
       # Override these to match your token setup if needed
