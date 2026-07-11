@@ -104,6 +104,22 @@ test("every tracked Dockerfile sits within SSC hadolint reach (find -maxdepth 3)
   }
 });
 
+test("lab TA state is durable: named volume, no /tmp db, non-destructive down", () => {
+  // Regression guards for the ta-data durability work: enrollments must
+  // survive `down`/`up`. Each of these was the exact mechanism of a real
+  // state-loss bug (TA_DB_PATH on /tmp; down.sh hard-coding `down -v`).
+  const compose = readFileSync(join(repoRoot, "deploy/lab/docker-compose.yml"), "utf8");
+  assert.match(compose, /^\s{2}ta-data:/m, "ta-data named volume must be declared");
+  assert.match(compose, /-\s*ta-data:\/data/, "ta-server must mount ta-data at /data");
+  const dbPath = compose.match(/TA_DB_PATH:\s*"?([^"\n]+)"?/)?.[1];
+  assert.ok(dbPath && !dbPath.startsWith("/tmp"), `TA_DB_PATH must not live in /tmp (got ${dbPath})`);
+
+  const down = readFileSync(join(repoRoot, "deploy/lab/down.sh"), "utf8");
+  const downInvocation = down.split("\n").find((l) => /docker compose .*down/.test(l)) ?? "";
+  assert.ok(!/\s-v\b/.test(downInvocation), "down.sh must not hard-code -v; wiping is opt-in (--wipe)");
+  assert.match(down, /--wipe/, "down.sh must offer an explicit --wipe reset path");
+});
+
 test("no private key material is tracked by git", () => {
   // Lab keys are generated into services/*/keys by up.sh. The .gitignore rules
   // are path-anchored — a directory move can silently un-ignore them (this
