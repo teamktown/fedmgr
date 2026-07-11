@@ -42,6 +42,32 @@ volumes:
 
 services:
   # -------------------------------------------------------------------------
+  # Entity host — static HTTP host for leaf entity configurations.
+  # OIDF leaves (e.g. local stdio MCP servers) must serve their self-signed
+  # entity configuration at <entityId>/.well-known/openid-federation for a
+  # §10 verifier to resolve them. Stdio processes have no HTTP surface, so
+  # the lab hosts their statements here. Populate with:
+  #   fedmgr entity config --entity-id http://localhost:9631/mcp/<name> ...
+  #   (write the JWT to ./entity-host/site/mcp/<name>/.well-known/openid-federation
+  #    and the public JWKS to ./entity-host/site/mcp/<name>/jwks.json)
+  # It shares ta-server's network namespace so http://localhost:9631 is the
+  # SAME origin from the TA (loopback), from other lab containers, and from
+  # the host (port published via ta-server) — the TA's same-origin
+  # enrollment check and the host-side §10 verifier see one identity.
+  # -------------------------------------------------------------------------
+  entity-host:
+    image: nginx:alpine
+    container_name: trust-lab-entity-host
+    network_mode: "service:ta-server"
+    depends_on:
+      ta-server:
+        condition: service_started
+    volumes:
+      - ./entity-host/site:/usr/share/nginx/html:ro
+      - ./entity-host/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    restart: unless-stopped
+
+  # -------------------------------------------------------------------------
   # OCI Registry
   # -------------------------------------------------------------------------
   registry:
@@ -92,6 +118,9 @@ services:
     container_name: trust-lab-ta
     ports:
       - "8090:8090"
+      # entity-host (network_mode: service:ta-server) listens here; published
+      # through this pod so host and containers share one origin for leaf ids.
+      - "9631:9631"
     volumes:
       - type: bind
         source: ../../services/ta-server/keys/ta.pub.jwk
@@ -100,6 +129,10 @@ services:
       - ta-secrets:/run/secrets:ro
     environment:
       PORT: "8090"
+      # The lab IS the development environment: everything speaks http://
+      # (localhost + docker DNS), which the TA's URL guard only allows in
+      # development. Production deployments must NOT set this.
+      NODE_ENV: "development"
       # /app is not writable by the non-root `ta` user; put the SQLite DB in /tmp
       # (ephemeral, fine for a lab). Override TA_DB_PATH + a writable volume in prod.
       TA_DB_PATH: "/tmp/ta.db"

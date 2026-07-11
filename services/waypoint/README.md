@@ -34,12 +34,42 @@ Claude Code ──MCP──▶ waypoint ──▶ fedmgr   (anchor accepted → 
 
 ```bash
 WAYPOINT_CONFIG=$(pwd)/waypoint.json \
-  claude mcp add trusted -- node "$(pwd)/packages/waypoint/dist/bin.js"
+  claude mcp add trusted -- node "$(pwd)/services/waypoint/dist/bin.js"
 # /mcp → "trusted" exposes only tools from downstreams that pass the policy
 ```
 
 Change `acceptedAnchors` and the same downstream flips from exposed to blocked —
 that is the gate.
+
+## Chain-validated admission against the local lab
+
+Declared trust (`acceptedAnchors` alone) admits on the operator's word. To require
+cryptographic §10 chain resolution, enroll the downstream and flip
+`requireValidChain` — with the lab up:
+
+```bash
+# 1. Mint the leaf's identity: keypair + self-signed entity configuration.
+#    The lab's entity-host serves site/ at http://localhost:9631 — one origin
+#    for the TA, the other containers, and the host.
+fedmgr entity config \
+  --entity-id http://localhost:9631/mcp/<name> --authority http://localhost:8090 \
+  --key-out ~/.config/fedmgr/keys/<name> \
+  --out deploy/lab/entity-host/site/mcp/<name>/.well-known/openid-federation
+# 2. Publish the JWKS next to it ({"keys":[<leaf.pub.jwk>]}):
+#    deploy/lab/entity-host/site/mcp/<name>/jwks.json
+# 3. Enroll (proof-of-key; the TA fetches the JWKS from the same origin):
+fedmgr entity enroll \
+  --entity-id http://localhost:9631/mcp/<name> --ta http://localhost:8090 \
+  --jwks-url http://localhost:9631/mcp/<name>/jwks.json \
+  --key ~/.config/fedmgr/keys/<name>/leaf.priv.jwk
+# 4. waypoint.json: set the downstream's entityId to the enrolled id and
+#    "policy": { "acceptedAnchors": ["http://localhost:8090"], "requireValidChain": true }
+```
+
+Run waypoint itself with `NODE_ENV=development` (the lab speaks http:) and pin the
+anchor key: `WAYPOINT_ANCHOR_JWKS='{"http://localhost:8090":{"keys":[<ta.pub.jwk>]}}'`.
+On start you'll see `downstream ADMITTED … "chain":"VALID"`; an unenrolled downstream
+is denied and never connected.
 
 ## Run it remotely (cloud / web — HTTP + OAuth edge)
 
@@ -55,7 +85,7 @@ WAYPOINT_OIDC_ISSUER=https://accounts.google.com \
 WAYPOINT_OIDC_AUDIENCE=https://waypoint.example \
 WAYPOINT_OIDC_JWKS_URI=https://www.googleapis.com/oauth2/v3/certs \
 WAYPOINT_HTTP_PORT=8077 \
-  node packages/waypoint/dist/bin-http.js
+  node services/waypoint/dist/bin-http.js
 ```
 
 - `GET /health` — open (probes/load balancers).
@@ -90,7 +120,7 @@ reachable anchor to each downstream:
 Proven against the live lab: a downstream whose declared identity chains to the TA is
 admitted (tools exposed); one that doesn't is denied and never connected — even though
 the accepted-anchor config would have accepted it. See
-[`docs/evidence/phase-6.4-waypoint-crypto-admission.md`](../../docs/evidence/phase-6.4-waypoint-crypto-admission.md).
+[`docs/history/evidence/phase-6.4-waypoint-crypto-admission.md`](../../docs/history/evidence/phase-6.4-waypoint-crypto-admission.md).
 
 **Fail-closed everywhere:** a downstream that fails the policy or chain, is malformed,
 or can't be reached is never connected and its tools are never exposed; a call to an

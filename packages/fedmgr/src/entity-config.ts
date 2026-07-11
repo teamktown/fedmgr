@@ -102,3 +102,21 @@ export async function buildLeafEntityConfig(opts: LeafEntityConfigOptions): Prom
     .setProtectedHeader({ alg: "ES256", kid: opts.publicJwk.kid as string, typ: "entity-statement+jwt" })
     .sign(key);
 }
+
+/**
+ * Sign the TA's enrollment challenge: a compact JWS over
+ * `{ nonce, entity_id }` with the leaf's private key (proof of key
+ * ownership). The TA verifies it against the JWKS it fetched from the
+ * leaf's jwks_url and, on success, activates the subordinate.
+ */
+export async function buildEnrollmentProof(
+  nonce: string,
+  entityId: string,
+  privateJwk: JWK
+): Promise<string> {
+  if (!nonce) throw new Error("[TRUST:FAIL] enrollment nonce is required");
+  const key = await importJWK(privateJwk, "ES256");
+  return new SignJWT({ nonce, entity_id: entityId })
+    .setProtectedHeader({ alg: "ES256", kid: privateJwk.kid as string })
+    .sign(key);
+}

@@ -115,3 +115,25 @@ test("NEGATIVE: no authority_hints is refused at mint time", async () => {
     /authority_hint/,
   );
 });
+
+test("buildEnrollmentProof: JWS carries {nonce, entity_id}, verifies under the leaf key, kid matches", async () => {
+  const { buildEnrollmentProof } = await import("../dist/entity-config.js");
+  const { jwtVerify } = await import("jose");
+  const kp = await mintLeafKeypair();
+  const jws = await buildEnrollmentProof("abc123nonce", "http://localhost:9631/mcp/x", kp.privateJwk);
+  const key = await importJWK(kp.publicJwk, "ES256");
+  const { payload, protectedHeader } = await jwtVerify(jws, key);
+  assert.equal(payload.nonce, "abc123nonce");
+  assert.equal(payload.entity_id, "http://localhost:9631/mcp/x");
+  assert.equal(protectedHeader.kid, kp.publicJwk.kid);
+  // a different key must NOT verify it (proof of THIS key's ownership)
+  const other = await mintLeafKeypair();
+  const wrongKey = await importJWK(other.publicJwk, "ES256");
+  await assert.rejects(() => jwtVerify(jws, wrongKey));
+});
+
+test("buildEnrollmentProof: refuses an empty nonce", async () => {
+  const { buildEnrollmentProof } = await import("../dist/entity-config.js");
+  const kp = await mintLeafKeypair();
+  await assert.rejects(() => buildEnrollmentProof("", "http://x", kp.privateJwk), /nonce/);
+});

@@ -15,7 +15,7 @@ import { type Command } from "commander";
 import fs from "node:fs";
 import path from "node:path";
 import { type JWK } from "jose";
-import { mintLeafKeypair, buildLeafEntityConfig } from "../entity-config.js";
+import { mintLeafKeypair, buildLeafEntityConfig, buildEnrollmentProof } from "../entity-config.js";
 
 export function registerEntityCommands(program: Command): void {
   const entity = program
@@ -99,6 +99,50 @@ export function registerEntityCommands(program: Command): void {
         "  (Content-Type: application/entity-statement+jwt)\n" +
         "Then enroll with your Trust Anchor (proof-of-key) so it serves a subordinate\n" +
         "statement binding this key; a verifier can then resolve your entity.\n"
+      );
+    });
+
+  entity
+    .command("enroll")
+    .description("Enroll this entity with a Trust Anchor (proof-of-key, two-step)")
+    .requiredOption("--entity-id <url>", "This entity's identifier (must match the hosted configuration)")
+    .requiredOption("--ta <url>", "Trust Anchor base URL (e.g. http://localhost:8090)")
+    .requiredOption("--jwks-url <url>", "URL where the TA can fetch this entity's JWKS")
+    .requiredOption("--key <file>", "Path to the entity's private JWK (from `entity config`)")
+    .action(async (opts: { entityId: string; ta: string; jwksUrl: string; key: string }) => {
+      const ta = opts.ta.replace(/\/$/, "");
+      const privateJwk = JSON.parse(fs.readFileSync(path.resolve(opts.key), "utf8")) as JWK;
+
+      const startRes = await fetch(`${ta}/enroll`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ entity_id: opts.entityId, jwks_url: opts.jwksUrl }),
+      });
+      const start = (await startRes.json()) as {
+        enrollment_id?: string; nonce?: string; error?: string; message?: string;
+      };
+      if (!startRes.ok || !start.enrollment_id || !start.nonce) {
+        process.stderr.write(`[entity enroll] TRUST:FAIL enroll rejected (HTTP ${startRes.status}): ${start.message ?? start.error ?? "unknown"}\n`);
+        process.exit(1);
+      }
+      process.stderr.write(`[entity enroll] challenge received (id=${start.enrollment_id}); signing proof of key ownership\n`);
+
+      const proofJws = await buildEnrollmentProof(start.nonce, opts.entityId, privateJwk);
+      const doneRes = await fetch(`${ta}/enroll/${start.enrollment_id}/complete`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ proof_jws: proofJws }),
+      });
+      const done = (await doneRes.json()) as { entity_id?: string; error?: string; message?: string };
+      if (!doneRes.ok) {
+        process.stderr.write(`[entity enroll] TRUST:FAIL completion rejected (HTTP ${doneRes.status}): ${done.message ?? done.error ?? "unknown"}\n`);
+        process.exit(1);
+      }
+
+      process.stderr.write(
+        `[entity enroll] TRUST:OK ${opts.entityId} is now an active subordinate of ${ta}\n` +
+        `  subordinate statement: ${ta}/federation_fetch?sub=${encodeURIComponent(opts.entityId)}\n` +
+        "A §10 verifier can now resolve this entity's chain to the anchor.\n"
       );
     });
 }
