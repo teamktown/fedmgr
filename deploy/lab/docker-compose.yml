@@ -40,6 +40,11 @@ volumes:
 
   registry-data:
 
+  # Durable TA state: subordinate/enrollment SQLite DB + fedvec index.
+  # Survives container recreation and plain `down`; removed only by
+  # `down.sh --wipe`. This is what makes enrollments persist between restarts.
+  ta-data:
+
 services:
   # -------------------------------------------------------------------------
   # Entity host — static HTTP host for leaf entity configurations.
@@ -127,15 +132,17 @@ services:
         target: /app/keys/ta.pub.jwk
         read_only: true
       - ta-secrets:/run/secrets:ro
+      - ta-data:/data
     environment:
       PORT: "8090"
       # The lab IS the development environment: everything speaks http://
       # (localhost + docker DNS), which the TA's URL guard only allows in
       # development. Production deployments must NOT set this.
       NODE_ENV: "development"
-      # /app is not writable by the non-root `ta` user; put the SQLite DB in /tmp
-      # (ephemeral, fine for a lab). Override TA_DB_PATH + a writable volume in prod.
-      TA_DB_PATH: "/tmp/ta.db"
+      # Durable state: enrollments/subordinates (SQLite) + the fedvec index
+      # live on the ta-data named volume so they survive container recreation
+      # and `down`. Only `down.sh --wipe` removes them.
+      TA_DB_PATH: "/data/ta.db"
       TA_ENTITY_ID: "${TA_ENTITY_ID:-http://localhost:8090}"
       TA_JWKS_URL: "${TA_ENTITY_ID:-http://localhost:8090}/.well-known/jwks.json"
       TA_PUBLIC_JWK: "/app/keys/ta.pub.jwk"

@@ -227,7 +227,7 @@ fedmgr doctor</pre>
     <table>
       <tr><th></th><th>Item</th><th>Why it's next</th></tr>
       <tr><td><span class="st todo">next</span></td><td>Merge to <code>main</code> (fast-forward, 80+ commits)</td><td>Triggers the <em>first npm release</em> of the 5 libs + CLI via semantic-release — merge <strong>is</strong> the release event</td></tr>
-      <tr><td><span class="st todo">next</span></td><td>TA database → volume (off <code>/tmp</code>)</td><td>Enrollments currently die with the container; daily-driver muscle memory needs them persistent</td></tr>
+      <tr><td><span class="st done">done</span></td><td>TA database → named volume (<code>ta-data:/data</code>); <code>down.sh</code> durable by default, <code>--wipe</code> to reset</td><td>Proven: fedmgr-mcp enrollment survived a full <code>down</code>/<code>up</code> cycle (subordinates intact, chain still VALID)</td></tr>
       <tr><td><span class="st todo">todo</span></td><td>Second real downstream: a git MCP under the anchor</td><td>Makes admission non-trivial and starts the actual tool-elevation story (git__* through the PEP)</td></tr>
       <tr><td><span class="st todo">todo</span></td><td>Issue <strong>waypoint its own trustmark</strong> (SSC-gated — already green)</td><td>Patient zero: the doorman becomes the trustmarket's first verified listing</td></tr>
       <tr><td><span class="st todo">todo</span></td><td>Extract entity/subordinate-statement signing out of ta-server into a lib</td><td>fedmgr-mcp → ta-server dep blocks its npm publish; the boundary test allowlists the debt so it can't grow, but it must shrink to zero</td></tr>

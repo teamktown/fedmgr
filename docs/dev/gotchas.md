@@ -8,7 +8,7 @@ lab, or the SSC suite. Each entry is a **guard**: the trap, then the rule.
 npm run build            # tsc -b across all packages
 npm test                 # per-package `node --test` — the whole workspace suite
 ./deploy/lab/up.sh     # build + start registry + TA + TMI, wait for health
-./deploy/lab/down.sh   # stop & clean
+./deploy/lab/down.sh   # stop (durable state kept; --wipe resets)
 npm run scan             # SSC/scripts/scan-all.sh (needs scanners installed)
 ```
 The published front door is **`@letsfederate/fedmgr`** (`packages/fedmgr/`,

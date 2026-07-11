@@ -45,4 +45,4 @@ echo "[lab] TA subordinates: $(curl -fsS http://localhost:8090/federation_list 2
 echo "[lab] Next:"
 echo "        ./examples/01-trust-circle/round-trip.sh    # sign+SBOM+trustmark round trip (needs cosign, syft, jq)"
 echo "        see docs/walkthroughs/trust-lab-quickstart.md  # incl. how to drive it from Claude Code"
-echo "[lab] Stop & clean: ./deploy/lab/down.sh"
+echo "[lab] Stop: ./deploy/lab/down.sh   (state persists; --wipe to reset)"

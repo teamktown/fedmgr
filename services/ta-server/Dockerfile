@@ -58,6 +58,11 @@ COPY --from=builder --chown=ta:ta /build/services/ta-server/package.json ./servi
 
 RUN mkdir -p /app/keys && chown ta:ta /app/keys
 
+# Durable data dir — the compose lab mounts the ta-data named volume here
+# (SQLite TA_DB_PATH + fedvec index). Created in-image with ta ownership so
+# the named volume initializes writable for the non-root user on first mount.
+RUN mkdir -p /data && chown ta:ta /data
+
 USER ta
 
 ENV PORT=8090 \
