@@ -86,4 +86,4 @@ export traces — otherwise tracing is a zero-config no-op.
 - JWS RFC 7515 · JWT RFC 7519 · JWK/JWKS RFC 7517
 - Verdict logic + tests: `packages/fedmgr-mcp/src/openid-ops.ts` (`validateMcpInvocation`),
   `test/validate-mcp-invocation.test.mjs`; tool tests: `test/validate-mcp-invocation-tool.test.mjs`.
-- Evidence of test runs: `docs/evidence/phase-6.0-test-evidence.md`.
+- Evidence of test runs: `docs/history/evidence/phase-6.0-test-evidence.md`.

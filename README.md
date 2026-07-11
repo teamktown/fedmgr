@@ -27,6 +27,9 @@ This is an npm-workspaces TypeScript monorepo (Node ≥ 24). The pieces:
 
 ## Quick start
 
+**Prerequisites:** Node **≥ 24** (native ML-KEM/ML-DSA via OpenSSL 3.5) · Docker + compose (the trust lab) ·
+optional for the container round-trip: `cosign`, `syft`, `jq`.
+
 ```sh
 npm ci
 npm test          # the whole suite (node --test)

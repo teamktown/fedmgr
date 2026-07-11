@@ -53,7 +53,7 @@ build → push to the local registry → **cosign sign** → **syft SBOM** → t
 TMI issues a digest-bound trustmark** → cosign verify + trustmark digest binding.
 A green run ends with `[TRUST:VALID] round trip complete`. See
 [`examples/01-trust-circle/README.md`](../../examples/01-trust-circle/README.md) and
-the captured evidence in [`docs/evidence/`](../evidence/).
+the captured evidence in [`docs/history/evidence/`](../evidence/).
 
 > Note on HSM-rooted signing: the lab uses a key-based cosign signature. Signing the
 > image *directly* with a SoftHSM/PKCS#11 key needs a cosign built with the
@@ -82,7 +82,7 @@ Or commit a project `.mcp.json`:
 }
 ```
 
-In Claude Code, run `/mcp` — you should see **fedmgr** with 12 tools. The tools
+In Claude Code, run `/mcp` — you should see **waypoint** exposing 13 `fedmgr__*` tools (via the trust-enforcing mux). The tools
 default to the lab URLs (`ta_url=http://localhost:8090`, `tmi_url=http://localhost:8080`),
 so with the lab up they "just work". Try prompts like:
 

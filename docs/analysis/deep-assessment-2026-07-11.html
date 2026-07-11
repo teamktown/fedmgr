@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>fedmgr — Deep Assessment · 2026-07-11</title>
+<!--
+═══════════════════════════════════════════════════════════════════════════
+ASSESSMENT PROTOCOL — read this before running the next assessment.
+Goal: routine, token-efficient, comparable. Follow it and the next pass
+costs ~70k agent tokens + one synthesis, not a whole session.
+
+1. PRIOR STATE: machine-readable scores + metrics live in the JSON block
+   <script id="scorecard-data"> below. Parse it; do not re-derive history.
+   The 2026-07-05 baseline is in trustworthy-mcp-assessment.html (id-less,
+   grep "scorecards"); from this file forward, always ship the JSON block.
+
+2. OBJECTIVE METRICS (one bash block, ~10 lines, run from repo root):
+     git rev-parse --short HEAD; git rev-list --count HEAD
+     npm test 2>&1 | tail -20            # suite total / fail (real exit!)
+     ls -t SSC/reports/*.md | head -1    # then grep its severity rollup
+     find packages/*/src services/*/src -name '*.ts' | wc -l
+     find packages/*/test services/*/test test -name '*.test.mjs' | wc -l
+     grep -rn 'TODO\|FIXME\|@ts-ignore\|as any' packages/*/src services/*/src | wc -l
+     find docs -name '*.md' -not -path 'docs/history/*' | wc -l
+
+3. SUBJECTIVE DIMENSIONS: spawn exactly 3 Explore agents (medium breadth),
+   one each for (a) docs+bootstrap, (b) docker+operational surface,
+   (c) tests+code health. Give each the fixed output schema used on
+   2026-07-11 (scores / inventory / findings file:line / top-5 gaps /
+   quick wins, under 60 lines). Architecture, trust-crypto, pedigree, npm,
+   and production-readiness are scored by the synthesizer from session
+   knowledge + the agents' evidence — do not spawn agents for those.
+
+4. OUTPUT: copy this file to deep-assessment-<date>.html, update the JSON
+   block (keep "prev" chains!), the scorecard grid, dimension notes, and
+   the R-table (mark items done/carried). Add a card link in index.html.
+   Apply any sub-30-minute quick wins in the same commit; everything else
+   becomes/updates an R-item. Commit as docs(assessment).
+═══════════════════════════════════════════════════════════════════════════
+-->
+<script type="application/json" id="scorecard-data">
+{
+  "date": "2026-07-11",
+  "commit": "82db8a6",
+  "baseline": { "date": "2026-07-05", "overall": 62 },
+  "suite": { "tests": 291, "fail": 0, "skipsHonest": true },
+  "scan": { "report": "SSC/reports/report20260710.v3.md", "critical": 0, "high": 0, "medium": 0, "low": 0, "scanners": 6 },
+  "metrics": { "commits": 174, "srcTsFiles": 71, "testFiles": 45, "loc": 11044, "docsRefMd": 27, "todoInSrc": 0, "tsIgnoreInSrc": 0 },
+  "scores": {
+    "overall":            { "now": 74, "prev": 62 },
+    "architecture":       { "now": 88, "prev": 82 },
+    "trust-crypto":       { "now": 86, "prev": 78 },
+    "code-pedigree":      { "now": 58, "prev": 45 },
+    "test-coverage":      { "now": 74, "prev": 88, "note": "prev overrated + surface grew faster than tests; enrollment/dashboard/fedvec gaps now enumerated" },
+    "test-credibility":   { "now": 85, "prev": 30 },
+    "docker-demo-ux":     { "now": 65, "prev": 62, "sub": { "docker-quality": 72, "compose-story": 68, "operational-surface": 55 } },
+    "npm-packaging":      { "now": 70, "prev": 55 },
+    "production-readiness": { "now": 52, "prev": 40 },
+    "docs-currency":      { "now": 78, "prev": 72 },
+    "bootstrap-onboarding": { "now": 85, "prev": null },
+    "supply-chain-ssc":   { "now": 90, "prev": null }
+  }
+}
+</script>
+<style>
+  :root{
+    --bg:#0b0f14; --panel:#121821; --panel2:#161d28; --ink:#e6edf3; --muted:#9fb0c3;
+    --line:#22303f; --accent:#4dd0a7; --accent2:#5aa9ff; --warn:#f5c451; --bad:#ff6b6b;
+    --radius:14px; --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 600px at 70% -10%,#132030 0,var(--bg) 55%);
+    color:var(--ink);font:16px/1.6 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;}
+  .wrap{max-width:1060px;margin:0 auto;padding:40px 24px 80px;}
+  a{color:var(--accent2);text-decoration:none} a:hover{text-decoration:underline}
+  .back{font:600 13px/1 var(--mono);color:var(--muted)}
+  .kicker{color:var(--accent);font:600 13px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;margin-top:18px}
+  h1{font-size:30px;margin:.3em 0 .1em}
+  .sub{color:var(--muted);max-width:78ch}
+  h2{font-size:20px;margin:38px 0 6px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+  h3{font-size:15px;margin:20px 0 6px;color:var(--accent)}
+  .card{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line);
+    border-radius:var(--radius);padding:18px 20px;margin:14px 0}
+  .hero{border-left:3px solid var(--accent)}
+  ul{margin:8px 0 8px 2px;padding-left:20px} li{margin:5px 0}
+  code{font-family:var(--mono);background:#0e141c;border:1px solid var(--line);padding:2px 6px;border-radius:6px;font-size:.88em}
+  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:14.5px}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font:600 12px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase}
+  .grid{display:grid;gap:12px}
+  .scorecards{grid-template-columns:repeat(auto-fit,minmax(200px,1fr));margin:22px 0}
+  .k{color:var(--muted);font:600 11px/1.3 var(--mono);letter-spacing:.06em;text-transform:uppercase}
+  .v{font:700 26px/1.3 var(--mono)}
+  .delta{font:700 13px/1 var(--mono)} .up{color:var(--accent)} .down{color:var(--bad)} .new{color:var(--accent2)}
+  .bar{height:6px;background:#0e141c;border-radius:4px;overflow:hidden;margin-top:6px}
+  .bar i{display:block;height:100%}
+  .st{font:600 11px/1 var(--mono);padding:4px 8px;border-radius:6px;white-space:nowrap}
+  .done{color:#0b1a14;background:var(--accent)} .prog{color:#1a1405;background:var(--warn)}
+  .todo{color:var(--muted);border:1px solid var(--line)}
+  .gate{color:var(--bad);font:600 12px/1 var(--mono)}
+  .muted{color:var(--muted)}
+  footer{margin-top:40px;color:var(--muted);font-size:13px;border-top:1px solid var(--line);padding-top:18px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="index.html">← workbench</a>
+  <div class="kicker">Deep assessment · 2026-07-11 · commit 82db8a6 · suite 291/0 · SSC 0/0/0/0</div>
+  <h1>Where we stand</h1>
+  <p class="sub">Six days after the last assessment (overall <b>62</b>): the credibility gaps it flagged are gone,
+  the supply chain went from blocking to green, and waypoint is a working daily driver with cryptographic
+  admission. What remains between here and 1.0 is no longer trust <em>plumbing</em> — it's the adoption
+  surface: a compose-up demo that works bare, tests on the enrollment path, and actually publishing.</p>
+
+  <div class="card hero">
+    <strong>Verdict in one line.</strong> The trust backplane is real and provably fail-closed end to end
+    (enroll → chain → pinned-anchor admission, all observed live) — but the first stranger to
+    <code>git clone</code> this repo still meets three avoidable walls: keys before compose, localhost
+    assumptions, and nothing on npm yet.
+  </div>
+
+  <h2>Scorecard — 2026-07-11 vs 2026-07-05</h2>
+  <div class="grid scorecards">
+    <div class="card"><div class="k">Overall</div><div class="v">74 <span class="delta up">▲12</span></div><div class="bar"><i style="width:74%;background:var(--warn)"></i></div></div>
+    <div class="card"><div class="k">Architecture / design</div><div class="v">88 <span class="delta up">▲6</span></div><div class="bar"><i style="width:88%;background:var(--accent)"></i></div></div>
+    <div class="card"><div class="k">Trust crypto (verified)</div><div class="v">86 <span class="delta up">▲8</span></div><div class="bar"><i style="width:86%;background:var(--accent)"></i></div></div>
+    <div class="card"><div class="k">Code-pedigree delivered</div><div class="v">58 <span class="delta up">▲13</span></div><div class="bar"><i style="width:58%;background:var(--warn)"></i></div></div>
+    <div class="card"><div class="k">Real test coverage</div><div class="v">74 <span class="delta down">▼14</span></div><div class="bar"><i style="width:74%;background:var(--warn)"></i></div></div>
+    <div class="card"><div class="k">Test-harness credibility</div><div class="v">85 <span class="delta up">▲55</span></div><div class="bar"><i style="width:85%;background:var(--accent)"></i></div></div>
+    <div class="card"><div class="k">Docker / demo UX</div><div class="v">65 <span class="delta up">▲3</span></div><div class="bar"><i style="width:65%;background:var(--warn)"></i></div></div>
+    <div class="card"><div class="k">npm packaging / adoption</div><div class="v">70 <span class="delta up">▲15</span></div><div class="bar"><i style="width:70%;background:var(--warn)"></i></div></div>
+    <div class="card"><div class="k">Production readiness</div><div class="v">52 <span class="delta up">▲12</span></div><div class="bar"><i style="width:52%;background:var(--warn)"></i></div></div>
+    <div class="card"><div class="k">Docs currency</div><div class="v">78 <span class="delta up">▲6</span></div><div class="bar"><i style="width:78%;background:var(--warn)"></i></div></div>
+    <div class="card"><div class="k">Bootstrap / onboarding</div><div class="v">85 <span class="delta new">new</span></div><div class="bar"><i style="width:85%;background:var(--accent)"></i></div></div>
+    <div class="card"><div class="k">Supply-chain (SSC)</div><div class="v">90 <span class="delta new">new</span></div><div class="bar"><i style="width:90%;background:var(--accent)"></i></div></div>
+  </div>
+  <p class="muted" style="font-size:13px">The one ▼: test <em>coverage</em> dropped on paper because this pass
+  enumerated what the old 88 glossed over — the surface grew (waypoint HTTP/OAuth, enrollment, entity-host)
+  faster than its tests, and the enrollment router (421 LOC, the trust-onboarding entry point) has none.
+  Credibility ▲55 is the mirror image: what <em>is</em> tested is now demonstrably honest.</p>
+
+  <h2>Your hypotheses, checked</h2>
+  <div class="card">
+    <table>
+      <tr><th>You said</th><th>Verdict</th></tr>
+      <tr><td>"README and bootstrap docs are thin, but better after restructuring"</td>
+          <td><strong>Better than you think.</strong> Bootstrap scores 85: clone → build → lab → waypoint-in-Claude-Code is fully sequenced (README + trust-lab-quickstart). The real docs debt is elsewhere: <code>.env.example</code> had 4 stale paths (fixed with this assessment), two walkthroughs linked the moved <code>docs/evidence/</code> (fixed), no prereqs block (fixed), and ta-server/tmi-server have no README at all (R9).</td></tr>
+      <tr><td>"Unknowns in our docker quality"</td>
+          <td><strong>Now known: 72, with three real issues.</strong> Multi-stage, non-root, healthchecks, tmpfs key policy are all solid. But images run <code>node:22-slim</code> against a declared <code>engines: &gt;=24</code> (drift), nothing is digest-pinned, and the softhsm test image is single-stage root. All bounded, all fixable (R2).</td></tr>
+      <tr><td>"SSC has matured drastically"</td>
+          <td><strong>Confirmed — 90, the strongest aspect.</strong> Six scanners, consent-gated checksummed installer, committed evidence trail (v1 partial → v2 found 11 HIGH → v3 clean), the gate blocks for real (exit 2 observed), scan-reach protected by a guard test, and the remediation was proven by exercising the risk path, not just rescanning.</td></tr>
+      <tr><td>"Operational surface is stdio, not docker compose up"</td>
+          <td><strong>Correct, and it's the weakest sub-score (55).</strong> The trust <em>infra</em> composes up; the MCP <em>surface</em> (waypoint + fedmgr-mcp) is host-spawned stdio from <code>dist/</code> — stale builds diverge silently, nothing automates the host side, and bare <code>docker compose up</code> fails without <code>up.sh</code>'s keygen. This is the #1 adoption gap (R2, R6).</td></tr>
+    </table>
+  </div>
+
+  <h2>Dimension notes (evidence, not vibes)</h2>
+  <div class="card">
+    <h3>Trust crypto — 86 ▲8</h3>
+    <ul>
+      <li>Chain-validated admission is <em>live</em>: enroll (proof-of-key CLI) → §10 resolution → pinned-anchor VALID → tools exposed; the same policy observed <em>denying</em> pre-enrollment. Fail-closed is demonstrated, not asserted.</li>
+      <li>Remaining: revocation is checked at connect only (R7); trustmark verification exists but waypoint doesn't yet require a mark (<code>requiredTrustMark</code> unused in the daily driver).</li>
+    </ul>
+    <h3>Tests — coverage 74 ▼ / credibility 85 ▲</h3>
+    <ul>
+      <li>291 cases, 0 fail; all 10 workspaces have tests; 26 files carry negative tests; hermetic via injectable <code>fetchFn</code>; skips are labeled and gated — no silent green. Zero TODO / <code>@ts-ignore</code> / <code>as any</code> in src (code-health 92).</li>
+      <li>Gaps by risk: ta-server <strong>enrollment router (421 LOC, 0 tests)</strong>, management mutations, dashboard, waypoint <code>bin-http</code>/OAuth mode, fedvec (6 src files, 5 cases).</li>
+    </ul>
+    <h3>Docker &amp; operations — 65 (72 / 68 / 55)</h3>
+    <ul>
+      <li>Working: both service images (rebuilt + health-verified repeatedly), lab compose via <code>up.sh</code>. Untested: standalone compose (references unpublished images), tunnels. Placeholder: trust-circle Dockerfile.</li>
+      <li>Structural: TA db on <code>/tmp</code> + <code>down.sh -v</code> = every teardown forgets enrollments; <code>node:22</code> vs <code>engines&gt;=24</code>; localhost hardcoded in defaults (the 10.0.0.191 pain you just hit); entity-host lifecycle coupled to ta-server's netns (accepted trade for one-origin).</li>
+    </ul>
+    <h3>Packaging &amp; pedigree — 70 / 58</h3>
+    <ul>
+      <li>Release pipeline is coherent and guard-tested (services can't publish; libs+CLI staged) but <strong>nothing is on npm yet</strong> — merge is the release event (R1). fedmgr-mcp publish stays blocked by the ta-server import (R4, allowlisted so it can't grow).</li>
+      <li>Pedigree ▲13 for the enforced SSC gate + provenance demo; the 1.0 promise — runtime attestation (running digest ↔ signed provenance, checked at call time) — remains the flagship unbuilt feature (R10).</li>
+    </ul>
+  </div>
+
+  <h2>The road to 1.0 — recommendations, rank-ordered</h2>
+  <div class="card">
+    <table>
+      <tr><th>#</th><th>Recommendation</th><th>Why it gates 1.0</th></tr>
+      <tr><td class="gate">R1</td><td>Merge to main → first npm release (libs + CLI)</td><td>Everything downstream of "adoption" needs an installable artifact; 80+ commits are sitting unreleased</td></tr>
+      <tr><td class="gate">R2</td><td>Bare <code>docker compose up</code> must work: keygen inside the decrypt sidecars, TA db on a named volume, no <code>-v</code> in default down, <code>node:24-slim</code> pinned by digest</td><td>The demo IS the product for first contact; today it fails without a shell script and forgets everything on restart</td></tr>
+      <tr><td class="gate">R3</td><td>Test the enrollment router + management mutations (ta-server)</td><td>The trust-onboarding entry point is the least-tested 421 LOC in the system — untestable to claim "fail-closed" there</td></tr>
+      <tr><td>R4</td><td>Extract entity/subordinate-statement signing into a lib; unblock fedmgr-mcp publish</td><td>The one architecture violation left; blocks the MCP tool from npm</td></tr>
+      <tr><td>R5</td><td>Waypoint HTTP/OAuth mode: tests + containerization decision</td><td>The remote story (cloud assistants) is wired but unverified; the container design is deliberately open — decide, don't drift</td></tr>
+      <tr><td>R6</td><td>One <code>PUBLIC_ORIGIN</code> knob (compose + up.sh + CLI defaults)</td><td>Kills the localhost hardcoding class; makes VM/LAN/cloud hosting one variable</td></tr>
+      <tr><td>R7</td><td>Continuous revocation re-checks (live <code>/trust-mark-status</code>)</td><td>Admission-at-connect only; a revoked downstream keeps its session today</td></tr>
+      <tr><td>R8</td><td>fedvec test depth (embedding/index paths)</td><td>Semantic search is a headline feature riding on 5 test cases</td></tr>
+      <tr><td>R9</td><td>READMEs for ta-server + tmi-server; enroll walkthrough page</td><td>The two core servers have zero per-service docs; operators fly blind</td></tr>
+      <tr><td>R10</td><td>Runtime attestation enforcement (digest ↔ provenance at call time)</td><td>The actual product promise — "pedigree enforced, not demonstrated" — and the 1.0 headline</td></tr>
+    </table>
+    <p class="muted" style="margin:8px 0 0">Applied with this assessment (quick wins, same commit):
+    <code>.env.example</code> paths fixed · 2 dead <code>docs/evidence/</code> links repointed ·
+    <code>trust-fabric.html</code> lab command fixed · README prereqs block added.</p>
+  </div>
+
+  <footer>
+    Assessment date 2026-07-11 · commit <code>82db8a6</code> · previous:
+    <a href="trustworthy-mcp-assessment.html">2026-07-05 (62/100)</a> ·
+    method: 3 scoped Explore agents (docs / docker+ops / tests, ~67k tokens) + synthesizer with session
+    knowledge · next pass: follow the ASSESSMENT PROTOCOL comment in this file's source — prior scores are
+    machine-readable in <code>#scorecard-data</code>.
+  </footer>
+</div>
+</body>
+</html>
