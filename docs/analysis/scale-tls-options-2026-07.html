@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>fedmgr — HTTPS &amp; identity at scale: options A–H</title>
+<script type="application/json" id="options-data">
+{
+  "date": "2026-07-11",
+  "decision": "OPEN — comparison aid; no option selected yet",
+  "dimensions": {
+    "effort":    { "label": "Build effort", "hint": "low → high (lower is better)" },
+    "coverage":  { "label": "Use-case coverage", "hint": "few audiences → all audiences" },
+    "scale":     { "label": "Scalability @ 10k devs", "hint": "breaks down → embarrassingly parallel" },
+    "regulated": { "label": "Regulated / airgap fitness", "hint": "FedRAMP · FISMA · 21 CFR 11" },
+    "ttv":       { "label": "Time to value", "hint": "months away → usable this week" },
+    "ops":       { "label": "Ongoing ops burden", "hint": "low → high (lower is better)" }
+  },
+  "options": [
+    { "id": "A", "name": "Per-laptop CA (step-ca + Caddy in compose)",
+      "what": "Each laptop mints its own disposable trust universe with automated TLS.",
+      "pro": "Self-contained and offline; dogfoods our CA machinery; certs auto-renew.",
+      "con": "Root-cert distribution threads through every Node process, container, browser.",
+      "scores": { "effort": 4, "coverage": 4, "scale": 9, "regulated": 5, "ttv": 8, "ops": 3 } },
+    { "id": "B", "name": "Org dev-PKI (internal DNS + internal ACME)",
+      "what": "Platform team issues real *.dev.corp names/certs to developer laptops.",
+      "pro": "Stable production-form identities in dev; org root already trusted on endpoints.",
+      "con": "Needs a platform team + VPN reach; unavailable to solo/OSS developers.",
+      "scores": { "effort": 5, "coverage": 5, "scale": 7, "regulated": 7, "ttv": 5, "ops": 5 } },
+    { "id": "C", "name": "Public DNS + DNS-01 wildcard (lab.letsfederate.org)",
+      "what": "Real Let's Encrypt certs for domains we control, validated via TXT records.",
+      "pro": "Zero client trust-store work; ideal for the hosted anchor + community demos.",
+      "con": "Only for our domains; CT-log leakage; useless inside enterprises/airgaps.",
+      "scores": { "effort": 2, "coverage": 3, "scale": 5, "regulated": 1, "ttv": 9, "ops": 2 } },
+    { "id": "D", "name": "Magic DNS (nip.io / sslip.io)",
+      "what": "IP-embedding public wildcard DNS; zero setup names.",
+      "pro": "Instant; nothing to install.",
+      "con": "DNS-rebind protection eats it; internet-dependent; IP-in-identity re-mint trap.",
+      "scores": { "effort": 1, "coverage": 2, "scale": 2, "regulated": 1, "ttv": 10, "ops": 2 } },
+    { "id": "E", "name": "Identity/location split + OIDF Resolver (§8)",
+      "what": "Stable https identities; chain resolution delegated to a trusted resolver/mirror.",
+      "pro": "Spec-native scale architecture; solves internal-http AND airgap with one primitive.",
+      "con": "Doesn't exist in our code yet; resolver becomes critical, audited infra.",
+      "scores": { "effort": 8, "coverage": 9, "scale": 10, "regulated": 8, "ttv": 3, "ops": 6 } },
+    { "id": "F", "name": "Service mesh / sidecar mTLS (Istio, Linkerd)",
+      "what": "Transparent TLS fronting for internal http endpoints inside K8s.",
+      "pro": "Enterprises often run it already; legacy endpoints get TLS without code change.",
+      "con": "Transport only — identity design still needed; heavyweight; mesh CA ≠ federation trust.",
+      "scores": { "effort": 6, "coverage": 3, "scale": 8, "regulated": 6, "ttv": 4, "ops": 7 } },
+    { "id": "G", "name": "Explicit http-origin allowlist (replaces NODE_ENV=development)",
+      "what": "A scoped, auditable config knob for the http endpoints that will always exist.",
+      "pro": "Kills the global dev-flag foot-gun for every audience; tiny to build.",
+      "con": "Those fetches stay http (freshness exposure); one more governed config surface.",
+      "scores": { "effort": 2, "coverage": 8, "scale": 8, "regulated": 6, "ttv": 9, "ops": 1 } },
+    { "id": "H", "name": "Airgap bundle (offline root + mirrored statements + signed status lists)",
+      "what": "Everything imports as signed artifacts; nothing reaches out of the enclave.",
+      "pro": "The only viable shape for FedRAMP/FISMA/CFR-11; doubles as everyone's DR story.",
+      "con": "Freshness by sneakernet cadence; needs trusted-time + revocation-list design.",
+      "scores": { "effort": 9, "coverage": 5, "scale": 6, "regulated": 10, "ttv": 2, "ops": 8 } }
+  ]
+}
+</script>
+<style>
+  :root{
+    --bg:#0b0f14; --panel:#121821; --panel2:#161d28; --ink:#e6edf3; --muted:#9fb0c3;
+    --line:#22303f; --accent:#4dd0a7; --accent2:#5aa9ff; --warn:#f5c451; --bad:#ff6b6b;
+    --radius:14px; --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 600px at 70% -10%,#132030 0,var(--bg) 55%);
+    color:var(--ink);font:16px/1.6 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;}
+  .wrap{max-width:1060px;margin:0 auto;padding:40px 24px 80px;}
+  a{color:var(--accent2);text-decoration:none} a:hover{text-decoration:underline}
+  .back{font:600 13px/1 var(--mono);color:var(--muted)}
+  .kicker{color:var(--accent);font:600 13px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;margin-top:18px}
+  h1{font-size:30px;margin:.3em 0 .1em}
+  .sub{color:var(--muted);max-width:78ch}
+  h2{font-size:20px;margin:38px 0 6px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+  .card{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line);
+    border-radius:var(--radius);padding:18px 20px;margin:14px 0}
+  .hero{border-left:3px solid var(--accent)}
+  ul{margin:8px 0 8px 2px;padding-left:20px} li{margin:5px 0}
+  code{font-family:var(--mono);background:#0e141c;border:1px solid var(--line);padding:2px 6px;border-radius:6px;font-size:.88em}
+  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:13.5px}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font:600 11px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase}
+  .muted{color:var(--muted)}
+  .oid{display:inline-block;min-width:22px;text-align:center;font:700 12px/20px var(--mono);
+    background:#0e1a16;border:1px solid #1f4a3c;color:var(--accent);border-radius:6px;margin-right:4px}
+  .controls{display:flex;gap:16px;flex-wrap:wrap;align-items:center;margin:4px 0 10px}
+  .controls label{font:600 12px/1 var(--mono);color:var(--muted);letter-spacing:.05em;text-transform:uppercase}
+  select{background:#0e141c;color:var(--ink);border:1px solid var(--line);border-radius:8px;
+    padding:7px 10px;font:14px/1.2 ui-sans-serif,system-ui;min-width:220px}
+  select:focus{outline:1px solid var(--accent2)}
+  .chartbox{position:relative;overflow-x:auto}
+  svg{display:block;min-width:700px}
+  .tip{position:absolute;pointer-events:none;background:#0e141c;border:1px solid var(--line);
+    border-radius:10px;padding:10px 12px;max-width:320px;font-size:13px;line-height:1.45;
+    box-shadow:0 6px 24px rgba(0,0,0,.5);display:none;z-index:5}
+  .tip b{color:var(--accent)} .tip .pc{color:var(--muted);font-size:12.5px;margin-top:4px}
+  footer{margin-top:40px;color:var(--muted);font-size:13px;border-top:1px solid var(--line);padding-top:18px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="index.html">← workbench</a>
+  <div class="kicker">Analysis · 2026-07-11 · https &amp; identity at 10k-dev scale — decision OPEN</div>
+  <h1>Options A–H: escaping localhost without breaking the laptop</h1>
+  <p class="sub">Constraints this holds simultaneously: tens of thousands of dev laptops running the compose lab
+  <em>locally</em>; https identities so shared entities never re-mint; internal http endpoints that will always
+  exist; and airgapped postures (FedRAMP · FISMA · 21 CFR 11). Pick the axes below and compare — the decision
+  is deliberately still open.</p>
+
+  <div class="card hero">
+    <strong>Two reframes that changed the board.</strong> (1) The OIDF chain is <em>self-authenticating</em> —
+    signed JWTs verified against pinned anchors — so TLS is transport hygiene, not the trust root: identity
+    (a stable <code>https://</code> URL) and location (where statements are fetched) are separable, which is
+    exactly what the spec's <b>§8 Resolver</b> formalizes. (2) Laptop labs should be <em>disposable</em> trust
+    universes — re-minting locally is <code>up.sh</code>; only <em>shared</em> identities (org anchors,
+    published MCPs, the trustmarket) need to never re-mint.
+  </div>
+
+  <h2>Compare the options — pick your axes</h2>
+  <div class="card">
+    <div class="controls">
+      <label for="xsel">X axis</label><select id="xsel"></select>
+      <label for="ysel">Y axis</label><select id="ysel"></select>
+    </div>
+    <div class="chartbox">
+      <svg id="chart" viewBox="0 0 860 520" width="100%" role="img" aria-label="Options A–H scatter comparison"></svg>
+      <div class="tip" id="tip"></div>
+    </div>
+    <p class="muted" style="font-size:12.5px;margin:6px 0 0">Scores are 1–10, argued in the table below (and
+    machine-readable in this page's <code>#options-data</code>). Hover a dot for the option's one-line case.
+    On effort and ops-burden axes, <em>lower is better</em> — the axis label says so.</p>
+  </div>
+
+  <h2>The options in full</h2>
+  <div class="card">
+    <table>
+      <tr><th></th><th>Option</th><th>Pros</th><th>Cons</th><th>Scalability @ 10k devs</th><th>Fit for purpose</th></tr>
+      <tr><td><span class="oid">A</span></td><td>Per-laptop CA (step-ca + Caddy in compose)</td>
+        <td>Self-contained; offline; dogfoods our CA machinery; auto-renewal; the fedmgr-minted CA can root the TLS chain</td>
+        <td>Root-cert distribution through every Node process/container/browser; identities die with the laptop (by design)</td>
+        <td>Excellent — embarrassingly parallel; 10k roots that never need to interop</td>
+        <td><b>Solo/OSS default.</b> Team: dev-only. Regulated: building block</td></tr>
+      <tr><td><span class="oid">B</span></td><td>Org dev-PKI (internal DNS + ACME)</td>
+        <td>Real stable names; org root pre-trusted on endpoints; production-form identities in dev</td>
+        <td>Needs platform team + network reach; onboarding friction; unavailable to OSS devs</td>
+        <td>Good within an org; nothing for the community</td>
+        <td><b>Enterprise platform orgs: default</b></td></tr>
+      <tr><td><span class="oid">C</span></td><td>Public DNS + DNS-01 wildcard</td>
+        <td>Real certs, zero client trust work; right answer for our hosted anchor + demos</td>
+        <td>Our domains only; CT-log leakage of hostnames; dead in enterprise/airgap</td>
+        <td>Fine for the hosted trustmarket tier</td>
+        <td><b>letsfederate hosted tier.</b> Not a laptop answer</td></tr>
+      <tr><td><span class="oid">D</span></td><td>Magic DNS (nip.io / sslip.io)</td>
+        <td>Zero setup, instant names</td>
+        <td>DNS-rebind protection breaks it unpredictably; internet-dependent; free-service dependency; IP-in-identity re-mint trap</td>
+        <td>Poor across 10k heterogeneous networks</td>
+        <td>Demos only. <b>Never identities</b></td></tr>
+      <tr><td><span class="oid">E</span></td><td>Identity/location split + OIDF Resolver (§8)</td>
+        <td>https identities <em>without</em> fronting internal http; spec-native; clients pin one resolver; signed statements are static/cacheable/CDN-able</td>
+        <td>Not built yet; resolver becomes critical audited infra; adds a hop</td>
+        <td><b>The scale architecture</b> — anchors become a static-hosting problem</td>
+        <td><b>Every audience at scale.</b> The strategic build</td></tr>
+      <tr><td><span class="oid">F</span></td><td>Service mesh / sidecar mTLS</td>
+        <td>Transparent TLS for legacy internal endpoints; enterprises may already run it</td>
+        <td>Transport only — identity still needs design; heavyweight; mesh CA must stay distinct from federation trust</td>
+        <td>Good inside K8s orgs; irrelevant elsewhere</td>
+        <td>Enterprise T2 complement to B/E</td></tr>
+      <tr><td><span class="oid">G</span></td><td>Explicit http-origin allowlist</td>
+        <td>Scoped, auditable, per-deployment; kills the <code>NODE_ENV=development</code> cargo-cult foot-gun; tiny build</td>
+        <td>Those fetches stay http (freshness exposure); one more governed config surface</td>
+        <td>Neutral — a policy knob, not infra</td>
+        <td><b>Everyone, immediately</b></td></tr>
+      <tr><td><span class="oid">H</span></td><td>Airgap bundle (offline root + mirrored statements + signed status lists)</td>
+        <td>Meets FedRAMP/FISMA/CFR-11 posture; everything verifiable inside the enclave; best DR story for all tiers</td>
+        <td>Freshness by import cadence; revocation latency by policy; needs trusted time + packaging design</td>
+        <td>Scales per-enclave; ops burden per enclave</td>
+        <td><b>Regulated/airgapped: the only viable shape</b></td></tr>
+    </table>
+  </div>
+
+  <h2>Blindspots this analysis surfaced</h2>
+  <div class="card">
+    <ul>
+      <li><b><code>NODE_ENV=development</code> is the wrong shape, not just retire-able</b> — global, overloaded, and destined to be baked into prod images by copy-paste at 10k devs. Option G is a correctness fix regardless of TLS strategy.</li>
+      <li><b>FIPS is a KeyProvider problem (good news)</b> — Node's OpenSSL isn't FIPS-validated; signing via the existing <code>KeyProvider</code> seam into OpenBao/cloud KMS/HSM puts crypto inside a validated boundary. The abstraction is accidentally the FIPS strategy.</li>
+      <li><b>Revocation is online-only today</b> — <code>/trust-mark-status</code> needs a live call: a scale hot-spot and an airgap impossibility. Signed, time-boxed status artifacts (CRL-style) are missing.</li>
+      <li><b>CFR 11 is about the audit trail, not the crypto</b> — a mutable SQLite <code>audit_log</code> ≠ tamper-evidence, attribution, retention, trusted timestamps.</li>
+      <li><b>Airgapped clocks drift and our trust is time-based</b> — short TTLs + drifted enclave clocks = spontaneous outage; TTL/tolerance must be posture-configurable, and the bundle needs a time story.</li>
+      <li><b>Multi-hop chains are untested</b> — org scale means leaf → intermediate → org TA → market anchor; the verifier supports depth 10, the lab has proven one hop.</li>
+      <li><b>CT-log leakage</b> — public certs publish internal hostnames to transparency logs; B/H avoid it, C accepts it.</li>
+    </ul>
+  </div>
+
+  <h2>Portfolio, not a winner</h2>
+  <div class="card">
+    <p>These aren't mutually exclusive — the audiences differ, so the endgame is a portfolio:
+    <b>A</b> as the shipped laptop default · <b>G</b> immediately (small, corrects a foot-gun) ·
+    <b>B/F</b> documented paths for enterprises · <b>C</b> for our hosted anchor ·
+    <b>E</b> as the next architectural build · <b>H</b> as E's packaging for the regulated tier.
+    The open question is sequencing and how much of E/H to pull forward — <em>decision pending</em>.</p>
+  </div>
+
+  <footer>
+    Analysis 2026-07-11 · companion to <a href="deploy-models-2026-07.html">deploy models</a> and the
+    <a href="deep-assessment-2026-07-11.html">deep assessment</a> · scores + full data machine-readable in
+    <code>#options-data</code> · chart: single-series labeled dots, axes user-selectable, tooltips on hover.
+  </footer>
+</div>
+
+<script>
+(function () {
+  const DATA = JSON.parse(document.getElementById("options-data").textContent);
+  const dims = DATA.dimensions, opts = DATA.options;
+  const xsel = document.getElementById("xsel"), ysel = document.getElementById("ysel");
+  for (const [k, d] of Object.entries(dims)) {
+    xsel.add(new Option(d.label, k));
+    ysel.add(new Option(d.label, k));
+  }
+  xsel.value = "effort"; ysel.value = "coverage";
+
+  const svg = document.getElementById("chart"), tip = document.getElementById("tip");
+  const W = 860, H = 520, M = { t: 24, r: 30, b: 64, l: 64 };
+  const px = v => M.l + ((v - 0) / 11) * (W - M.l - M.r);
+  const py = v => H - M.b - ((v - 0) / 11) * (H - M.t - M.b);
+  const NS = "http://www.w3.org/2000/svg";
+  const el = (n, at) => { const e = document.createElementNS(NS, n); for (const k in at) e.setAttribute(k, at[k]); return e; };
+
+  function render() {
+    const xk = xsel.value, yk = ysel.value;
+    svg.textContent = "";
+
+    // recessive hairline grid + ticks 2..10
+    for (let v = 2; v <= 10; v += 2) {
+      svg.appendChild(el("line", { x1: px(v), y1: py(0.5), x2: px(v), y2: py(10.5), stroke: "#22303f", "stroke-width": 1 }));
+      svg.appendChild(el("line", { x1: px(0.5), y1: py(v), x2: px(10.5), y2: py(v), stroke: "#22303f", "stroke-width": 1 }));
+      const tx = el("text", { x: px(v), y: H - M.b + 18, "text-anchor": "middle", fill: "#9fb0c3", "font-size": 11 }); tx.textContent = v; svg.appendChild(tx);
+      const ty = el("text", { x: M.l - 10, y: py(v) + 4, "text-anchor": "end", fill: "#9fb0c3", "font-size": 11 }); ty.textContent = v; svg.appendChild(ty);
+    }
+    // axis titles (direction spelled out; lower-is-better flagged)
+    const xt = el("text", { x: (M.l + W - M.r) / 2, y: H - 14, "text-anchor": "middle", fill: "#e6edf3", "font-size": 13, "font-weight": 600 });
+    xt.textContent = dims[xk].label + " — " + dims[xk].hint; svg.appendChild(xt);
+    const yt = el("text", { x: 16, y: (M.t + H - M.b) / 2, fill: "#e6edf3", "font-size": 13, "font-weight": 600,
+      transform: `rotate(-90 16 ${(M.t + H - M.b) / 2})`, "text-anchor": "middle" });
+    yt.textContent = dims[yk].label + " — " + dims[yk].hint; svg.appendChild(yt);
+
+    // dodge exact-coordinate ties so every dot stays visible
+    const seen = new Map();
+    const placed = opts.map(o => {
+      const key = o.scores[xk] + "," + o.scores[yk];
+      const n = seen.get(key) ?? 0; seen.set(key, n + 1);
+      const ang = n * 2.4, r = n === 0 ? 0 : 14;
+      return { o, x: px(o.scores[xk]) + r * Math.cos(ang), y: py(o.scores[yk]) + r * Math.sin(ang) };
+    });
+
+    for (const p of placed) {
+      const g = el("g", { cursor: "pointer" });
+      // surface ring keeps overlapping dots legible; big transparent hit target
+      g.appendChild(el("circle", { cx: p.x, cy: p.y, r: 16, fill: "transparent" }));
+      g.appendChild(el("circle", { cx: p.x, cy: p.y, r: 8, fill: "#4dd0a7", stroke: "#121821", "stroke-width": 2 }));
+      const lab = el("text", { x: p.x + 12, y: p.y + 4, fill: "#e6edf3", "font-size": 12, "font-weight": 700 });
+      lab.textContent = p.o.id; g.appendChild(lab);
+      g.addEventListener("mousemove", ev => {
+        const box = svg.parentElement.getBoundingClientRect();
+        tip.style.display = "block";
+        tip.style.left = Math.min(ev.clientX - box.left + 14, box.width - 330) + "px";
+        tip.style.top = (ev.clientY - box.top + 12) + "px";
+        tip.innerHTML = "<b>" + p.o.id + " · " + p.o.name + "</b><div>" + p.o.what + "</div>" +
+          "<div class='pc'>+ " + p.o.pro + "<br>− " + p.o.con + "</div>" +
+          "<div class='pc'>" + dims[xsel.value].label + ": " + p.o.scores[xsel.value] +
+          " · " + dims[ysel.value].label + ": " + p.o.scores[ysel.value] + "</div>";
+      });
+      g.addEventListener("mouseleave", () => { tip.style.display = "none"; });
+      svg.appendChild(g);
+    }
+  }
+  xsel.addEventListener("change", render);
+  ysel.addEventListener("change", render);
+  render();
+})();
+</script>
+</body>
+</html>
