@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>fedmgr — Install-assistant strategy: SWOT across three surfaces</title>
+<style>
+  :root{
+    --bg:#0b0f14; --panel:#121821; --panel2:#161d28; --ink:#e6edf3; --muted:#9fb0c3;
+    --line:#22303f; --accent:#4dd0a7; --accent2:#5aa9ff; --warn:#f5c451; --bad:#ff6b6b;
+    --radius:14px; --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 600px at 70% -10%,#132030 0,var(--bg) 55%);
+    color:var(--ink);font:16px/1.6 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;}
+  .wrap{max-width:1080px;margin:0 auto;padding:40px 24px 80px;}
+  a{color:var(--accent2);text-decoration:none} a:hover{text-decoration:underline}
+  .back{font:600 13px/1 var(--mono);color:var(--muted)}
+  .kicker{color:var(--accent);font:600 13px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;margin-top:18px}
+  h1{font-size:30px;margin:.3em 0 .1em}
+  .sub{color:var(--muted);max-width:80ch}
+  h2{font-size:20px;margin:38px 0 6px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+  h3{font-size:15px;margin:18px 0 6px;color:var(--accent);font-family:var(--mono)}
+  .card{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line);
+    border-radius:var(--radius);padding:18px 20px;margin:14px 0}
+  .hero{border-left:3px solid var(--accent)}
+  ul{margin:6px 0 6px 2px;padding-left:20px} li{margin:4px 0}
+  code{font-family:var(--mono);background:#0e141c;border:1px solid var(--line);padding:2px 6px;border-radius:6px;font-size:.86em}
+  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:14px}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font:600 11px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase}
+  .muted{color:var(--muted)}
+  .swot{display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid var(--line);border-radius:12px;overflow:hidden;margin:10px 0}
+  .swot > div{padding:12px 14px;border:1px solid var(--line);margin:-0.5px}
+  .swot h4{margin:0 0 6px;font:700 12px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase}
+  .s h4{color:var(--accent)} .w h4{color:var(--bad)} .o h4{color:var(--accent2)} .t h4{color:var(--warn)}
+  .swot ul{margin:0;padding-left:18px;font-size:13.5px} .swot li{margin:3px 0}
+  .verdict{font-size:13.5px;color:var(--muted);margin:6px 2px 0}
+  .verdict b{color:var(--ink)}
+  .tag{display:inline-block;font:600 10.5px/1 var(--mono);padding:3px 7px;border-radius:6px;margin-left:8px;vertical-align:middle}
+  .rec{color:#0b1a14;background:var(--accent)} .fund{color:#1a1405;background:var(--warn)} .keep{color:var(--muted);border:1px solid var(--line)}
+  footer{margin-top:40px;color:var(--muted);font-size:13px;border-top:1px solid var(--line);padding-top:18px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="index.html">← workbench</a>
+  <div class="kicker">Analysis · 2026-07-12 · how to help users install &amp; enable fedmgr — decision OPEN</div>
+  <h1>The install assistant: three surfaces, one reframe</h1>
+  <p class="sub">The goal is an assistant that helps a user install fedmgr and enable their config. Three
+  candidate surfaces — a hosted Dify chat, the in-browser RVF-WASM widget, and a Claude skill in the code
+  tree. They are not competitors; they answer different moments. The reframe below decides which is the
+  <em>primary</em> one, then a SWOT on each, then where RVF actually earns its place.</p>
+
+  <div class="card hero">
+    <strong>The reframe.</strong> Install help splits into two kinds. <b>Informational</b> assistance answers
+    from the docs ("what's the enroll command?"). <b>Situated</b> assistance reads the user's actual machine
+    and acts ("your <code>docker ps</code> shows no lab; your <code>ca/root.crt</code> is mode 600 so Node
+    ignored it — here's the fix"). <em>Installs fail environmentally</em> — a port taken, a stale build, a
+    cert that didn't export, a daemon not running. A doc bot can only guess at those; an agent can look. So
+    the highest-value install surface is the one that runs where the install happens — the terminal — not the
+    one on the marketing page. That is the Claude skill. The web surfaces are the funnel that brings people
+    to it.
+  </div>
+
+  <h2>Surface A — Hosted Dify RAG chat <span class="tag fund">fund: top-of-funnel</span></h2>
+  <div class="swot">
+    <div class="s"><h4>Strengths</h4><ul>
+      <li>Zero friction — reaches evaluators who haven't cloned anything yet</li>
+      <li>Hosted, always-on; lives on the website next to the pitch</li>
+      <li>Grounded + cited (spec + docs corpus); the full build is already spec'd</li>
+    </ul></div>
+    <div class="w"><h4>Weaknesses</h4><ul>
+      <li>Blind to the user's machine — can't see the real error or state</li>
+      <li>Another service to run/pay for (compute, vector DB, reranker)</li>
+      <li>Separate from the terminal where the install actually happens</li>
+    </ul></div>
+    <div class="o"><h4>Opportunities</h4><ul>
+      <li>Captures pre-install questions → tells you what the pitch fails to explain</li>
+      <li>Same corpus the skill uses — build the index once, serve both</li>
+      <li>Natural home for the "why behind the choices" content</li>
+    </ul></div>
+    <div class="t"><h4>Threats</h4><ul>
+      <li>Hallucinated commands are worse than silence for a <em>trust</em> tool — mitigated only by strict grounding + eval</li>
+      <li>Corpus drift if KB isn't re-synced on merge → stale bot</li>
+      <li>Ops burden competes with product work</li>
+    </ul></div>
+  </div>
+  <p class="verdict"><b>Verdict:</b> the evaluator funnel, not the installer. Keep it, scope it to
+  pre-clone questions, and point every "now actually install it" answer at the skill.</p>
+
+  <h2>Surface B — In-browser RVF-WASM widget <span class="tag keep">keep: zero-infra widget</span></h2>
+  <div class="swot">
+    <div class="s"><h4>Strengths</h4><ul>
+      <li>Already built (12 entries, 3 arcs) — sunk cost is done</li>
+      <li>Zero infra, zero cost, works offline; nothing to run</li>
+      <li>Dogfoods the project's own vector format (RVF/fedvec) on the homepage</li>
+    </ul></div>
+    <div class="w"><h4>Weaknesses</h4><ul>
+      <li>Q&amp;A only — retrieves text, cannot act or reason across many docs</li>
+      <li>Small corpus; query-side embedding is weak until the MiniLM upgrade</li>
+      <li>RVF's own gotchas (cosine-on-reopen, companion <code>.idmap.json</code> files) make it finicky to grow</li>
+    </ul></div>
+    <div class="o"><h4>Opportunities</h4><ul>
+      <li>The living proof that fedvec/RVF works — a demo, not just a widget</li>
+      <li>Offline path for the airgapped tier (option H) — no network dependency</li>
+    </ul></div>
+    <div class="t"><h4>Threats</h4><ul>
+      <li>Easy to over-invest — it will never be the situated installer</li>
+      <li>Shipping a large RVF brain is a non-starter (500MB+); index must stay tiny</li>
+    </ul></div>
+  </div>
+  <p class="verdict"><b>Verdict:</b> leave it as the homepage taster and the RVF demo. Do not grow it into
+  the install assistant — it structurally can't be one.</p>
+
+  <h2>Surface C — Claude skill in the code tree <span class="tag rec">recommended primary</span></h2>
+  <div class="swot">
+    <div class="s"><h4>Strengths</h4><ul>
+      <li><b>Situated</b> — reads the real environment (docker state, ports, cert perms, the actual <code>TRUST:FAIL</code> line) and acts</li>
+      <li>Lives where the install happens; can drive <code>up.sh</code>, verify health, fix a config, re-run</li>
+      <li>It <em>is</em> what drove this whole build — proven, not hypothetical</li>
+      <li>Cheapest start: the <code>fedmgr-dev</code> skill already exists; extend it or add <code>install-assist</code></li>
+      <li>Dogfoods the trust story — the skill/agent can itself be a trusted MCP behind waypoint</li>
+    </ul></div>
+    <div class="w"><h4>Weaknesses</h4><ul>
+      <li>Requires Claude Code (or an agent host) — not every user has one</li>
+      <li>Per-user tooling, not a hosted funnel — doesn't capture anonymous web traffic</li>
+      <li>Must be versioned and maintained alongside the code (a skill is a doc that rots)</li>
+    </ul></div>
+    <div class="o"><h4>Opportunities</h4><ul>
+      <li>Ship as a repo skill AND a published/installable one — reaches Claude Code + Agent SDK users</li>
+      <li>Can run the SSC scan, enroll the user's first MCP, and flip <code>requireValidChain</code> end-to-end — a guided first-run</li>
+      <li>The same guards live in <code>gotchas.md</code>/FAQ — the skill loads them so it never repeats a known trap</li>
+    </ul></div>
+    <div class="t"><h4>Threats</h4><ul>
+      <li>An agent that runs commands on a user's box needs clear guardrails (confirm destructive steps)</li>
+      <li>Skill/doc drift vs the code — mitigated by the structure tests that already pin the invariants</li>
+      <li>Ties the best experience to one vendor's agent runtime</li>
+    </ul></div>
+  </div>
+  <p class="verdict"><b>Verdict:</b> the primary install surface. Highest-value (situated beats
+  informational for installs), cheapest to start (skill scaffold exists), and it dogfoods the product.</p>
+
+  <h2>Where RVF actually earns its place — three roles, one is the sharp one</h2>
+  <p class="sub">Your instinct that RVF is "assistive on the install of a user" is right, but the strongest
+  role isn't the obvious one. RVF plays three distinct parts; rank them:</p>
+  <table>
+    <tr><th>Role</th><th>What it means</th><th>Verdict</th></tr>
+    <tr><td><b>Retrieval index</b> for the corpus</td>
+      <td>Use RVF/fedvec as the vector store the assistant queries, instead of Dify's built-in DB or MiniLM</td>
+      <td class="muted"><b>Situational.</b> Great for the offline/airgap tier (dogfooding + no network); oversized machinery for a 32k-word doc set otherwise. Not the default — MiniLM/Dify DB are simpler on the hosted path.</td></tr>
+    <tr><td><b>Insight-capture loop</b> — the sharp one</td>
+      <td>Embed each user's failing question / error into an RVF index; cluster it to see <em>where installs break</em></td>
+      <td><b>The strategic win.</b> Semantic clustering of free-text failures is exactly what RVF is good at. The clusters become the next FAQ entries and docs — the assistant's failures feed the corpus that improves the assistant. Closes the loop.</td></tr>
+    <tr><td><b>Shared corpus</b> across surfaces</td>
+      <td>One RVF index both the Dify bot and the local skill consult</td>
+      <td class="muted"><b>Nice-to-have.</b> Real, but only worth it once two surfaces are live and drifting; premature before then.</td></tr>
+  </table>
+  <p class="verdict">So RVF's headline role is <b>listening</b>, not answering: it turns the flood of install
+  questions into a ranked map of what to document next. That is machine-assisted insight into the user's
+  install — captured centrally, fed back as content.</p>
+
+  <h2>Recommended strategy — portfolio, sequenced</h2>
+  <div class="card">
+    <ul>
+      <li><b>1 · Claude skill first</b> (primary). Extend <code>fedmgr-dev</code> or add an
+        <code>install-assist</code> skill that: detects prereqs (Node 24, docker), runs <code>up.sh</code>,
+        reads real errors against the operations FAQ, enrolls the user's first MCP, and flips
+        <code>requireValidChain</code> — a guided first-run with confirm-before-destructive guards. Cheapest
+        and highest-value; the scaffold already exists.</li>
+      <li><b>2 · Dify chat second</b> (funnel). The hosted, cited pre-clone helper on the website;
+        every "now install it" answer hands off to the skill. Build per
+        <code>docs/dify-knowledge-assistant.md</code>.</li>
+      <li><b>3 · RVF as the insight loop</b> (the differentiator). Capture failing questions/errors from
+        both surfaces into an RVF index; cluster weekly; the clusters mint new FAQ/docs. This is the part
+        no doc bot gives you and the part that compounds.</li>
+      <li><b>4 · RVF-WASM widget stays</b> as the homepage taster + fedvec demo — do not grow it into the
+        installer.</li>
+    </ul>
+    <p class="muted" style="margin:8px 0 0">One line: <b>the skill installs, the chat funnels, RVF
+    listens.</b> The web surfaces bring people to the terminal; the terminal is where situated help wins;
+    RVF turns everyone's failures into tomorrow's docs.</p>
+  </div>
+
+  <footer>
+    Analysis 2026-07-12 · companion to <a href="deploy-models-2026-07.html">deploy models</a>,
+    <a href="scale-tls-options-2026-07.html">scale/TLS options</a>, and the
+    <a href="deep-assessment-2026-07-11.html">deep assessment</a> · build spec for the chat surface:
+    <code>docs/dify-knowledge-assistant.md</code> · decision OPEN.
+  </footer>
+</div>
+</body>
+</html>
