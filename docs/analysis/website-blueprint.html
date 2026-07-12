@@ -42,7 +42,8 @@
   journeys, with every piece of content traceable to a demonstrable fedmgr capability (or an honestly
   labelled roadmap item). This is the map; the <a href="website-ai-infrastructure.html">AI-infrastructure
   paper</a> is the plumbing and the <a href="deep-reassessment-2026-07.html">deep re-assessment</a> is the
-  raw material. Dated 2026-07-05.</p>
+  raw material. Dated 2026-07-05; refreshed 2026-07-12 with the "why behind the choices" arc and the
+  knowledge-assistant plan (§6–§7).</p>
 
   <h2>1 · The spine: three arcs</h2>
   <p>Every page, Q&amp;A entry, and demo belongs to exactly one arc, so a visitor always knows which
@@ -119,6 +120,57 @@
   The endpoint is a Cloudflare Worker → D1; locally it's a no-op preview so the scorecard works offline.
   A weekly triage reads the aggregate + the Tier-1 "misses" (questions that retrieved poorly) + Langfuse
   traces from the opt-in tier, and every improvement lands as a content commit that re-mints the corpus.</p>
+
+  <h2>6 · The "why behind the choices" arc — decisions as content</h2>
+  <p>The build since the 2026-07 restructure produced a set of decisions that are themselves the most
+  persuasive material we have: each one is a real fork where the easy path was wrong and we can show why.
+  A trust product earns credibility by <em>explaining its reasoning</em>, not asserting conclusions — so
+  every row below becomes a short "why we chose this" page, linked from the arc it serves and from the
+  scorecard section it answers.</p>
+  <table>
+    <tr><th>The choice</th><th>The easy path we rejected</th><th>The why (the page's thesis)</th><th>Serves arc</th></tr>
+    <tr><td><strong>packages/ vs services/ split</strong></td><td>One flat workspace; publish everything to npm</td>
+      <td>Location must answer "npm library or deployable container?" — the boundary encodes the publish decision and stops a server being npm-published by accident. A structure test enforces it.</td>
+      <td>Supply-chain integrity</td></tr>
+    <tr><td><strong>Enforced SSC gate, not advisory</strong></td><td>Scan and warn; let humans decide</td>
+      <td>A trust mark that can be issued over known HIGH CVEs is theater. The gate <em>blocked</em> at 11 HIGH, we remediated to 0/0/0/0, and proved the fix by exercising the risk path — not by re-scanning.</td>
+      <td>Supply-chain integrity</td></tr>
+    <tr><td><strong>FEDMGR_ALLOW_ORIGINS, not NODE_ENV=development</strong></td><td>A global dev flag to permit http endpoints</td>
+      <td>A global switch permits http to <em>every</em> host, overloads a variable that changes unrelated behavior, is invisible to review, and gets copy-pasted into prod. Exact-origin exceptions are scoped, auditable, and empty-by-default. Residual risk is staleness, never forgery — the chain is signature-rooted.</td>
+      <td>Bring your own trust</td></tr>
+    <tr><td><strong>TLS via our own internal CA</strong></td><td>A public cert, or plaintext-in-the-lab forever</td>
+      <td>The trust tool issues its own transport trust — the lab's TLS chain roots in a CA fedmgr minted and independently re-verified. Identity (a stable https URL) and location (where statements are fetched) are separable; TLS is hygiene, not the trust root.</td>
+      <td>Deploy OIDF with AI</td></tr>
+    <tr><td><strong>Disposable laptop labs, durable shared identities</strong></td><td>Make every lab identity permanent</td>
+      <td>Re-minting a local federation is one command — so laptop identities are disposable. Only <em>shared</em> identities (org anchors, published MCPs, the trustmarket) must be minted once and never churn. This dissolves the "https everywhere vs local dev" tension.</td>
+      <td>Deploy OIDF with AI</td></tr>
+    <tr><td><strong>KeyProvider seam → OpenBao → cloud KMS</strong></td><td>Hard-code SoftHSM; or jump straight to a vault</td>
+      <td>Crawl/walk/run on one abstraction: encrypted-on-disk today, OpenBao ("safer than local, not an HSM") next, cloud KMS/HSM later — each a KeyProvider implementation, nothing reinvented. The seam is also the FIPS strategy (validated crypto lives behind it).</td>
+      <td>Supply-chain integrity</td></tr>
+  </table>
+  <p>These pages double as the LLM corpus (§7): the "why" content is exactly what users ask the assistant
+  when a command fails and they want to understand the guard they hit, not just silence it.</p>
+
+  <h2>7 · The knowledge assistant — surfacing the corpus through Dify</h2>
+  <p>The accrued docs are already a knowledge base; a <strong>Dify RAG chat flow</strong> turns them into an
+  install-and-operate helper. Full build spec (ingestion, chunking, retrieval, model, system prompt,
+  evaluation) lives in <code>docs/dify-knowledge-assistant.md</code> — the essentials:</p>
+  <table>
+    <tr><th>Decision</th><th>Choice</th><th>Why</th></tr>
+    <tr><td>Corpus</td><td>Durable <code>docs/</code> only — never <code>docs/history/</code> or <code>docs/analysis/</code></td>
+      <td>Journals and dated snapshots would answer with superseded state. <code>operations-faq.md</code> is the highest-value source — already Q→A→prevention shaped.</td></tr>
+    <tr><td>Retrieval</td><td>Hybrid (vector + keyword) + rerank → top-4, citations on</td>
+      <td>Install answers are full of exact tokens (<code>FEDMGR_ALLOW_ORIGINS</code>, <code>:9443</code>) that pure semantic search fuzzes; a trust tool shows its sources.</td></tr>
+    <tr><td>Model</td><td><strong>Claude Haiku 4.5</strong> at <strong>temperature 0</strong>; escalate hard architecture Qs to <strong>Sonnet 5</strong></td>
+      <td>Grounded doc-QA is extract-and-synthesize, not open reasoning — Haiku is fast, cheap, and (unlike the Claude 5 family) still accepts <code>temperature</code>, which must be pinned to 0 for faithful answers.</td></tr>
+    <tr><td>Prompt</td><td>Strict grounding contract: answer only from context, quote commands verbatim, cite <code>source_path</code>, honest "not in the docs"</td>
+      <td>Faithfulness is the failure mode that matters for a trust tool's own helper — an invented flag is worse than "I don't know".</td></tr>
+    <tr><td>Refresh &amp; eval</td><td>Re-sync KB on merge to <code>main</code>; eval seeded from the FAQ's Q/A pairs</td>
+      <td>Same discipline as the test suite — green must mean grounded, not just fluent; the corpus is the docs, so stale docs = stale bot.</td></tr>
+  </table>
+  <p>This is the concrete instance of the "opt-in Dify guided tier" that was Phase 3 on the roadmap below —
+  now specified against the real corpus. It sits alongside the in-browser RVF-WASM Q&amp;A (§5): the WASM
+  path is the zero-infra homepage widget; Dify is the deeper, hosted, install-support surface.</p>
 
   <h2>5 · Build status</h2>
   <table>

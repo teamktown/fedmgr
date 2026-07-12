@@ -14,6 +14,8 @@ from past development phases are preserved under [`history/`](history/).
 | [extending-trustmarks.md](extending-trustmarks.md) | Adding a new trustmark type end to end |
 | [signing.md](signing.md) | Key handling, signing, and CI secrets |
 | [security-faq.md](security-faq.md) | Threat-model questions and answers |
+| [operations-faq.md](operations-faq.md) | **When something breaks** — symptom → cause → prevention, from real incidents |
+| [dify-knowledge-assistant.md](dify-knowledge-assistant.md) | Build a Dify RAG chat flow over these docs (model, settings, prompt) |
 
 ## Understanding the design
 
