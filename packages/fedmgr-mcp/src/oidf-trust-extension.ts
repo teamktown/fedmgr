@@ -18,6 +18,7 @@
  * SPEC: OIDF §"Entity Identifiers", §"Trust Marks". Advertised claims are NOT a
  * substitute for verifying the trust chain — they tell you where/how to verify.
  */
+import { allowedOrigins } from "@letsfederate/kms";
 
 export const OIDF_TRUST_EXTENSION_ID = "org.letsfederate/oidf-trust";
 
@@ -73,11 +74,15 @@ export function buildOidfTrustExtension(opts: {
 function isHttpsUrl(s: unknown): boolean {
   if (typeof s !== "string" || s.length === 0) return false;
   try {
-    const proto = new URL(s).protocol;
+    const u = new URL(s);
+    const proto = u.protocol;
     if (proto === "https:") return true;
-    // http is permitted ONLY in development/lab (NODE_ENV=development), mirroring
-    // the SSRF guard's policy — production entity ids must be https.
-    return proto === "http:" && process.env["NODE_ENV"] === "development";
+    if (proto !== "http:") return false;
+    // http identities are permitted only by explicit exception, mirroring the
+    // SSRF guard's policy: an exact-origin FEDMGR_ALLOW_ORIGINS entry (option
+    // G, preferred) or legacy NODE_ENV=development.
+    if (allowedOrigins().has(u.origin.toLowerCase())) return true;
+    return process.env["NODE_ENV"] === "development";
   } catch {
     return false;
   }

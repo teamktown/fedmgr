@@ -173,7 +173,7 @@ export {
   type TrustResult,
 } from "./trust-validator.js";
 
-export { assertSafeUrl, UrlSafetyError } from "./validate-url.js";
+export { assertSafeUrl, allowedOrigins, UrlSafetyError } from "./validate-url.js";
 
 // ---------------------------------------------------------------------------
 // Factory — resolves provider from a string tag.
