@@ -39,3 +39,10 @@ npm run scan             # SSC scan (installs scanners on consent only)
 
 Full detail and the remaining guards (Node version, RVF cosine-on-reopen, SSC
 repo-root assumptions, broad `.gitignore` rules): **`docs/dev/gotchas.md`**.
+
+## Helping a user INSTALL rather than develop?
+If the task is "install fedmgr / stand up the lab / enable my config / connect
+an MCP through waypoint / fix an enrollment-TLS-chain error" — that's the
+**`fedmgr-install`** skill (situated: diagnose the real machine, then act) plus
+the symptom→cause→fix reference `docs/operations-faq.md`. Use this dev skill for
+building, testing, and changing the code itself.
