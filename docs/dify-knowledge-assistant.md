@@ -8,6 +8,30 @@ the gotchas — is already a corpus. This describes how to surface it through a
 No DSL here — Dify's flow is built in its UI. This is the design: what to
 ingest, how to chunk it, which model and settings, and the system prompt.
 
+## 0. A "training set" here means RAG, not fine-tuning
+
+The instinct to "train an LLM on fedmgr + OpenID Federation" almost always
+means fine-tuning — and for this corpus that is the wrong tool. **Do not
+fine-tune.** Fine-tuning bakes today's commands, ports, and paths into weights
+that go stale the moment the repo moves (this project renamed half its
+directory tree in a single week, and flipped the lab from http to https in
+another). Retrieval-augmented generation over the versioned markdown keeps the
+assistant exactly as current as `git pull`, keeps every answer **citable**, and
+costs nothing to update.
+
+So the "training set" is not a JSONL of prompt/completion pairs — it is this
+repo's docs, chunked and indexed. Two places also want to be in the corpus that
+aren't fedmgr's own files:
+
+- **The OpenID Federation 1.0 spec**, chunked per section (§3 entity
+  statements, §8 resolve, §10 trust chains), so the assistant can answer "is
+  this fedmgr-specific or standard OIDF behavior?" — the question operators ask.
+- **The MCP spec / extension pages** the trust extension builds on.
+
+Revisit fine-tuning only for the airgapped/offline world (option H in the
+scale-TLS analysis) — and even then, *distill from this same corpus* rather
+than hand-authoring examples.
+
 ## 1. The knowledge base (what to ingest)
 
 Point Dify's Knowledge ingestion at the **durable reference path only** — never
