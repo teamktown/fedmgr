@@ -226,7 +226,8 @@ fedmgr doctor</pre>
   <div class="card">
     <table>
       <tr><th></th><th>Item</th><th>Why it's next</th></tr>
-      <tr><td><span class="st todo">next</span></td><td>Merge to <code>main</code> (fast-forward, 80+ commits)</td><td>Triggers the <em>first npm release</em> of the 5 libs + CLI via semantic-release — merge <strong>is</strong> the release event</td></tr>
+      <tr><td><span class="st done">done</span></td><td><strong>Options A+G</strong> — lab speaks TLS (Caddy internal CA, identities <code>https://localhost:9443/9444/9445</code>); <code>FEDMGR_ALLOW_ORIGINS</code> exact-origin exceptions replace the global dev flag everywhere</td><td>Prod posture end-to-end: enrollment, §10 chain VALID, waypoint admission — all over https with <code>NODE_ENV</code> gone; 14 new guard tests + TLS structure guard</td></tr>
+      <tr><td><span class="st todo">next</span></td><td>Merge to <code>main</code> (fast-forward, 90+ commits)</td><td>Triggers the <em>first npm release</em> of the 5 libs + CLI via semantic-release — merge <strong>is</strong> the release event</td></tr>
       <tr><td><span class="st done">done</span></td><td>TA database → named volume (<code>ta-data:/data</code>); <code>down.sh</code> durable by default, <code>--wipe</code> to reset</td><td>Proven: fedmgr-mcp enrollment survived a full <code>down</code>/<code>up</code> cycle (subordinates intact, chain still VALID)</td></tr>
       <tr><td><span class="st todo">todo</span></td><td>Second real downstream: a git MCP under the anchor</td><td>Makes admission non-trivial and starts the actual tool-elevation story (git__* through the PEP)</td></tr>
       <tr><td><span class="st todo">todo</span></td><td>Issue <strong>waypoint its own trustmark</strong> (SSC-gated — already green)</td><td>Patient zero: the doorman becomes the trustmarket's first verified listing</td></tr>

@@ -39,8 +39,48 @@ wait_health() { # name url
 wait_health TMI http://localhost:8080/health
 wait_health TA  http://localhost:8090/health
 
+# ── TLS edge (option A): export Caddy's internal-CA root for clients ────────
+# The public root lands in deploy/lab/ca/root.crt; every https client (host
+# Node processes, the TA container itself) trusts it via NODE_EXTRA_CA_CERTS.
+# First boot only: the TA started before the root existed — restart it once so
+# Node picks the file up.
+ROOT_CRT="deploy/lab/ca/root.crt"
+for _ in $(seq 1 15); do
+  docker compose -f "$COMPOSE" cp caddy:/data/caddy/pki/authorities/local/root.crt "$ROOT_CRT.new" >/dev/null 2>&1 && break
+  sleep 2
+done
+if [ ! -s "$ROOT_CRT.new" ]; then
+  echo "[lab] TLS root did NOT appear (caddy pki)" >&2; exit 1
+fi
+# The TA must trust the CURRENT root (a --wipe regenerates the CA, so compare
+# content — mere existence is not enough). On change: swap the file and restart
+# the TA pod so Node re-reads NODE_EXTRA_CA_CERTS.
+TA_ROOT_SUM=$(docker compose -f "$COMPOSE" exec -T ta-server sha256sum /lab-ca/root.crt 2>/dev/null | cut -d' ' -f1 || true)
+NEW_SUM=$(sha256sum "$ROOT_CRT.new" | cut -d' ' -f1)
+mv "$ROOT_CRT.new" "$ROOT_CRT"
+chmod 644 "$ROOT_CRT"   # PUBLIC cert; containers read it as non-root users
+if [ "$TA_ROOT_SUM" != "$NEW_SUM" ]; then
+  echo "[lab] TLS root is new/changed — restarting TA pod with the exported root"
+  docker compose -f "$COMPOSE" restart ta-server >/dev/null 2>&1
+  # Restarting the netns OWNER gives it a fresh namespace; the followers'
+  # listeners are stranded in the dead one. They must restart AFTER the owner
+  # (`up -d` won't — compose sees them as unchanged-and-running).
+  docker compose -f "$COMPOSE" restart entity-host caddy >/dev/null 2>&1
+  wait_health TA http://localhost:8090/health
+fi
+wait_https() { # name url
+  for _ in $(seq 1 15); do
+    curl -fsS --cacert "$ROOT_CRT" "$2" >/dev/null 2>&1 && { echo "[lab] $1 healthy (TLS)"; return 0; }
+    sleep 2
+  done
+  echo "[lab] $1 did NOT answer over TLS" >&2; return 1
+}
+wait_https "TA  https://localhost:9443" https://localhost:9443/health
+wait_https "TMI https://localhost:9444" https://localhost:9444/health
+
 echo
-echo "[lab] UP  →  TA=http://localhost:8090  TMI=http://localhost:8080  registry=localhost:5000"
+echo "[lab] UP  →  TA=https://localhost:9443  TMI=https://localhost:9444  statements=https://localhost:9445"
+echo "[lab]        (plain http :8090/:8080 remain for debugging; root CA: $ROOT_CRT)"
 echo "[lab] TA subordinates: $(curl -fsS http://localhost:8090/federation_list 2>/dev/null || echo '?')"
 echo "[lab] Next:"
 echo "        ./examples/01-trust-circle/round-trip.sh    # sign+SBOM+trustmark round trip (needs cosign, syft, jq)"

@@ -11,8 +11,8 @@ Audience: a developer new to OpenID Federation, lightly comfortable with crypto.
 
 ```
 trust.letsfederate.org  ← canonical Trust Anchor identity (entity id)
-   │  (in the lab it resolves to http://localhost:8090)
-   ├── TMI  http://localhost:8080   issues signed, digest-bound trustmarks
+   │  (in the lab it resolves to https://localhost:9443)
+   ├── TMI  https://localhost:9444   issues signed, digest-bound trustmarks
    └── registry localhost:5000      stores your images + cosign signatures + SBOMs
 ```
 
@@ -35,8 +35,8 @@ You should see:
 ```
 [lab] TMI healthy
 [lab] TA healthy
-[lab] UP  →  TA=http://localhost:8090  TMI=http://localhost:8080  registry=localhost:5000
-[lab] TA subordinates: ["http://localhost:8080"]
+[lab] UP  →  TA=https://localhost:9443  TMI=https://localhost:9444  statements=https://localhost:9445
+[lab] TA subordinates: ["https://localhost:9444"]
 ```
 
 The last line means the TA already vouches for the TMI — a real trust chain.
@@ -83,7 +83,7 @@ Or commit a project `.mcp.json`:
 ```
 
 In Claude Code, run `/mcp` — you should see **waypoint** exposing 13 `fedmgr__*` tools (via the trust-enforcing mux). The tools
-default to the lab URLs (`ta_url=http://localhost:8090`, `tmi_url=http://localhost:8080`),
+default to the lab URLs (`ta_url=https://localhost:9443`, `tmi_url=https://localhost:9444`),
 so with the lab up they "just work". Try prompts like:
 
 - “Using fedmgr, provision an MCP trust circle and then validate the invocation.”

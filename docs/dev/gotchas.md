@@ -26,7 +26,7 @@ route at runtime). When service A starts importing package B, update
 - ship `packages/B/dist` (+ `package.json`) in the runtime stage
 
 **Verify by running**, not by host build: `./deploy/lab/up.sh` then curl a
-real endpoint (e.g. `curl localhost:8090/federation_search?q=x`). This is how
+real endpoint (e.g. `curl --cacert deploy/lab/ca/root.crt "https://localhost:9443/federation_search?q=x"`). This is how
 the fedvec→ta-server regression was caught after host `npm run build` passed.
 
 ## Guard: disk-full corrupts node_modules

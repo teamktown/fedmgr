@@ -69,8 +69,8 @@ export type {
 // also serves discovery — but identity and reachable location are distinct, so a
 // local lab can resolve the canonical id to localhost. SPEC: OIDF §"Entity
 // Identifiers". (https://openid.net/specs/openid-federation-1_1.html)
-const DEFAULT_TA_URL = "http://localhost:8090";
-const DEFAULT_TMI_URL = "http://localhost:8080";
+const DEFAULT_TA_URL = "https://localhost:9443";
+const DEFAULT_TMI_URL = "https://localhost:9444";
 const DEFAULT_TRUST_ANCHOR_ID = "https://trust.letsfederate.org";
 // fedmgr-mcp's own entity identity under the canonical anchor (patient zero: the
 // tool that issues trust also advertises its own trust). FEDMGR_MCP_ENTITY_ID may
@@ -710,12 +710,12 @@ async function toolInitializeLocalCa(): Promise<string> {
     "   (Runs: docker compose -f deploy/lab/docker-compose.yml up --build)",
     "",
     "4. Verify services are healthy:",
-    "   curl http://localhost:8090/health   # Trust Anchor",
-    "   curl http://localhost:8080/health   # Trust Mark Issuer",
+    "   curl --cacert deploy/lab/ca/root.crt https://localhost:9443/health   # Trust Anchor",
+    "   curl --cacert deploy/lab/ca/root.crt https://localhost:9444/health   # Trust Mark Issuer",
     "",
     "5. Check entity configurations:",
-    "   curl http://localhost:8090/.well-known/openid-federation",
-    "   curl http://localhost:8080/.well-known/openid-federation",
+    "   curl --cacert deploy/lab/ca/root.crt https://localhost:9443/.well-known/openid-federation",
+    "   curl --cacert deploy/lab/ca/root.crt https://localhost:9444/.well-known/openid-federation",
     "",
     "To stop the lab:",
     "   npm run lab:down",

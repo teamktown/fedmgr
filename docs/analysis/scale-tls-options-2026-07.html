@@ -104,7 +104,7 @@
 <body>
 <div class="wrap">
   <a class="back" href="index.html">← workbench</a>
-  <div class="kicker">Analysis · 2026-07-11 · https &amp; identity at 10k-dev scale — decision OPEN</div>
+  <div class="kicker">Analysis · 2026-07-11 · https &amp; identity at 10k-dev scale — DECIDED 2026-07-12: A + G built</div>
   <h1>Options A–H: escaping localhost without breaking the laptop</h1>
   <p class="sub">Constraints this holds simultaneously: tens of thousands of dev laptops running the compose lab
   <em>locally</em>; https identities so shared entities never re-mint; internal http endpoints that will always
@@ -200,8 +200,14 @@
     <p>These aren't mutually exclusive — the audiences differ, so the endgame is a portfolio:
     <b>A</b> as the shipped laptop default · <b>G</b> immediately (small, corrects a foot-gun) ·
     <b>B/F</b> documented paths for enterprises · <b>C</b> for our hosted anchor ·
-    <b>E</b> as the next architectural build · <b>H</b> as E's packaging for the regulated tier.
-    The open question is sequencing and how much of E/H to pull forward — <em>decision pending</em>.</p>
+    <b>E</b> as the next architectural build · <b>H</b> as E's packaging for the regulated tier.</p>
+    <p><b>DECIDED &amp; BUILT (2026-07-12):</b> A + G shipped together, test-first. G:
+    <code>FEDMGR_ALLOW_ORIGINS</code> exact-origin exceptions in the kms SSRF guard + the fedmgr-mcp policy
+    layer (14 new tests). A: Caddy internal CA in the lab (TLS identities
+    <code>https://localhost:9443/9444/9445</code>), root exported to <code>deploy/lab/ca/root.crt</code>,
+    <code>NODE_ENV=development</code> removed from every lab and client config. Proven live: enrollment +
+    §10 chain VALID + waypoint admission over TLS in production posture. B/C/F documented paths;
+    E/H remain the next architectural build.</p>
   </div>
 
   <footer>

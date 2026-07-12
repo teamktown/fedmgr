@@ -19,6 +19,9 @@ done
 
 docker compose -f deploy/lab/docker-compose.yml down "${ARGS[@]+"${ARGS[@]}"}"
 if [[ " ${ARGS[*]-} " == *" -v "* ]]; then
+  # A wipe regenerates Caddy's CA on next up — drop the stale exported root so
+  # nothing keeps trusting the old one.
+  rm -f deploy/lab/ca/root.crt
   echo "[lab] down — volumes WIPED (fresh state on next up)."
 else
   echo "[lab] down — durable state kept (ta-data, registry). Use --wipe for a reset."

@@ -120,6 +120,32 @@ test("lab TA state is durable: named volume, no /tmp db, non-destructive down", 
   assert.match(down, /--wipe/, "down.sh must offer an explicit --wipe reset path");
 });
 
+test("lab runs TLS-fronted with explicit origin exceptions — no global dev flag (options A+G)", () => {
+  const compose = readFileSync(join(repoRoot, "deploy/lab/docker-compose.yml"), "utf8");
+
+  // Option A: Caddy terminates TLS inside ta-server's netns; https ports published.
+  assert.match(compose, /^\s{2}caddy:/m, "caddy service must exist");
+  assert.match(compose, /caddy:[\s\S]*?network_mode:\s*"service:ta-server"/, "caddy must share ta-server netns (one-origin loopback)");
+  for (const p of ["9443:9443", "9444:9444", "9445:9445"]) {
+    assert.ok(compose.includes(`"${p}"`), `https port ${p} must be published via the ta-server pod`);
+  }
+  const caddyfile = readFileSync(join(repoRoot, "deploy/lab/Caddyfile"), "utf8");
+  assert.match(caddyfile, /tls internal/, "Caddyfile must use the internal CA");
+  for (const site of ["localhost:9443", "localhost:9444", "localhost:9445"]) {
+    assert.ok(caddyfile.includes(site), `Caddyfile must serve ${site}`);
+  }
+
+  // Option G: the TA runs with explicit origin exceptions, NOT the global dev flag.
+  const taBlock = compose.slice(compose.indexOf("container_name: trust-lab-ta\n"), compose.indexOf("tmi-decrypt:"));
+  assert.ok(!/NODE_ENV/.test(taBlock), "ta-server must not set NODE_ENV (option G replaces it)");
+  assert.match(taBlock, /FEDMGR_ALLOW_ORIGINS/, "ta-server must declare its origin exceptions explicitly");
+  assert.match(taBlock, /NODE_EXTRA_CA_CERTS/, "ta-server needs the lab root CA for https fetches");
+
+  // The lab CA root lands in a tracked dir whose contents stay untracked.
+  const gi = readFileSync(join(repoRoot, "deploy/lab/ca/.gitignore"), "utf8");
+  assert.match(gi, /^\*$/m, "deploy/lab/ca contents must be gitignored (machine-specific root.crt)");
+});
+
 test("no private key material is tracked by git", () => {
   // Lab keys are generated into services/*/keys by up.sh. The .gitignore rules
   // are path-anchored — a directory move can silently un-ignore them (this

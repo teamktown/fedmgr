@@ -45,6 +45,10 @@ volumes:
   # `down.sh --wipe`. This is what makes enrollments persist between restarts.
   ta-data:
 
+  # Caddy's internal CA + issued certs (option A). The CA private key never
+  # leaves this volume; up.sh exports only the public root.crt to ./ca/.
+  caddy-data:
+
 services:
   # -------------------------------------------------------------------------
   # Entity host — static HTTP host for leaf entity configurations.
@@ -70,6 +74,23 @@ services:
     volumes:
       - ./entity-host/site:/usr/share/nginx/html:ro
       - ./entity-host/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    restart: unless-stopped
+
+  # -------------------------------------------------------------------------
+  # TLS edge (option A) — Caddy + internal CA, sharing ta-server's netns so
+  # https://localhost:9443/9444/9445 is ONE origin from the host, the TA's own
+  # fetches, and the lab containers. See Caddyfile for the site map.
+  # -------------------------------------------------------------------------
+  caddy:
+    image: caddy:2-alpine
+    container_name: trust-lab-caddy
+    network_mode: "service:ta-server"
+    depends_on:
+      ta-server:
+        condition: service_started
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
     restart: unless-stopped
 
   # -------------------------------------------------------------------------
@@ -126,6 +147,11 @@ services:
       # entity-host (network_mode: service:ta-server) listens here; published
       # through this pod so host and containers share one origin for leaf ids.
       - "9631:9631"
+      # Caddy (also in this netns) terminates https here — the lab's REAL
+      # identity origins: TA :9443, TMI :9444, entity statements :9445.
+      - "9443:9443"
+      - "9444:9444"
+      - "9445:9445"
     volumes:
       - type: bind
         source: ../../services/ta-server/keys/ta.pub.jwk
@@ -133,27 +159,35 @@ services:
         read_only: true
       - ta-secrets:/run/secrets:ro
       - ta-data:/data
+      # Lab TLS root (public cert, exported by up.sh) — trusted for https
+      # fetches to the identity origins. Absent on very first boot; up.sh
+      # exports it and restarts this service once.
+      - ./ca:/lab-ca:ro
     environment:
       PORT: "8090"
-      # The lab IS the development environment: everything speaks http://
-      # (localhost + docker DNS), which the TA's URL guard only allows in
-      # development. Production deployments must NOT set this.
-      NODE_ENV: "development"
+      # Option G: NO global dev flag. The lab's transport/locality exceptions
+      # are named, exact origins: the three https loopback identity origins
+      # (loopback is otherwise refused outside dev) and the ONE internal http
+      # hop (TMI jwks bootstrap, container-to-container — an honest, explicit
+      # exception rather than fronting it).
+      FEDMGR_ALLOW_ORIGINS: "https://localhost:9443,https://localhost:9444,https://localhost:9445,http://tmi-server:8080"
+      NODE_EXTRA_CA_CERTS: "/lab-ca/root.crt"
       # Durable state: enrollments/subordinates (SQLite) + the fedvec index
       # live on the ta-data named volume so they survive container recreation
       # and `down`. Only `down.sh --wipe` removes them.
       TA_DB_PATH: "/data/ta.db"
-      TA_ENTITY_ID: "${TA_ENTITY_ID:-http://localhost:8090}"
-      TA_JWKS_URL: "${TA_ENTITY_ID:-http://localhost:8090}/.well-known/jwks.json"
+      TA_ENTITY_ID: "${TA_ENTITY_ID:-https://localhost:9443}"
+      TA_JWKS_URL: "${TA_ENTITY_ID:-https://localhost:9443}/.well-known/jwks.json"
       TA_PUBLIC_JWK: "/app/keys/ta.pub.jwk"
       TA_PRIVATE_JWK: "/run/secrets/ta.priv.jwk"
       TA_ORG_NAME: "letsfederate Trust Anchor (local lab)"
       # Register TMI as a subordinate — fetched at startup.
-      # entityId = the TMI's public IDENTITY (localhost, as seen from the host);
-      # jwksUrl  = the in-network LOCATION (docker service DNS) so the TA can
-      # actually reach it from inside the compose network. Identity != location.
+      # entityId = the TMI's public IDENTITY (its https origin via Caddy);
+      # jwksUrl  = the in-network LOCATION (docker service DNS, plain http —
+      # covered by the FEDMGR_ALLOW_ORIGINS exception above, and safe to fetch
+      # before Caddy is up). Identity != location.
       TA_SUBORDINATES: >
-        [{"entityId":"${TMI_ISSUER:-http://localhost:8080}",
+        [{"entityId":"${TMI_ISSUER:-https://localhost:9444}",
           "jwksUrl":"http://tmi-server:8080/.well-known/jwks.json"}]
     depends_on:
       ta-decrypt:
@@ -214,13 +248,15 @@ services:
       - tmi-secrets:/run/secrets:ro
     environment:
       PORT: "8080"
-      TMI_ISSUER: "${TMI_ISSUER:-http://localhost:8080}"
-      TMI_JWKS_URL: "${TMI_ISSUER:-http://localhost:8080}/.well-known/jwks.json"
+      # Same origin-exception posture as the TA (option G) — no global dev flag.
+      FEDMGR_ALLOW_ORIGINS: "https://localhost:9443,https://localhost:9444,https://localhost:9445"
+      TMI_ISSUER: "${TMI_ISSUER:-https://localhost:9444}"
+      TMI_JWKS_URL: "${TMI_ISSUER:-https://localhost:9444}/.well-known/jwks.json"
       TMI_PUBLIC_JWK: "/app/keys/tmi.pub.jwk"
       TMI_PRIVATE_JWK: "/run/secrets/tmi.priv.jwk"
       # Declare the TA as this TMI's authority so a verifier can resolve the chain
       # TMI -> TA (required for cryptographic trust-chain validation).
-      TMI_AUTHORITY_HINTS: '["${TA_ENTITY_ID:-http://localhost:8090}"]'
+      TMI_AUTHORITY_HINTS: '["${TA_ENTITY_ID:-https://localhost:9443}"]'
     depends_on:
       tmi-decrypt:
         condition: service_completed_successfully

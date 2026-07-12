@@ -42,8 +42,8 @@ LOG_FORMAT=json fedmgr doctor             # force structured logs (default: text
 ```bash
 ./deploy/lab/up.sh      # build + start registry + Trust Anchor + Trustmark Issuer, wait healthy
 ./deploy/lab/down.sh    # stop (durable state kept; --wipe resets)
-curl -s localhost:8090/health                       # Trust Anchor
-curl -s localhost:8080/health                       # Trustmark Issuer
+curl -s --cacert deploy/lab/ca/root.crt https://localhost:9443/health   # Trust Anchor (TLS)
+curl -s --cacert deploy/lab/ca/root.crt https://localhost:9444/health   # Trustmark Issuer (TLS)
 curl -s 'localhost:8090/federation_search?q=trust'  # semantic search (fedvec)
 ```
 

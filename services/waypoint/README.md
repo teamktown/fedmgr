@@ -22,7 +22,8 @@ Claude Code ──MCP──▶ waypoint ──▶ fedmgr   (anchor accepted → 
   "downstreams": [
     { "name": "fedmgr", "command": "node",
       "args": ["/abs/path/packages/fedmgr-mcp/dist/bin.js"],
-      "env": { "NODE_ENV": "development" },
+      "env": { "NODE_EXTRA_CA_CERTS": "/abs/path/deploy/lab/ca/root.crt",
+               "FEDMGR_ALLOW_ORIGINS": "https://localhost:9443,https://localhost:9444,https://localhost:9445" },
       "entityId": "https://trust.letsfederate.org/mcp/fedmgr-mcp",
       "trustAnchor": "https://trust.letsfederate.org" }
   ],
@@ -49,25 +50,25 @@ cryptographic §10 chain resolution, enroll the downstream and flip
 
 ```bash
 # 1. Mint the leaf's identity: keypair + self-signed entity configuration.
-#    The lab's entity-host serves site/ at http://localhost:9631 — one origin
-#    for the TA, the other containers, and the host.
+#    The lab fronts entity statements at https://localhost:9445 (Caddy TLS) —
+#    one origin for the TA, the other containers, and the host.
 fedmgr entity config \
-  --entity-id http://localhost:9631/mcp/<name> --authority http://localhost:8090 \
+  --entity-id https://localhost:9445/mcp/<name> --authority https://localhost:9443 \
   --key-out ~/.config/fedmgr/keys/<name> \
   --out deploy/lab/entity-host/site/mcp/<name>/.well-known/openid-federation
 # 2. Publish the JWKS next to it ({"keys":[<leaf.pub.jwk>]}):
 #    deploy/lab/entity-host/site/mcp/<name>/jwks.json
 # 3. Enroll (proof-of-key; the TA fetches the JWKS from the same origin):
 fedmgr entity enroll \
-  --entity-id http://localhost:9631/mcp/<name> --ta http://localhost:8090 \
-  --jwks-url http://localhost:9631/mcp/<name>/jwks.json \
+  --entity-id https://localhost:9445/mcp/<name> --ta https://localhost:9443 \
+  --jwks-url https://localhost:9445/mcp/<name>/jwks.json \
   --key ~/.config/fedmgr/keys/<name>/leaf.priv.jwk
 # 4. waypoint.json: set the downstream's entityId to the enrolled id and
-#    "policy": { "acceptedAnchors": ["http://localhost:8090"], "requireValidChain": true }
+#    "policy": { "acceptedAnchors": ["https://localhost:9443"], "requireValidChain": true }
 ```
 
-Run waypoint itself with `NODE_ENV=development` (the lab speaks http:) and pin the
-anchor key: `WAYPOINT_ANCHOR_JWKS='{"http://localhost:8090":{"keys":[<ta.pub.jwk>]}}'`.
+Run waypoint with `NODE_EXTRA_CA_CERTS=deploy/lab/ca/root.crt` (the lab is https now) and pin the
+anchor key: `WAYPOINT_ANCHOR_JWKS='{"https://localhost:9443":{"keys":[<ta.pub.jwk>]}}'`.
 On start you'll see `downstream ADMITTED … "chain":"VALID"`; an unenrolled downstream
 is denied and never connected.
 

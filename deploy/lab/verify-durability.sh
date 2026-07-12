@@ -24,8 +24,8 @@ case "$DB_PATH" in
 esac
 
 say "2/4 creating durable state (enrollment challenge)"
-# entity-host origin satisfies the TA's same-origin + SSRF rules in the lab.
-EID="http://localhost:9631/mcp/durability-probe-$$"
+# The https entity-host origin satisfies same-origin + the lab allowlist.
+EID="https://localhost:9445/mcp/durability-probe-$$"
 RESP=$(curl -fsS -X POST "$TA/enroll" -H 'content-type: application/json' \
   -d "{\"entity_id\":\"$EID\",\"jwks_url\":\"$EID/jwks.json\"}")
 ENROLL_ID=$(echo "$RESP" | python3 -c "import json,sys; print(json.load(sys.stdin)['enrollment_id'])")
