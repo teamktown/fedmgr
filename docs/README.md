@@ -34,6 +34,7 @@ from past development phases are preserved under [`history/`](history/).
 |---|---|
 | [dev/gotchas.md](dev/gotchas.md) | **Read first** — hard-won guards (Docker ≠ host build, npm 11, RVF, SSC) |
 | [dev/running.md](dev/running.md) | Build / test / run commands |
+| [dev/branching.md](dev/branching.md) | **Before your first PR** — semantic branches, main protection, merge=release |
 | [dev/trust-verification.md](dev/trust-verification.md) | The single §10 verifier and signer pinning |
 | [dev-guide.md](dev-guide.md) | Contributor guide |
 | [testing.md](testing.md) | Test layout and how to run suites |

@@ -42,6 +42,10 @@ node packages/fedmgr/dist/bin.js --help     # all commands
 
 CLI verbs: `init` · `doctor` · `keys` · `entity` · `trustmark` · `oci` · `cbom` · `search`.
 
+Contributing? See [CONTRIBUTING.md](CONTRIBUTING.md) and the branching/release
+rules in [docs/dev/branching.md](docs/dev/branching.md) — `main` is protected and
+a merge publishes a release.
+
 **Stand up a local trust lab** (Trust Anchor + Trust Mark Issuer + registry in Docker):
 
 ```sh

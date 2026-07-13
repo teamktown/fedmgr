@@ -29,14 +29,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/teamktown/fedmgr.git"
+    "url": "git+https://github.com/letsfederate/fedmgr.git"
   },
   "author": "Chris Phillips",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/teamktown/fedmgr/issues"
+    "url": "https://github.com/letsfederate/fedmgr/issues"
   },
-  "homepage": "https://github.com/teamktown/fedmgr#readme",
+  "homepage": "https://github.com/letsfederate/fedmgr#readme",
   "devDependencies": {
     "@semantic-release/changelog": "^6.0.3",
     "@semantic-release/git": "^10.0.1",

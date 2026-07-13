@@ -31,6 +31,6 @@ chain-resolved issuer keys + the anchor's `trust_mark_issuers` — never a mark'
 marks are gated on signed [`@letsfederate/ssc-attest`](https://www.npmjs.com/package/@letsfederate/ssc-attest)
 evidence that the artifact passed a zero-HIGH/CRITICAL scan.
 
-See the [repo](https://github.com/teamktown/fedmgr) for the full trust model, the local lab, and ADRs.
+See the [repo](https://github.com/letsfederate/fedmgr) for the full trust model, the local lab, and ADRs.
 
 MIT.

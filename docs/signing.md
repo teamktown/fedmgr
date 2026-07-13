@@ -78,7 +78,7 @@ npm audit signatures --verbose
 
 # Example output for @letsfederate/kms:
 # @letsfederate/kms@1.0.0: Signed by:
-#   Repository: teamktown/fedmgr
+#   Repository: letsfederate/fedmgr
 #   Workflow:   .github/workflows/release.yml
 #   SHA:        <git-sha>
 ```
@@ -117,7 +117,7 @@ brew install cosign          # macOS
 cosign verify \
   ghcr.io/teamktown/ta-server:latest \
   --certificate-identity-regexp \
-    "https://github.com/teamktown/fedmgr/.github/workflows/containers.yml" \
+    "https://github.com/letsfederate/fedmgr/.github/workflows/containers.yml" \
   --certificate-oidc-issuer \
     "https://token.actions.githubusercontent.com"
 
@@ -126,7 +126,7 @@ cosign verify-attestation \
   --type cyclonedx \
   ghcr.io/teamktown/ta-server:latest \
   --certificate-identity-regexp \
-    "https://github.com/teamktown/fedmgr/.github/workflows/containers.yml" \
+    "https://github.com/letsfederate/fedmgr/.github/workflows/containers.yml" \
   --certificate-oidc-issuer \
     "https://token.actions.githubusercontent.com" \
   | jq '.payload | @base64d | fromjson | .predicate'
@@ -150,7 +150,7 @@ cosign verify-attestation \
   --type cyclonedx \
   ghcr.io/teamktown/tmi-server:latest \
   --certificate-identity-regexp \
-    "https://github.com/teamktown/fedmgr/.github/workflows/containers.yml" \
+    "https://github.com/letsfederate/fedmgr/.github/workflows/containers.yml" \
   --certificate-oidc-issuer \
     "https://token.actions.githubusercontent.com" \
   | jq -r '.payload | @base64d | fromjson | .predicate.components[].name' \
@@ -265,13 +265,13 @@ npm audit signatures
 # Container cosign signature
 cosign verify \
   ghcr.io/teamktown/ta-server:1.0.0 \
-  --certificate-identity-regexp "https://github.com/teamktown/fedmgr" \
+  --certificate-identity-regexp "https://github.com/letsfederate/fedmgr" \
   --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
 
 # Container SBOM
 cosign verify-attestation --type cyclonedx \
   ghcr.io/teamktown/ta-server:1.0.0 \
-  --certificate-identity-regexp "https://github.com/teamktown/fedmgr" \
+  --certificate-identity-regexp "https://github.com/letsfederate/fedmgr" \
   --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
 
 # OIDF trustmark on container

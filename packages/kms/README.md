@@ -1,6 +1,6 @@
 # @letsfederate/kms
 
-Pluggable signing for [fedmgr](https://github.com/teamktown/fedmgr) — one `KeyProvider` interface
+Pluggable signing for [fedmgr](https://github.com/letsfederate/fedmgr) — one `KeyProvider` interface
 (`kid` / `jwks` / `signJwt`) over three backends:
 
 - **SoftKMS** — encrypted local JWKs (step-cli minted), for dev and the trust lab.

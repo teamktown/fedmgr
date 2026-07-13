@@ -1,7 +1,7 @@
 # @letsfederate/oidf-verify
 
 OpenID Federation **§10** trust-chain and trust-mark verification. The single,
-spec-correct verifier that every trust decision in [fedmgr](https://github.com/teamktown/fedmgr)
+spec-correct verifier that every trust decision in [fedmgr](https://github.com/letsfederate/fedmgr)
 routes through.
 
 - **Chain** (`verifyTrustChain`) — walks a leaf up to a **pinned** trust anchor, binding each
@@ -22,7 +22,7 @@ const chain = await verifyTrustChain("https://mcp.example", { trustAnchors: [anc
 if (chain.state === "VALID") { /* trusted, rooted in your pinned anchor */ }
 ```
 
-See [`docs/adr/0002`](https://github.com/teamktown/fedmgr/blob/main/docs/adr/0002-oidf-operational-model-issuance-and-verification.md)
+See [`docs/adr/0002`](https://github.com/letsfederate/fedmgr/blob/main/docs/adr/0002-oidf-operational-model-issuance-and-verification.md)
 for the operational model and `docs/dev/trust-verification.md` for anchor pinning.
 
 MIT.

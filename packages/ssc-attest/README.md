@@ -17,4 +17,4 @@ const verdict = await verifySscStatementJws(jws, { publicJwks, expectedArtifactD
 if (!verdict.ok) throw new Error(verdict.reasons.join("; ")); // fail closed
 ```
 
-Zero dependencies beyond `jose`. Part of [fedmgr](https://github.com/teamktown/fedmgr). MIT.
+Zero dependencies beyond `jose`. Part of [fedmgr](https://github.com/letsfederate/fedmgr). MIT.

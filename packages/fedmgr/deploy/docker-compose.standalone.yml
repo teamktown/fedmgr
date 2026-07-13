@@ -26,7 +26,7 @@ services:
     restart: unless-stopped
 
   ta-server:
-    image: "${FEDMGR_TA_IMAGE:-ghcr.io/teamktown/fedmgr-ta:latest}"  # not published yet
+    image: "${FEDMGR_TA_IMAGE:-ghcr.io/letsfederate/fedmgr-ta:latest}"  # not published yet
     ports: ["8090:8090"]
     environment:
       PORT: "8090"
@@ -35,7 +35,7 @@ services:
     restart: unless-stopped
 
   tmi-server:
-    image: "${FEDMGR_TMI_IMAGE:-ghcr.io/teamktown/fedmgr-tmi:latest}"  # not published yet
+    image: "${FEDMGR_TMI_IMAGE:-ghcr.io/letsfederate/fedmgr-tmi:latest}"  # not published yet
     ports: ["8080:8080"]
     environment:
       PORT: "8080"

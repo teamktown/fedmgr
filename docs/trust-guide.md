@@ -305,7 +305,7 @@ No key needed — uses Sigstore OIDC.
 ```bash
 npm audit signatures
 # @letsfederate/kms@1.0.0: Signed by:
-#   Repository: teamktown/fedmgr
+#   Repository: letsfederate/fedmgr
 #   Workflow:   .github/workflows/release.yml
 ```
 
@@ -339,7 +339,7 @@ cosign attest --type cyclonedx \
 # 6. Verify
 cosign verify \
   ghcr.io/teamktown/ta-server@${DIGEST} \
-  --certificate-identity-regexp "https://github.com/teamktown/fedmgr" \
+  --certificate-identity-regexp "https://github.com/letsfederate/fedmgr" \
   --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
 ```
 
@@ -357,7 +357,7 @@ TRUSTMARK_JWS=$(fedmgr trustmark issue \
   --id   "https://letsfederate.org/trustmarks/AssessedAndPasses_minQuality_v1" \
   --tmi  https://tmi.letsfederate.org \
   --image-digest "${DIGEST}" \
-  --repo "https://github.com/teamktown/fedmgr")
+  --repo "https://github.com/letsfederate/fedmgr")
 
 # Attach it as a cosign attestation:
 fedmgr oci attach-trustmark \
@@ -373,13 +373,13 @@ Complete verification chain (all three layers):
 ```bash
 # 1. Cosign signature (workflow identity)
 cosign verify ghcr.io/teamktown/ta-server@${DIGEST} \
-  --certificate-identity-regexp "https://github.com/teamktown/fedmgr" \
+  --certificate-identity-regexp "https://github.com/letsfederate/fedmgr" \
   --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
 
 # 2. SBOM (what's inside the image)
 cosign verify-attestation --type cyclonedx \
   ghcr.io/teamktown/ta-server@${DIGEST} \
-  --certificate-identity-regexp "https://github.com/teamktown/fedmgr" \
+  --certificate-identity-regexp "https://github.com/letsfederate/fedmgr" \
   --certificate-oidc-issuer "https://token.actions.githubusercontent.com"
 
 # 3. OIDF Trustmark (quality/compliance claim, chain back to TA)
@@ -408,7 +408,7 @@ The workflow:
 
 ```bash
 # Clone and install
-git clone https://github.com/teamktown/fedmgr
+git clone https://github.com/letsfederate/fedmgr
 cd fedmgr && npm install && npm run build -ws --if-present
 
 # Generate both key pairs

@@ -1,6 +1,6 @@
 # @letsfederate/obs
 
-The observability core for [fedmgr](https://github.com/teamktown/fedmgr): a zero-dependency structured
+The observability core for [fedmgr](https://github.com/letsfederate/fedmgr): a zero-dependency structured
 logger plus OpenTelemetry-API spans named for trust operations.
 
 - **Logging** — a global `LOG_LEVEL`, dual syslog-style / JSON output to stderr, LLM-legible. No forced
