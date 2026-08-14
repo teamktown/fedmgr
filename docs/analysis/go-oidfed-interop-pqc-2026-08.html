@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>go-oidfed interop &amp; Go-stack PQC — fedmgr</title>
+<style>
+  :root{--bg:#0b0f14;--panel:#121821;--panel2:#161d28;--ink:#e6edf3;--muted:#9fb0c3;--line:#22303f;--accent:#4dd0a7;--accent2:#5aa9ff;--warn:#f5c451;--bad:#ff6b6b;--radius:14px;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;}
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 600px at 70% -10%,#132030 0,var(--bg) 55%);color:var(--ink);font:16px/1.62 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;}
+  .wrap{max-width:1060px;margin:0 auto;padding:40px 24px 90px}
+  a{color:var(--accent2);text-decoration:none}a:hover{text-decoration:underline}
+  .back{font:600 13px/1 var(--mono);color:var(--muted)}
+  .kicker{color:var(--accent);font:600 13px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;margin-top:18px}
+  h1{font-size:31px;margin:.3em 0 .1em}
+  .sub{color:var(--muted);max-width:80ch}
+  h2{font-size:21px;margin:34px 0 6px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+  h3{font-size:15px;margin:18px 0 4px;color:var(--accent)}
+  .card{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px;margin:14px 0}
+  .win{border-left:3px solid var(--accent)} .eo{border-left:3px solid var(--accent2)} .risk{border-left:3px solid var(--warn)}
+  ul,ol{margin:8px 0 8px 2px;padding-left:20px}li{margin:6px 0}
+  code{font-family:var(--mono);background:#0e141c;border:1px solid var(--line);padding:2px 6px;border-radius:6px;font-size:.85em}
+  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:13.5px}
+  th,td{text-align:left;padding:8px 9px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font:600 11px/1 var(--mono);letter-spacing:.05em;text-transform:uppercase}
+  .st{font:600 11px/1 var(--mono);padding:3px 7px;border-radius:6px;white-space:nowrap}
+  .now{color:#0b1a14;background:var(--accent)}.stage{color:#1a1405;background:var(--warn)}.no{color:var(--muted);border:1px solid var(--line)}.bad2{color:#2a0f0f;background:var(--bad)}
+  footer{margin-top:36px;color:var(--muted);font-size:13px;border-top:1px solid var(--line);padding-top:18px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="index.html">← workbench</a>
+  <div class="kicker">Interop assessment + PQC plan · 2026-08-06</div>
+  <h1>go-oidfed interop &amp; the Go stack's PQC readiness</h1>
+  <p class="sub">Code-level assessment of <strong>go-oidfed/lib v0.11.1</strong>, <strong>lighthouse v0.22.1</strong>
+  (TA/TMI/resolver server) and <strong>offa</strong> (RP forward-auth daemon), cross-referenced against our TS
+  wire profile — docs first, spot-checks against source and the <em>running lab</em> where the docs were silent.
+  Target topology: <strong>mutual cross-anchoring</strong> (our TA + a lighthouse TA side by side, entities enrolled
+  under both; optional third neutral root). Smoke test deliberately <strong>backlogged, not started</strong>.</p>
+
+  <div class="card win">
+    <strong>Verdict: interop is very feasible — and the Go stack is <em>ahead of us</em> on PQC signing.</strong>
+    The wire formats agree on every load-bearing detail (<code>typ</code> strings, <code>trust_mark_type</code>,
+    <code>authority_hints</code> walk, <code>federation_fetch?sub=</code>, embedded <code>jwks</code>), and I verified
+    live that our TA's entity configuration already advertises the endpoint metadata go-oidfed's resolver
+    <em>requires</em>. The frictions are real but small and enumerated below — the top two are alg defaults
+    (lighthouse signs ES512 by default; our verifier accepts only ES256) and trust-mark revocation (incompatible
+    status endpoints; go-oidfed has no status client at all). On PQC: go-oidfed already ships
+    <strong>ML-DSA-44/65/87 and hybrid composite JWS</strong>; the standards landed (<strong>RFC 9964</strong>, May 2026;
+    Go 1.27 public <code>crypto/mldsa</code>, Aug 2026) — the bottleneck for a cross-stack PQC demo is now
+    <em>our</em> <code>jose</code> v5 pin and hard-coded ES256.
+  </div>
+
+  <h2>The three repos at a glance</h2>
+  <table>
+    <tr><th>Repo</th><th>What it is</th><th>Key facts for us</th></tr>
+    <tr><td><strong>go-oidfed/lib</strong> v0.11.1</td><td>The OIDF 1.0 library (targets spec "main", post-draft-43 naming)</td>
+      <td>jwx v4; algs pluggable per signer (ES*/PS*/RS*/EdDSA/<strong>ML-DSA/composites</strong>); strict exact-match
+      <code>typ</code>; <code>trust_mark_type</code> only (no legacy <code>id</code> read); resolver requires the authority's EC
+      to advertise <code>federation_fetch_endpoint</code>; full metadata-policy operator set + registrable custom operators;
+      <strong>no trust-mark status client</strong>; Go 1.26 (<code>GOEXPERIMENT=jsonv2</code>).</td></tr>
+    <tr><td><strong>lighthouse</strong> v0.22.1</td><td>TA / intermediate / resolver / TMI server on lib</td>
+      <td>Endpoints DB-managed (paths configurable, no defaults); enrollment via admin API, open <code>enroll</code>, or
+      <code>enroll_request</code> + pluggable entity checkers; signing alg DB-stored, <strong>default ES512</strong>,
+      runtime-switchable (incl. ML-DSA) with an <code>nbf</code> cutover; key rotation + <code>historical_keys</code>;
+      port 7672; pre-1.0 config churn (0.22 moved config→DB).</td></tr>
+    <tr><td><strong>offa</strong></td><td>Forward-auth RP daemon (Traefik/NGINX/Caddy), self-described PoC</td>
+      <td>All federation ops delegated to lib; TAs pinned via YAML (inline/file JWKS, else TLS-trust fetch);
+      can outsource chain-building to a TA's resolve endpoint; verifies required OP trust marks by
+      <code>trust_mark_type</code>; publishes only <code>openid_relying_party</code> — useful to us as a chain/mark
+      verification probe, not as an MCP-side component.</td></tr>
+  </table>
+
+  <h2>Interop matrix — fedmgr (TS) ↔ go-oidfed</h2>
+  <table>
+    <tr><th>Surface</th><th>Ours (verified)</th><th>Theirs (cited)</th><th>Status</th></tr>
+    <tr><td>Entity statement <code>typ</code></td><td><code>entity-statement+jwt</code></td><td>Same, required, exact match</td><td><span class="st now">works</span></td></tr>
+    <tr><td>Trust mark <code>typ</code></td><td><code>trust-mark+jwt</code></td><td>Same, required</td><td><span class="st now">works</span></td></tr>
+    <tr><td>Trust mark type claim</td><td><code>trust_mark_type</code> + legacy <code>id</code> alongside</td><td><code>trust_mark_type</code> only; never reads <code>id</code></td><td><span class="st now">works (we emit both)</span></td></tr>
+    <tr><td>EC endpoint advertisement</td><td><code>metadata.federation_entity</code> advertises fetch/list/status — <em>confirmed live on :8090</em></td><td>Resolver <em>drops the branch</em> without <code>federation_fetch_endpoint</code> in the authority's EC</td><td><span class="st now">works</span></td></tr>
+    <tr><td>Chain building</td><td><code>authority_hints</code> walk, pinned anchor JWKS</td><td>Same walk; <code>fetch?sub=</code>; bare-array <code>federation_list</code> (ours is bare — confirmed)</td><td><span class="st now">works</span></td></tr>
+    <tr><td>Signing algs</td><td>ES256 only, hard-coded in <code>oidf-verify</code> (<code>algorithms:["ES256"]</code>)</td><td>Pluggable; lighthouse <strong>defaults ES512</strong>; verification infers alg from key (no allowlist)</td><td><span class="st stage">friction #1</span></td></tr>
+    <tr><td>Trust mark verification</td><td>Anchor-authorized issuers via <code>trust_mark_issuers</code>; jku never trusted</td><td>Same authorization model; absent type key ⇒ <em>any issuer accepted</em>; lab TA currently doesn't set <code>TA_TRUST_MARK_ISSUERS</code></td><td><span class="st stage">config task</span></td></tr>
+    <tr><td>Trust mark status / revocation</td><td><code>GET /trust-mark-status?sub&amp;id</code> → <code>{active}</code></td><td>Spec shape: POST form <code>trust_mark</code> → JWT (<code>trust-mark-status-response+jwt</code>); <strong>lib has no status client at all</strong></td><td><span class="st bad2">gap #2</span></td></tr>
+    <tr><td>Enrollment</td><td>Non-spec <code>/enroll</code> (audit-logged)</td><td>Non-spec too: admin API (manual JWKS), open <code>enroll</code> (fetches + self-verifies subject EC), <code>enroll_request</code>+checkers</td><td><span class="st stage">use admin API</span></td></tr>
+    <tr><td>Resolve endpoint</td><td>None (we walk chains ourselves)</td><td>lighthouse serves one; lib/offa can consume ours if we ever add it — not required for cross-anchoring</td><td><span class="st no">optional</span></td></tr>
+    <tr><td>Metadata policy</td><td>Not applied by our verifier</td><td>Full operator set, <code>metadata_policy_crit</code> enforced</td><td><span class="st no">their strength; N/A for marks</span></td></tr>
+    <tr><td>Entity types</td><td>MCP-shaped metadata on our entities</td><td><code>GuessEntityTypes()</code> on enroll may yield <em>empty</em> for non-standard types → invisible to filtered listing</td><td><span class="st stage">pass entity_type explicitly</span></td></tr>
+  </table>
+
+  <h2>Recommendation 1 — interop via mutual cross-anchoring</h2>
+  <div class="card">
+    <strong>Run lighthouse as the second TA and cross-register through its admin API, with algs pinned to the
+    common denominator (ES256) first.</strong> Concretely, in order:
+    <ol>
+      <li><strong>Alg alignment before anything else.</strong> Set lighthouse's signing alg to <code>ES256</code>
+        (<code>PUT /api/v1/admin/kms/alg</code>) <em>or</em> widen our verifier's allowlist to accept ES512. Do the first
+        immediately (config-only), schedule the second anyway — a parameterized allowlist is also the PQC seam (Rec 2).</li>
+      <li><strong>Cross-register subordinates via explicit paths, not open enroll.</strong> Our entities → lighthouse via
+        admin API (<code>POST /api/v1/admin/subordinates</code> with <code>entity_id</code>, <code>jwks</code>, and
+        <strong>explicit <code>registered_entity_types</code></strong> — avoids the <code>GuessEntityTypes</code> blindspot).
+        Their entities → our TA via <code>TA_SUBORDINATES</code>/registry with <code>fetchEndpoint</code>. Leave lighthouse's
+        open <code>enroll</code> endpoint disabled or checker-guarded (<code>entity_id</code>/<code>trust_mark</code> checker).</li>
+      <li><strong>Pin JWKS in both directions.</strong> go-oidfed silently degrades to TOFU on the TA's self-published
+        <code>jwks</code> when nothing is pinned — configure <code>jwks_file</code> for our TA in lighthouse/offa configs,
+        and keep our side's pinned-anchor behavior as-is.</li>
+      <li><strong>Authorize trust mark issuers on both anchors.</strong> Set <code>TA_TRUST_MARK_ISSUERS</code> on our TA
+        (today it's unset ⇒ go-oidfed would accept any issuer for our mark types) and register our TMI + mark types in
+        lighthouse's trust-mark registries so <em>its</em> EC publishes <code>trust_mark_issuers</code> covering our TMI.</li>
+      <li><strong>Verify their marks, serve them ours.</strong> Their marks verify under our verifier once alg-aligned
+        (their claims are <code>trust_mark_type</code>-only — our verifier already reads that first). Our marks carry both
+        names, so lib accepts them as-is.</li>
+      <li><strong>Third anchor (optional, later):</strong> a second lighthouse instance as neutral root, with both TAs as
+        intermediates (lighthouse: just set <code>authority_hints</code>; ours: supports intermediates via
+        <code>fetchEndpoint</code> entries). This makes chains cross the Go/TS boundary mid-chain — the strongest interop
+        proof, worth doing only after the 2-TA lab is green.</li>
+    </ol>
+  </div>
+
+  <h3>Predicted friction, ranked</h3>
+  <ol>
+    <li><span class="st stage">high</span> <strong>ES512 vs ES256:</strong> with defaults untouched, <em>zero</em> cross-stack
+      verification works. Config fix on their side, one-line widening on ours. Also note: "it verifies in Go" is weak
+      evidence — lib infers alg from key with no allowlist, so Go accepting our statements says nothing about the reverse.</li>
+    <li><span class="st bad2">gap</span> <strong>Revocation doesn't cross the boundary:</strong> go-oidfed never checks status
+      endpoints (README: "No"), and our status endpoint isn't spec-shaped anyway. Cross-stack, a revoked mark stays valid
+      until <code>exp</code>. Mitigation now: short TTLs (already our practice). Fix: implement the spec-shaped status
+      endpoint (POST → <code>trust-mark-status-response+jwt</code>) alongside our legacy one — backlogged.</li>
+    <li><span class="st stage">med</span> <strong>Enrollment strictness:</strong> lighthouse's <code>enroll</code> fetches and
+      self-verifies the subject's EC with lib's exact-typ parsing; any TS-side EC quirk 400s opaquely. The admin-API path
+      sidesteps this entirely — use it for the first pass, then test <code>enroll</code> as a conformance probe.</li>
+    <li><span class="st stage">med</span> <strong>Entity-type invisibility:</strong> MCP-shaped metadata → empty
+      <code>GuessEntityTypes()</code> → entity missing from <code>list?entity_type=…</code>. Always pass
+      <code>registered_entity_types</code>/<code>entity_type</code> explicitly.</li>
+    <li><span class="st no">low</span> <strong>TOFU degradation</strong> (pin JWKS, step 3); <strong>unbounded chain depth</strong>
+      in lib (set <code>constraints.max_path_length</code> on both anchors); <strong>offa's</strong> hard requirement on OP
+      <code>client_registration_types_supported</code> — irrelevant until we front an actual OP, but disqualifies offa as a
+      general-purpose probe for OP-less topologies; use it for chain/mark verification only.</li>
+  </ol>
+
+  <h2>Recommendation 2 — PQC readiness of the Go stack (layered)</h2>
+  <div class="card eo">
+    <strong>The landscape moved under our July analysis — in our favor.</strong> Since 2026-07-05:
+    <strong>RFC 9964</strong> (May 2026) made ML-DSA in JOSE a <em>published standards-track RFC</em> (algs
+    <code>ML-DSA-44/65/87</code>, new key type <code>AKP</code>) — PQC <em>signing</em> is no longer "draft/experimental";
+    <strong>Go 1.27</strong> (Aug 2026) ships public <code>crypto/mldsa</code> + x509 support; <code>jose</code> npm supports
+    ML-DSA since v6.1.0; and Node 24 on this machine <em>already generates ML-DSA-65 keys natively</em> (verified live,
+    OpenSSL 3.5.7). The leader-posture line should be updated from "honest that PQC signing is draft" to
+    <strong>"PQC signing is standardized; we ship it on a schedule."</strong>
+  </div>
+
+  <table>
+    <tr><th>Layer</th><th>Go stack (go-oidfed)</th><th>Our TS stack</th></tr>
+    <tr><td><strong>Key exchange</strong></td><td><span class="st now">solved by the edge</span> — put lighthouse behind our
+      Caddy edge; the lab edge already negotiates <code>X25519MLKEM768</code> (verified live this session)</td>
+      <td><span class="st now">same edge, already proven</span></td></tr>
+    <tr><td><strong>JWS signatures</strong></td><td><span class="st now">shipped</span> — ML-DSA-44/65/87 + composite hybrids
+      (MLDSA65ES256 etc.), lighthouse can cut over at runtime with <code>nbf</code></td>
+      <td><span class="st bad2">blocked by us</span> — <code>jose</code> pinned v5 (need ≥6.1), verifier hard-codes ES256</td></tr>
+    <tr><td><strong>Stdlib alignment</strong></td><td><span class="st stage">migration due</span> — lib uses
+      <code>filippo.io/mldsa</code> + circl + <code>jwx-go/mldsa</code>; Go 1.27's <code>crypto/mldsa</code> is the long-term home</td>
+      <td><span class="st now">Node 24 native ml-dsa (verified)</span></td></tr>
+    <tr><td><strong>CBOM</strong></td><td><span class="st stage">absent</span> — nothing CBOM-shaped in any of the three repos</td>
+      <td><span class="st now">shipped &amp; signed</span> — extend with Go-stack rows when we run lighthouse</td></tr>
+  </table>
+
+  <h3>Phase now (config + docs, no code)</h3>
+  <ul>
+    <li>Front lighthouse with the same PQC edge as everything else — its docs even recommend Caddy. PQC key exchange
+      for the whole 2-TA lab from day one; zero Go changes.</li>
+    <li>Extend our CBOM with the Go-stack inventory when lighthouse joins the lab: <code>ES512→ES256 (config)</code>
+      signature rows (quantum-vulnerable, migrate → ML-DSA, 2031), the edge-KEM row already covers transport.
+      A CBOM that spans <em>two implementations</em> is a differentiator nobody else has.</li>
+    <li>Update the July leader-posture doc: RFC 9964 changes the "honest roadmap" message.</li>
+  </ul>
+  <h3>Phase next (our catch-up — the actual critical path)</h3>
+  <ul>
+    <li><code>jose</code> v5 → v6 (major bump; touches all packages that pin <code>^5.x</code>).</li>
+    <li>Parameterize the verifier's alg allowlist (<code>oidf-verify</code>, TMI signer) — one seam serves both interop
+      (ES512) and PQC (<code>ML-DSA-65</code>, composite). This is the crypto-agility ADR the July analysis called for,
+      now with a concrete driver.</li>
+    <li>Then the demo the posture deserves: <strong>a lighthouse-signed ML-DSA-65 trust mark verified by our TS verifier,
+      and our ES256 mark verified by offa — over the ML-KEM edge.</strong> Every layer of that sentence is PQC or
+      cross-stack. All prerequisites verified available; sequencing in backlog.</li>
+    <li>Composite hybrids (<code>MLDSA65ES256</code>) as the migration posture once
+      <a href="https://datatracker.ietf.org/doc/draft-ietf-jose-pq-composite-sigs/">draft-ietf-jose-pq-composite-sigs</a>
+      stabilizes — go-oidfed already implements them; treat as pre-standard.</li>
+  </ul>
+  <h3>Phase upstream (issue-ready asks for go-oidfed)</h3>
+  <ul>
+    <li><strong>Verification alg allowlist:</strong> lib verifies with <code>WithInferAlgorithmFromKey</code> and no
+      allowlist — accepts any alg the key implies. File as a crypto-agility/hardening issue (mirrors our own fix).</li>
+    <li><strong>Trust-mark status client:</strong> the acknowledged "No" in their feature table; revocation is the one
+      trust property that dies at the stack boundary. Offer the spec-shaped client + our endpoint as the test peer.</li>
+    <li><strong>Go 1.27 <code>crypto/mldsa</code> migration:</strong> low-urgency dependency-reduction issue; they're on
+      third-party ML-DSA today.</li>
+    <li>These are contributions to the reference OIDF ecosystem — exactly the letsfederate advocacy lane.</li>
+  </ul>
+
+  <h2>Backlog — explicitly not started</h2>
+  <ul>
+    <li><strong>Smoke test</strong> (was Phase 3, moved here by decision): build lighthouse + offa (Go ≥1.26,
+      <code>GOEXPERIMENT=jsonv2</code>, CGO for lighthouse/sqlite); run lighthouse on :7672 as second TA (fresh compose
+      service behind Caddy); fetch both ECs and diff; cross-register via admin API per Rec 1 steps 1–4; probe with offa
+      (pinned JWKS, <code>required_op_trust_marks</code>). Exit criteria: chain each way + one trust mark verified each way.</li>
+    <li>Spec-shaped trust-mark status endpoint beside our legacy one.</li>
+    <li><code>jose</code> v6 upgrade + alg-allowlist parameterization (+ crypto-agility ADR).</li>
+    <li>CBOM Go-stack rows; ML-DSA cross-stack demo script (<code>examples/03-pqc-interop</code>); third-anchor topology.</li>
+  </ul>
+
+  <h2>Appendix — gotchas captured during this assessment</h2>
+  <ul>
+    <li>lighthouse's repo-root <code>docker-compose.yaml</code> is a <em>stale unrelated example</em> (traefik/gota) — the
+      real deployment reference is <code>docs/deployment/caddy.md</code>.</li>
+    <li>lighthouse signs <strong>ES512 by default</strong>; nothing cross-stack works until algs are aligned (see Rec 1.1).</li>
+    <li>lighthouse's <code>enroll</code> endpoint is <strong>open to everyone</strong> unless an entity checker is configured.</li>
+    <li>lib's <code>typ</code> check is exact and case-sensitive (<code>application/…</code>-prefixed values rejected), and
+      inspects only the first JWS signature.</li>
+    <li>lib silently falls back to TOFU on the TA's own <code>jwks</code> when no pinned JWKS is configured.</li>
+    <li>Our <code>jose</code> v5 pin blocks ML-DSA (needs ≥6.1.0); our verifier hard-codes <code>algorithms:["ES256"]</code>
+      — promoted to <code>docs/dev/gotchas.md</code>.</li>
+    <li>Host <code>curl</code> (OpenSSL 3.0.13) cannot negotiate ML-KEM — PQC edge probes must use Node 24 or an
+      OpenSSL 3.5 client (verified earlier this session; also promoted).</li>
+    <li>go-oidfed is pre-1.0 with real config churn (0.22 moved endpoints/trust-anchors from config file to DB) — pin
+      lighthouse image tags in any compose work.</li>
+    <li>The running lab containers predate this branch (3 weeks old); live-endpoint facts above were re-verified against
+      them and hold, but rebuild before the smoke test.</li>
+  </ul>
+
+  <footer>
+    Assessed 2026-08-06 against go-oidfed/lib v0.11.1, lighthouse v0.22.1, offa @ main (shallow clones), the running
+    trust lab, and: <a href="https://datatracker.ietf.org/doc/rfc9964/">RFC 9964 (ML-DSA for JOSE/COSE)</a> ·
+    <a href="https://github.com/golang/go/issues/77626">golang/go #77626 (crypto/mldsa)</a> ·
+    <a href="https://pkg.go.dev/crypto/mldsa">crypto/mldsa (Go 1.27)</a> ·
+    <a href="https://github.com/panva/jose/blob/main/CHANGELOG.md">jose CHANGELOG (ML-DSA since v6.1.0)</a> ·
+    <a href="https://github.com/nodejs/node/pull/59259">nodejs/node #59259 (ML-DSA KeyObject/sign/verify)</a> ·
+    <a href="https://datatracker.ietf.org/doc/draft-ietf-jose-pq-composite-sigs/">draft-ietf-jose-pq-composite-sigs</a>.
+    Companion: <a href="post-quantum-readiness.html">Post-quantum readiness (2026-07-05)</a> — superseded on the
+    "signing is draft" point by RFC 9964.
+  </footer>
+</div>
+</body>
+</html>
