@@ -44,7 +44,7 @@ invented format:
 ## What we inventory (our actual primitives)
 | Use | Algorithm | Primitive | Quantum-safe | Migrate → | Deadline |
 |---|---|---|---|---|---|
-| trust-chain-jws | ES256 / ECDSA P-256 | signature | no | ML-DSA | 2031-12-31 |
+| trust-chain-jws | ES512 / ECDSA P-521 (default; ES256/384 accepted) | signature | no | ML-DSA | 2031-12-31 |
 | local-ca | ECDSA P-256 (root-ca) | signature | no | ML-DSA | 2031-12-31 |
 | artifact-signing | ECDSA P-256 (cosign) | signature | no | ML-DSA | 2031-12-31 |
 | digest | SHA-256 | hash | yes (Grover ≈128-bit) | — | — |

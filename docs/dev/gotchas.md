@@ -79,5 +79,29 @@ The RuVector `.rvf`/brain store is 500 MB+ — **never** commit it (`.ruvector/`
 `*.rvf`, `ruvector.db`, `*.pub.jwk` are gitignored). Keep learnings as small
 markdown, not a vector DB.
 
+## Guard: JWS alg is derived from the key, allowlisted at verify
+Signing/verification infer the alg from the key's curve (P-256→ES256,
+P-521→ES512 — default since 2026-08; jose v6 requires an explicit alg for
+JWKs without one). Verifiers constrain to `SUPPORTED_JWS_ALGS` in
+`@letsfederate/kms` (EC family only) — never trust the JWS header's alg, and
+never widen by key-type inference alone (that's go-oidfed's gap, don't copy
+it). Exceptions that stay put: pkcs11 provider is ES256 (P-256 hardware);
+fedmgr-mcp keeps its looser local helper (RS256 OpenBao transit path,
+review Finding #5). jose v6 also generates **non-extractable** keys by
+default — test fixtures that `exportJWK` need `{ extractable: true }`.
+Compose note: recreating `ta-server` (netns owner) requires
+`up -d --force-recreate entity-host caddy` — plain `restart` fails with
+"No such container" (followers pin the old container id).
+
+## Guard: PQC signing path is gated by our own pins, not the ecosystem
+ML-DSA in JOSE is standardized (RFC 9964, May 2026) and available end-to-end:
+Node 24 signs it natively (OpenSSL 3.5), `jose` npm supports it since **v6.1.0**,
+and go-oidfed ships it today. What blocks us: we pin `jose` **^5.x** and
+`packages/oidf-verify` hard-codes `algorithms:["ES256"]`. Widen the allowlist
+deliberately (parameterize), never by key-type inference. Related: host `curl`
+links OpenSSL 3.0 and **cannot** negotiate ML-KEM — probe the PQC edge with
+Node 24 or an OpenSSL 3.5 container, not curl. Cross-stack detail:
+`docs/analysis/go-oidfed-interop-pqc-2026-08.html`.
+
 ## Commits
 Author is **Chris Phillips only** — no `Co-Authored-By` / tool trailers.

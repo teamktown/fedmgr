@@ -9,11 +9,14 @@ OpenSSL 3.5 it's demonstrated end-to-end that ML-DSA (FIPS 204) signing and ML-K
 exchange work natively, that OpenSSL 3.5 can mint an ML-DSA-65 certificate authority, and that Node 24's
 X.509 accepts it. So minting a post-quantum CA is a **tooling choice, not a capability gap**.
 
-What's *not* true yet: fedmgr's default CA is still classical EC P-256, and the real blocker to
-switching is **cross-ecosystem acceptance** — other verifiers, public trust stores, and the JOSE-PQC
-signature format all need to catch up before a PQC mark is verifiable everywhere. Within a
-fedmgr-only federation (every verifier on Node 24 / OpenSSL 3.5), a private post-quantum trust fabric
-is feasible today.
+Crypto-agility is no longer aspirational: the trust-chain JWS layer derives its algorithm from the
+signing key (ES512/P-521 by default, ES256/384 accepted against a closed EC allowlist, on jose v6),
+so a future ML-DSA algorithm slot is a policy change, not a rewrite — and RFC 9964 (May 2026) has
+since standardized ML-DSA for JOSE. What's *not* true yet: fedmgr's trust chain and default CA are
+still classical ECDSA, and the real blocker to switching is **cross-ecosystem acceptance** — other
+verifiers and public trust stores need to catch up before a PQC mark is verifiable everywhere.
+Within a fedmgr-only federation (every verifier on Node 24 / OpenSSL 3.5), a private post-quantum
+trust fabric is feasible today.
 
 fedmgr ships a Cryptographic Bill of Materials (CBOM, CycloneDX 1.6) that is honest about this: the
 ECDSA uses are flagged quantum-vulnerable with a migration horizon, while SHA-256 and hybrid KEMs are

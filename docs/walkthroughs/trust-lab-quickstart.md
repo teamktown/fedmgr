@@ -22,13 +22,18 @@ trust.letsfederate.org  ← canonical Trust Anchor identity (entity id)
 - For the container round trip you also need **cosign**, **syft**, and **jq**.
   Install hints are printed by the script if any are missing — it never fakes a step.
 
+> **Tip:** `npm run docs` serves this documentation tree rendered at
+> http://127.0.0.1:8092/ — handy for following along. It's a small read-only
+> server bound to loopback, covered by the same supply-chain scan gate as the
+> rest of the workspace.
+
 ## 1. Start the lab (one command)
 
 ```bash
 ./deploy/lab/up.sh
 ```
 
-This generates EC P-256 keys (encrypted at rest — no host `step` CLI needed),
+This generates EC P-521 keys (ES512 signing; encrypted at rest — no host `step` CLI needed),
 builds the TA/TMI images on first run, starts everything, and waits for health.
 You should see:
 

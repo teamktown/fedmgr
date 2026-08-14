@@ -106,7 +106,9 @@ server {
 
 ### Step A3: Generate TA Keys
 
-The Trust Anchor needs an EC P-256 key pair. The private key is encrypted at rest (PBES2 JWE).
+The Trust Anchor needs an EC key pair — P-521 by default (signing ES512;
+P-256/P-384 also work, the alg is derived from the curve). The private key is
+encrypted at rest (PBES2 JWE).
 
 ```bash
 # [ORG] TA keys go in services/ta-server/keys/

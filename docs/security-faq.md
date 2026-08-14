@@ -46,18 +46,22 @@ router checks `new URL(entity_id).origin === new URL(jwks_url).origin`.
 
 ### What is it?
 
-JWTs signed with RS256 or HS256 can be accepted by verifiers that trust ES256
-if the algorithm is not pinned. An attacker signs a token with their RSA key or
-HMAC-derives it from the public key material.
+JWTs signed with RS256 or HS256 can be accepted by verifiers that trust only
+EC algorithms if the algorithm is not pinned. An attacker signs a token with
+their RSA key or HMAC-derives it from the public key material.
 
 ### How fedmgr blocks it
 
-All `jwtVerify()` calls pin `algorithms: ["ES256"]` explicitly:
+The verification alg is derived from the **key we hold** (curve → alg via
+`jwsAlgForJwk()`), never from the JWS header, and every `jwtVerify()` call
+pins the closed EC allowlist `SUPPORTED_JWS_ALGS` (ES256/ES384/ES512, from
+`@letsfederate/kms`; ES512 is the signing default since the P-521 key
+rollover):
 
 ```typescript
 await jwtVerify(proof_jws, cryptoKey, {
   clockTolerance: 60,
-  algorithms: ["ES256"],
+  algorithms: [...SUPPORTED_JWS_ALGS],
 });
 ```
 
@@ -222,7 +226,7 @@ Before shipping federation infrastructure, verify:
 - [ ] All outbound URLs are validated with `assertSafeUrl()` (SSRF)
 - [ ] `entity_id` and `jwks_url` share the same origin (entity binding)
 - [ ] JWK embedding strips private fields with `stripPrivateFields()`
-- [ ] All `jwtVerify()` calls pin `algorithms: ["ES256"]`
+- [ ] All `jwtVerify()` calls pin `algorithms` to `SUPPORTED_JWS_ALGS` (EC family only)
 - [ ] All `async` Express routes are wrapped with `asyncHandler()`
 - [ ] All outbound fetches have timeouts and size caps
 - [ ] Every npm package declares its runtime deps explicitly

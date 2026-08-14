@@ -216,7 +216,7 @@ const DETAIL = {
   ta:{t:"ta-server — your TA / CA",m:"control · the root you run",b:"Your Trust Anchor: statements, federation_list/fetch, enrollment, trust-mark-status. <b>75%</b>. Stand up in minutes via <code>./deploy/lab/up.sh</code>."},
   tmi:{t:"tmi-server — Trust Mark Issuer",m:"control · marks",b:"Issues signed, digest-bindable trust marks (proven in the lab). <b>70%</b>."},
   fmcp:{t:"fedmgr-mcp",m:"mcp · tools + extension",b:"Trust ops as MCP tools + the <code>oidf-trust</code> extension (patient zero). <b>70%</b>."},
-  kms:{t:"kms — signing + validators",m:"library · crypto core",b:"SoftKMS/OpenBao, <code>validateTrustChain</code>, <code>validateTrustmark</code>, the SSRF guard. <b>85%</b> — most mature."},
+  kms:{t:"kms — signing + validators",m:"library · crypto core",b:"SoftKMS/OpenBao, <code>validateTrustChain</code>, <code>validateTrustmark</code>, the SSRF guard. Curve-derived JWS alg (ES512 default, closed EC allowlist, jose v6). <b>85%</b> — most mature."},
   letsfed:{t:"trust.letsfederate.org",m:"pedigree · foundational",b:"<b>Foundational</b> trust axis: signs the fedmgr/waypoint components so you verify the <i>pedigree</i> of the software you run — independent of your runtime CA. ≈ 40%."},
   oci:{t:"OCI registry + npm",m:"distribution",b:"Signed artifacts. CI does cosign + SBOM + provenance; OIDF mark over releases is the remaining piece."},
 };

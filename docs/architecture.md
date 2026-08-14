@@ -63,8 +63,9 @@ KeyProvider (interface)
 SoftKmsProvider (implements KeyProvider)
 ├── Reads: privateJwkPath (decrypted, on tmpfs at runtime)
 ├── Reads: publicJwkPath  (plaintext, bind-mount)
-├── Validates: EC P-256 only (fails fast on wrong key type)
-└── Signs: ES256 via jose
+├── Validates: EC P-256/P-384/P-521 (fails fast on anything else)
+└── Signs: alg derived from the key's curve — ES512 default (P-521 keys),
+    ES256/ES384 accepted; policy lives in SUPPORTED_JWS_ALGS + jwsAlgForJwk()
 
 Pkcs11Provider (implements KeyProvider — Increment E)
 ├── Lazy-loads pkcs11js via dynamic import (absent in CI; Decision 2)
@@ -238,18 +239,17 @@ Trust Anchor (letsfederate.org)      [Increment D]
 ## 7. Testing
 
 ```
-npm test -ws --if-present
-
-Package                   Tests   Pass
-@letsfederate/kms           7      7    (SoftKMS sign, JWKS safety, kid continuity)
-@letsfederate/fedmgr    8      8    (command structure, --sub required)
-@letsfederate/tmi-server   10     10    (entity statement claims, typ, exp>iat, authority_hints)
-@letsfederate/ta-server    12     12    (subordinate registry, federation_fetch signing, chain verify)
-─────────────────────────────────────
-Total                      37     37
+npm test        # structure tests + every workspace (node --test, spec reporter)
 ```
 
-See also: `docs/ralph-loop/` for per-increment test details.
+As of 2026-08-06 the workspace suite is **328 tests, 0 failures** (a handful
+of SoftHSM2-gated integration tests skip without hardware). Highlights per
+package: kms (SoftKMS sign/JWKS safety/alg policy), oidf-verify (§10 chain +
+trust-mark verification incl. negative cases), ta-server (registry, statement
+signing, chain verify, enrollment), tmi-server (statement claims/typ/exp),
+fedmgr (CLI + entity config + CBOM), site (corpus + scorecard).
+
+See also: `docs/history/ralph-loop/` for per-increment test details.
 
 ---
 
@@ -264,3 +264,17 @@ See also: `docs/ralph-loop/` for per-increment test details.
 | D — Trust Anchor | ✅ | TA entity config, `federation_list`, `federation_fetch`, ta-server in compose |
 | E — Full chain + PKCS#11 | ⏳ | Trust chain verification (every link), intermediate entities, SoftHSM2 |
 | F — CI/CD publish | ⏳ | GitHub Actions: test matrix, semantic-release, npm publish |
+
+---
+
+## 9. Cross-implementation interop (go-oidfed)
+
+fedmgr interoperates with the reference Go stack (go-oidfed/lib, lighthouse,
+offa) at the wire level — same `typ` headers, `trust_mark_type` claim,
+`authority_hints` chain walk, and (since the ES512 default) overlapping
+signing algorithms. We deliberately do **not** embed lighthouse or any
+go-oidfed code in this workspace: interop is proven at the protocol boundary
+(cross-anchored Trust Anchors), not by vendoring. The full assessment —
+interop matrix, cross-anchoring plan, ranked frictions, and the Go stack's
+PQC posture — is preserved in
+`docs/analysis/go-oidfed-interop-pqc-2026-08.html`.

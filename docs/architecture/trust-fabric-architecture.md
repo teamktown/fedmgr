@@ -45,7 +45,7 @@ You can self-host your CA and *also* verify our code's pedigree — they don't c
 ```mermaid
 flowchart TB
   subgraph lib["fedmgr library (TypeScript packages)"]
-    kms["@letsfederate/kms<br/>signing providers (SoftKMS/OpenBao/PKCS11)<br/>validateTrustChain · validateTrustmark · SSRF guard"]
+    kms["@letsfederate/kms<br/>signing providers (SoftKMS/OpenBao/PKCS11)<br/>curve-derived JWS alg — ES512 default, closed EC allowlist<br/>validateTrustChain · validateTrustmark · SSRF guard"]
     ta["@letsfederate/ta-server<br/>entity/subordinate statements<br/>federation_list/fetch · trust-mark-status<br/>enrollment · mgmt · sqlite registry"]
     tmi["@letsfederate/tmi-server<br/>trust-mark issue · schemas"]
   end
