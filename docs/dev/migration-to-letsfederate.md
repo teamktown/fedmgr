@@ -14,6 +14,30 @@ history).
 > can `git clone` from later; the tarball is the working tree. Keep both off the
 > box.
 
+## 0. Split out the personal workbench (before anything moves)
+
+The repo stays two-tier: public `fedmgr` is the product **and** the turnkey
+tour (clone → `deploy/lab/up.sh` → quickstart → VALID chain); personal
+instrumentation lives in the **private sibling** `teamktown/fedmgr-workbench`.
+Do this split *before* the org move so nothing personal rides along.
+
+- [ ] **Move to the workbench** (private): Claude/session results & reports,
+      plans and these migration working notes once executed, the
+      "where did we leave off" status dashboard, and the assessment-protocol
+      machinery (the `#scorecard-data` JSON pages that drive routine deep
+      assessments).
+- [ ] **Curate `docs/analysis/` — the one seam.** Finished, dated assessment
+      HTML (house-style pages like the go-oidfed interop/PQC report) is
+      *public product history* — it stays. Raw session output, scorecards, and
+      protocol pages move private. Rule of thumb: if it reports on the
+      *software*, it stays; if it reports on the *sessions*, it moves.
+- [ ] **Sweep for stragglers** before flipping visibility:
+      `git grep -il "scorecard-data\|session\|workbench" docs/ site/` and
+      review anything personal-instrumentation-shaped.
+- [ ] **`tools/docs-serve.mjs` stays public** — it's part of the tour
+      (`npm run docs`), read-only, loopback-bound, its one dependency
+      (`marked`, exact-pinned) provenance-verified and covered by the SSC gate.
+
 ## 1. Land the work on `main`
 
 All current work lives on `codex/refactor-docker-compose-for-trust-anchor-implementation`
