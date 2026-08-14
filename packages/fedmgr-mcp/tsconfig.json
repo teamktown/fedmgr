@@ -1,0 +1,26 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "composite": true
+  },
+  "references": [
+    {
+      "path": "../kms"
+    },
+    {
+      "path": "../../services/ta-server"
+    },
+    {
+      "comment": "Build-only: the issue_trustmark contract test imports TMI's IssueRequestSchema. Ensures tmi-server/dist exists whenever fedmgr-mcp is built.",
+      "path": "../../services/tmi-server"
+    },
+    {
+      "path": "../oidf-verify"
+    }
+  ],
+  "include": [
+    "src/**/*"
+  ]
+}

@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Post-quantum readiness &amp; leader posture — fedmgr</title>
+<style>
+  :root{--bg:#0b0f14;--panel:#121821;--panel2:#161d28;--ink:#e6edf3;--muted:#9fb0c3;--line:#22303f;--accent:#4dd0a7;--accent2:#5aa9ff;--warn:#f5c451;--bad:#ff6b6b;--radius:14px;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;}
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 600px at 70% -10%,#132030 0,var(--bg) 55%);color:var(--ink);font:16px/1.62 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;}
+  .wrap{max-width:1060px;margin:0 auto;padding:40px 24px 90px}
+  a{color:var(--accent2);text-decoration:none}a:hover{text-decoration:underline}
+  .back{font:600 13px/1 var(--mono);color:var(--muted)}
+  .kicker{color:var(--accent);font:600 13px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;margin-top:18px}
+  h1{font-size:31px;margin:.3em 0 .1em}
+  .sub{color:var(--muted);max-width:80ch}
+  h2{font-size:21px;margin:34px 0 6px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+  h3{font-size:15px;margin:18px 0 4px;color:var(--accent)}
+  .card{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px;margin:14px 0}
+  .win{border-left:3px solid var(--accent)} .eo{border-left:3px solid var(--accent2)}
+  ul{margin:8px 0 8px 2px;padding-left:20px}li{margin:6px 0}
+  code{font-family:var(--mono);background:#0e141c;border:1px solid var(--line);padding:2px 6px;border-radius:6px;font-size:.85em}
+  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:13.5px}
+  th,td{text-align:left;padding:8px 9px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font:600 11px/1 var(--mono);letter-spacing:.05em;text-transform:uppercase}
+  .st{font:600 11px/1 var(--mono);padding:3px 7px;border-radius:6px;white-space:nowrap}
+  .now{color:#0b1a14;background:var(--accent)}.stage{color:#1a1405;background:var(--warn)}.no{color:var(--muted);border:1px solid var(--line)}.bad2{color:#2a0f0f;background:var(--bad)}
+  .score{font-size:24px;font-weight:700}
+  footer{margin-top:36px;color:var(--muted);font-size:13px;border-top:1px solid var(--line);padding-top:18px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="index.html">← workbench</a>
+  <div class="kicker">Assessment + leader posture · 2026-07-05</div>
+  <h1>Post-quantum: where we stand &amp; how to lead</h1>
+  <p class="sub">Grounded in the <strong>June 2026 Executive Order</strong> ("Securing the Nation Against
+  Advanced Cryptographic Attacks") and Cloudflare's response. The headline: a credible 2026 "PQC leader"
+  ships <strong>hybrid post-quantum key exchange at the edge + crypto-agility + a crypto bill of materials
+  <em>now</em></strong>, and is <strong>honest that PQC signing is still draft/experimental</strong>. We can
+  hit that posture — and much of it falls out of the exposure choice we're already making.</p>
+
+  <div class="card eo">
+    <strong>What the EO actually requires.</strong> Binds federal agencies (and contractors via a future FAR
+    rule, comply by <strong>Dec 31 2030</strong>). Two hard end-states: <strong>key establishment by Dec 31
+    2030; digital signatures by Dec 31 2031</strong> — key exchange is prioritized a year ahead. Names only
+    <strong>FIPS 203 (ML-KEM)</strong> explicitly; signatures handled generically (FIPS 204/205 not named). No
+    "hybrid" or "TLS" mandate — it operates at the FIPS-standards layer. Central supply-chain move: a
+    <strong>Cryptographic Bill of Materials (CBOM)</strong> for automated crypto-asset assessment. Frames
+    harvest-now-decrypt-later as the reason to act on confidentiality today.
+  </div>
+
+  <h2>The reframe: key-exchange first, signatures second</h2>
+  <p class="sub">Our earlier read was signature-centric (our signatures are all ECDSA). The EO + the ecosystem
+  correct that: <strong>the near-term, observable win is post-quantum key exchange</strong>, because encrypted
+  traffic can be harvested now and decrypted post-quantum. A signature only has to resist forgery <em>live</em>,
+  so it has a longer runway. Cloudflare: <em>"the transition to post-quantum encryption is well underway, while
+  the transition to post-quantum authentication has only just begun"</em> — and <strong>over two-thirds of
+  browser traffic to Cloudflare is already post-quantum encrypted</strong> (June 2026) via hybrid
+  <code>X25519MLKEM768</code>.</p>
+
+  <div class="card win">
+    <strong>The free win — the exposure edge <em>is</em> our PQC key exchange.</strong> If we front waypoint with
+    <strong>Cloudflare Tunnel</strong> (already the enterprise exposure recommendation), the client↔edge TLS is
+    <strong>hybrid X25519MLKEM768 — post-quantum key exchange, out of the gate, with zero crypto code on our
+    side.</strong> Reachability and PQC-key-establishment come from the <em>same</em> decision. That is the
+    single highest-leverage, EO-aligned, demonstrable move we have.
+  </div>
+
+  <h2>What we use today (the inventory)</h2>
+  <table>
+    <tr><th>Surface</th><th>Today</th><th>PQC status</th></tr>
+    <tr><td><strong>Key exchange / TLS at the edge</strong> (client → waypoint)</td><td>classical TLS (or none, local)</td><td><span class="st now">upgradeable free via the edge (X25519MLKEM768)</span></td></tr>
+    <tr><td>Trust chain + trust marks (JWS)</td><td>ES256 (ECDSA P-256)</td><td><span class="st bad2">classical — stage to ML-DSA</span></td></tr>
+    <tr><td>Local CA (<code>ca.ts</code>)</td><td>EC P-256 self-signed root</td><td><span class="st stage">ML-DSA-capable via OpenSSL 3.5 (private trust)</span></td></tr>
+    <tr><td>Artifact signing (cosign self-provenance)</td><td>ECDSA P-256</td><td><span class="st bad2">classical — PQC experimental only</span></td></tr>
+    <tr><td>Digests (SBOM, checksums, binding)</td><td>SHA-256 / SHA-3</td><td><span class="st now">fine (Grover ≈128-bit)</span></td></tr>
+  </table>
+
+  <h2>"Leader out of the gate" — scorecard (2026-realistic)</h2>
+  <table>
+    <tr><th>Leadership signal</th><th>Shippable now?</th><th>Our position</th></tr>
+    <tr><td><strong>Hybrid PQC key exchange at the edge</strong></td><td><span class="st now">yes</span></td><td>Free via Cloudflare Tunnel edge; or OpenSSL 3.5 / Node 24.7+ if we terminate TLS ourselves. <strong>Do this.</strong></td></tr>
+    <tr><td><strong>Crypto-agility</strong> (algorithms are config, negotiated)</td><td><span class="st now">yes</span></td><td>Bones exist — JWS <code>alg</code> is parameterized, KMS pluggable. Capture a crypto-agility ADR + make alg choice explicit.</td></tr>
+    <tr><td><strong>CBOM</strong> — publish our own crypto bill of materials</td><td><span class="st now">yes</span></td><td>We already generate SBOMs (syft). A CBOM is the crypto-focused sibling — cheap, directly EO-aligned, and a differentiator almost nobody ships. <strong>Build it.</strong></td></tr>
+    <tr><td><strong>ML-DSA-capable private CA</strong> as a demonstrable option</td><td><span class="st stage">yes (private trust)</span></td><td>OpenSSL 3.5 issues ML-DSA (FIPS 204) private-CA certs today (where AWS/Microsoft operate). Offer it as an option; keep ECDSA default.</td></tr>
+    <tr><td><strong>Honest signature roadmap</strong> to the 2031 deadline</td><td><span class="st now">yes</span></td><td>Say plainly: JOSE-PQC and cosign-PQC are draft/experimental (below). Transparency <em>is</em> the leadership move.</td></tr>
+  </table>
+  <p class="sub">Hit rows 1–3 + 5 and we can defensibly say: <strong>"post-quantum key exchange today,
+  crypto-agile, with a published CBOM and an authentication roadmap toward the 2031 federal deadline."</strong>
+  That's a real leader posture — and it's honest. Overall PQC readiness moves <span class="score" style="color:var(--warn)">3 → 6/10</span> the day we ship edge-KEM + CBOM (up from "agile bones, zero PQC").</p>
+
+  <h2>CBOM — the cheap differentiator we should ship</h2>
+  <div class="card">
+    <p style="margin:0 0 6px">The EO's supply-chain centerpiece is a <strong>Cryptographic Bill of Materials</strong>:
+    an inventory of the crypto a system uses, so it can be assessed for quantum-vulnerability automatically. We're
+    uniquely placed — we already generate a signed SBOM in <code>init</code>. A CBOM adds a machine-readable
+    inventory of <em>our own</em> primitives:</p>
+    <pre style="margin:0;padding:12px;background:#0e141c;border:1px solid var(--line);border-radius:8px;font:12px/1.5 var(--mono)">{ "algorithms": [
+    { "use": "trust-chain-jws",  "alg": "ES256", "family": "ECDSA", "curve": "P-256",
+      "quantum_vulnerable": true,  "migrate_to": "ML-DSA", "deadline": "2031-12-31" },
+    { "use": "edge-key-exchange", "alg": "X25519MLKEM768", "family": "hybrid-KEM",
+      "quantum_vulnerable": false, "note": "PQC key establishment via edge" },
+    { "use": "digest", "alg": "SHA-256", "quantum_vulnerable": false } ] }</pre>
+    <p class="muted" style="margin:6px 0 0">CycloneDX 1.6 has a native <strong>cryptographic-asset</strong>
+    component type, so this can ride the same syft/CycloneDX pipeline we already ship. Signing it with our own
+    provenance flow makes it a <em>verifiable</em> CBOM — exactly the "automated crypto-asset assessment" the EO
+    asks for.</p>
+  </div>
+
+  <h2>Signatures — staged, and honest about it</h2>
+  <table>
+    <tr><th>Path</th><th>Reality (2026)</th><th>Our move</th></tr>
+    <tr><td>Private-CA ML-DSA (our local CA + trust chains)</td><td><span class="st stage">real for PRIVATE trust</span> — OpenSSL 3.5 issues ML-DSA certs; AWS/Microsoft do it. Prefer ML-DSA over SLH-DSA for size.</td><td>Make the CA ML-DSA-<em>capable</em> (needs Node 24.7+/OpenSSL 3.5); keep ECDSA the interoperable default.</td></tr>
+    <tr><td>PQC JOSE trust marks (interop)</td><td><span class="st no">draft only</span> — <code>draft-ietf-cose-dilithium-11</code>, COSE code points not final ("to be removed before RFC").</td><td>Implement behind an experimental feature flag; do <strong>not</strong> rely on it for interop yet. ECDSA stays default.</td></tr>
+    <tr><td>cosign / Sigstore PQC artifact signing</td><td><span class="st no">experimental</span> — Sigstore roadmap, gated on Go stdlib (SLH-DSA ~Go 1.25, ML-DSA ~Go 1.26).</td><td>Experiment in a private Sigstore only; keep production cosign ECDSA. Don't market cosign-PQC as production.</td></tr>
+    <tr><td>Public Web-PKI PQC certs</td><td><span class="st no">not in production</span> — no browser trust store accepts ML-DSA; broad trust not before 2027.</td><td>N/A for us short-term — our edge is a tunnel/private trust, not a public cert we issue.</td></tr>
+  </table>
+  <p class="sub"><strong>Avoid</strong> liboqs/oqs-provider for the standardized algorithms — it self-disables
+  ML-KEM/ML-DSA/SLH-DSA on OpenSSL 3.5+ and carries a "not for production" notice. Use OpenSSL 3.5 native
+  (LTS to 2030) / Node 24.7+. Reserve <strong>SLH-DSA (FIPS 205)</strong> or stateful hash-based (LMS/XMSS) for a
+  conservative long-lived root-signing tier, per NSA CNSA 2.0's "sign firmware/roots earliest" ordering.</p>
+
+  <h2>Are we minting PQC-ready CAs today? (tested on this VM)</h2>
+  <div class="card win">
+    <strong>No — but we proved we <em>can</em>, and the blocker is exactly acceptance, as suspected.</strong>
+    Our <code>ca.ts</code> mints EC&nbsp;P-256 via the smallstep step-cli container. On Node&nbsp;24 (OpenSSL
+    3.5.7) we tested the full post-quantum path and it works end-to-end:
+  </div>
+  <table>
+    <tr><th>Test (2026-07-05, Node 24 / OpenSSL 3.5.7)</th><th>Result</th></tr>
+    <tr><td>Node 24 <code>crypto</code> ML-DSA (FIPS 204) keygen + sign + verify + tamper-reject</td><td><span class="st now">✓ works</span> — ml-dsa-44/65/87 (sigs 2420/3309/4627 B)</td></tr>
+    <tr><td>Node 24 ML-KEM-768 (FIPS 203) keygen + <code>encapsulate</code></td><td><span class="st now">✓ works</span></td></tr>
+    <tr><td>Mint an <strong>ML-DSA-65 self-signed CA</strong> (OpenSSL 3.5, CA:TRUE)</td><td><span class="st now">✓ minted</span></td></tr>
+    <tr><td><strong>Node 24 <code>X509Certificate</code> accepts that ML-DSA CA</strong> (parse, ca=true, self-signature verifies)</td><td><span class="st now">✓ accepted</span></td></tr>
+  </table>
+  <h3>So what's stopping us? — acceptance, then tooling</h3>
+  <ul>
+    <li><strong>Acceptance (the real blocker, as you guessed):</strong> a CA is only useful if every relying
+    party recognizes its root algorithm. <em>Within a fedmgr-only federation</em> where every verifier runs
+    Node 24 / OpenSSL 3.5, acceptance is <strong>ready now</strong> — we just proved our own verifier accepts an
+    ML-DSA CA. So a <strong>private PQC trust fabric is technically feasible today.</strong> <em>Across the wider
+    ecosystem</em> it isn't: trust marks are JWS and PQC-JOSE (<code>draft-ietf-cose-dilithium</code>) code
+    points aren't final, no public trust store accepts ML-DSA, and other federation members must run
+    PQC-capable verifiers. Everyone must agree on the same PQC root alg — and the interop standards aren't there.</li>
+    <li><strong>Tooling (solvable):</strong> our CA path uses step-cli (EC/RSA only) and the system OpenSSL is
+    3.0 (no PQC). To mint ML-DSA we'd swap the CA backend to an OpenSSL-3.5 path (a container like the tested
+    <code>alpine:edge</code>, or Node-based issuance) — straightforward, gated only on wanting it.</li>
+  </ul>
+  <p class="sub"><strong>Recommendation:</strong> keep ECDSA the default for interop, but add an <strong>opt-in
+  ML-DSA CA + intra-fedmgr PQC trust-chain mode</strong> — because our own stack already mints <em>and</em>
+  accepts it, we can credibly demo a fully post-quantum private federation now, while being honest that
+  cross-ecosystem interop waits on JOSE-PQC finalization.</p>
+
+  <h2>rUv-native option (unchanged, honest)</h2>
+  <p class="sub"><strong>QuDAG</strong> (<code>qudag-crypto</code>) targets ML-KEM-768 + ML-DSA, but its own
+  testing report flags the implementations as <em>placeholder / not production-ready</em>. A reference, not a
+  drop-in. For production PQC, prefer OpenSSL 3.5 / Node 24 native behind our pluggable KMS.</p>
+
+  <h2>Recommendation — the shippable path</h2>
+  <div class="card win">
+    <ol>
+      <li><strong>Edge hybrid KEM (free, now):</strong> front waypoint with Cloudflare Tunnel → client↔edge is
+      X25519MLKEM768. Reachability + PQC key exchange from one decision.</li>
+      <li><strong>Ship a signed CBOM (cheap, now):</strong> extend the <code>init</code> provenance flow to emit
+      + sign a CycloneDX cryptographic-asset inventory. EO-aligned, differentiating, honest.</li>
+      <li><strong>Crypto-agility ADR (now):</strong> make algorithm choice explicit + swappable; document the
+      2030/2031 targets.</li>
+      <li><strong>ML-DSA-capable private CA (stage):</strong> add the OpenSSL 3.5 / Node 24 path as an option,
+      ECDSA default.</li>
+      <li><strong>Signatures experimental (flagged):</strong> JOSE-PQC + cosign-PQC behind feature flags,
+      clearly labeled, tracking the drafts.</li>
+    </ol>
+    <strong>Posture statement we can stand behind:</strong> <em>"fedmgr does post-quantum key exchange today,
+    is crypto-agile, publishes a verifiable Cryptographic BOM, and has an ML-DSA authentication roadmap to the
+    2031 federal deadline."</em>
+  </div>
+
+  <h2 class="muted" style="font-size:15px">Roadmap note — housing artifacts</h2>
+  <p class="sub"><code>github.com/artifact-keeper</code> is a real self-hosted universal <em>package</em> registry
+  (Rust; 40+ formats). But its security is package-storage-first (GPG/RSA signing, SBOM <em>consumption</em>) —
+  no in-toto/SLSA/cosign/provenance and no PQC. Fit for housing signed trust marks / attestations is
+  weak-to-partial (dumb blob storage). It can <em>complement</em> as the package registry, but the trust
+  source of truth wants a purpose-built attestation store or an OCI registry with native cosign support.</p>
+
+  <footer>
+    Grounded in the <a href="https://www.whitehouse.gov/presidential-actions/2026/06/securing-the-nation-against-advanced-cryptographic-attacks/">June 2026 EO</a>,
+    <a href="https://blog.cloudflare.com/post-quantum-eo-2026/">Cloudflare's response</a>, NIST FIPS 203/204/205,
+    and OpenSSL 3.5 / Node 24 / Sigstore / IETF-COSE sources. Ties to the
+    <a href="waypoint-remote-access.html">exposure edge</a> (the free KEM win). Back to the
+    <a href="index.html">workbench</a>.
+  </footer>
+</div>
+</body>
+</html>

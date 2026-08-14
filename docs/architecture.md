@@ -1,0 +1,280 @@
+# fedmgr Architecture
+
+> The current architecture of the workspace. For the operational trust model
+> (issuance, hosting, §10 verification) see `adr/0002-oidf-operational-model-issuance-and-verification.md`.
+
+---
+
+## 1. What fedmgr Is
+
+`fedmgr` is an OpenID Federation 1.0 orchestration toolkit for MCP (Model Context Protocol) server deployments. It enables:
+
+- **Trust establishment**: A Trust Anchor (TA) vouches for MCP servers and Trustmark Issuers via signed entity statements
+- **Trustmark issuance**: The TMI server mints JWS trustmarks asserting assessed quality, compliance, or capability claims
+- **OCI attestation**: Trustmarks are attached to container images as cosign attestations
+- **CLI tooling**: `fedmgr` CLI manages the full key → trustmark → attestation lifecycle
+
+---
+
+## 2. Monorepo Layout
+
+```
+fedmgr/
+├── packages/
+│   ├── kms/             @letsfederate/kms           — KMS interface + SoftKMS provider
+│   ├── tmi-server/      @letsfederate/tmi-server     — Trustmark Issuer HTTP service
+│   ├── ta-server/       @letsfederate/ta-server      — Trust Anchor HTTP service
+│   └── fedmgr/      @letsfederate/fedmgr     — CLI (keys/trustmark/oci)
+│
+├── src/                 Legacy CommonJS code (pre-uplift, to be migrated)
+│   ├── fedmgr/          — existing federation manager
+│   └── mcp-core/        — existing MCP core runtime
+│
+├── examples/
+│   └── lab/             — Local trust lab (registry:2 + ta-server + tmi-server)
+│
+├── scripts/
+│   ├── tmi-keys-init.sh — Generate encrypted JWK pair via step CLI (reused for TA)
+│   ├── tmi-decrypt.sh   — Decrypt JWE → tmpfs; wipe on EXIT
+│   └── oidf-cert.sh     — OIDF conformance test harness runner
+│
+├── services/tmi-server/Dockerfile — Multi-stage build for tmi-server
+├── services/ta-server/Dockerfile  — Multi-stage build for ta-server
+├── docs/
+│   ├── architecture.md         — This file
+│   ├── decisions.md            — Locked architecture decisions
+│   ├── extending-trustmarks.md — How to add trustmark types/fields
+│   └── ralph-loop/             — Per-increment RALPH docs
+└── tsconfig.base.json   — Shared TS composite config
+```
+
+---
+
+## 3. Key Components
+
+### 3.1 `@letsfederate/kms` — KMS Interface
+
+```
+KeyProvider (interface)
+├── kid(): Promise<string>
+├── jwks(): Promise<{ keys: JWK[] }>       ← public only, no `d` field
+└── signJwt(payload, header): Promise<string>
+
+SoftKmsProvider (implements KeyProvider)
+├── Reads: privateJwkPath (decrypted, on tmpfs at runtime)
+├── Reads: publicJwkPath  (plaintext, bind-mount)
+├── Validates: EC P-256/P-384/P-521 (fails fast on anything else)
+└── Signs: alg derived from the key's curve — ES512 default (P-521 keys),
+    ES256/ES384 accepted; policy lives in SUPPORTED_JWS_ALGS + jwsAlgForJwk()
+
+Pkcs11Provider (implements KeyProvider — Increment E)
+├── Lazy-loads pkcs11js via dynamic import (absent in CI; Decision 2)
+├── C_Initialize: tolerates CKR_CRYPTOKI_ALREADY_INITIALIZED (code 401)
+├── C_Login: tolerates CKR_USER_ALREADY_LOGGED_IN (code 256)
+├── Signing: CKM_ECDSA; caller pre-hashes with SHA-256; output is raw R||S
+├── Public key export: CKA_EC_POINT → strip OCTET STRING wrapper → x/y base64url
+└── Config: { libraryPath, slot?, pin, keyLabel, kid? }
+
+createProvider(tag, config): KeyProvider
+└── Factory: "softkms" → SoftKmsProvider | "pkcs11" → Pkcs11Provider
+```
+
+**Key policy:**
+- Private key encrypted at rest as PBES2 JWE (`step crypto jwk create`)
+- Decrypted only into tmpfs (`/dev/shm` or Docker `type: tmpfs` volume)
+- `SoftKmsProvider` never writes key material
+- `jwks()` strips `d` before returning
+- `Pkcs11Provider`: private key never leaves HSM; only public key is extracted via PKCS#11
+
+### 3.2 `@letsfederate/ta-server` — Trust Anchor
+
+```
+Endpoints:
+  GET  /.well-known/openid-federation           — self-signed TA entity statement JWT
+  GET  /.well-known/jwks.json                   — TA public JWKS
+  GET  /federation_list                         — JSON array of subordinate entity IDs
+  GET  /federation_fetch?sub=<entityId>         — signed subordinate statement JWT
+  GET  /trust-mark-status?sub=&id=              — active/revoked status per OIDF §10
+  GET  /intermediates                           — management: list intermediate entity IDs
+  GET  /health                                  — liveness + subordinate count
+
+SubordinateRegistry (in-memory, default):
+  Populated at startup from TA_SUBORDINATES env var (JSON array of {entityId, jwksUrl, fetchEndpoint?})
+  TA fetches each subordinate's JWKS and caches it; fail-fast if any JWKS fetch fails
+
+FileSubordinateRegistry (persistent, optional):
+  Activated by TA_REGISTRY_PATH env var
+  Writes JSON on every register()/remove(); reloads on construction
+  Drop-in replacement: extends SubordinateRegistry
+
+TrustChainVerifier (src/federation/chain-verifier.ts):
+  verifyTrustChain(leaf, trustAnchor, opts) — OIDF draft-43 §9
+  Traversal: follows authority_hints[0] (NOT iss) at each hop
+  Injectable fetchFn for unit testing without HTTP
+
+federation_list query parameters (OIDF §8.3 + extensions):
+  entity_type=intermediate | leaf     — filter by entity type
+  limit=N                             — max results per page
+  after=<entityId>                    — pagination cursor
+```
+
+### 3.3 `@letsfederate/tmi-server` — Trustmark Issuer
+
+```
+Endpoints:
+  GET  /.well-known/jwks.json            ← public JWKS (Cache-Control: 1h)
+  GET  /.well-known/openid-federation    ← self-signed entity statement JWT
+  POST /trustmarks/issue                 ← mint signed trustmark JWS
+  GET  /health                           ← liveness check
+
+Trustmark payload:
+  { iss, sub, id, iat, exp, jku, image_digest?, repo?, evidence? }
+
+Entity statement payload:
+  { iss, sub, iat, exp, jwks, metadata.federation_entity, authority_hints? }
+```
+
+**Content-Type**: `application/entity-statement+jwt` (OIDF spec §4.3)
+
+### 3.4 `@letsfederate/fedmgr` — CLI
+
+```
+fedmgr keys init softkms [--dir] [--force]
+  → step crypto jwk create (encrypted JWK pair)
+
+fedmgr trustmark issue --sub <url> [--id] [--tmi] [--ttl] [--image-digest] ...
+  → POST /trustmarks/issue → compact JWS
+
+fedmgr trustmark verify --jws <token> [--jwks <url>]
+  → fetch jku JWKS → jwtVerify → exit 0/1
+
+fedmgr oci attach-trustmark --image <ref> --jws <token>
+  → cosign attest --type <predicate-uri> --predicate <tmpfile>
+
+fedmgr oci verify-trustmark --image <ref>
+  → cosign verify-attestation --type <predicate-uri>
+```
+
+---
+
+## 4. Local Trust Lab
+
+```bash
+npm run ta:keys:init   # generate TA keys (one-time)
+npm run tmi:keys:init  # generate TMI keys (one-time)
+npm run lab:up         # docker compose up --build
+
+Services:
+  registry:2   :5000  — local OCI registry
+  ta-decrypt   (sidecar) — decrypts TA JWE → ta-secrets tmpfs, exits
+  tmi-decrypt  (sidecar) — decrypts TMI JWE → tmi-secrets tmpfs, exits
+  tmi-server   :8080  — starts after tmi-decrypt completes
+  ta-server    :8090  — starts after ta-decrypt completes AND tmi-server healthy
+```
+
+**Key flow in Docker:**
+```
+services/ta-server/keys/
+  ta.priv.jwe (PBES2)  ──→ ta-decrypt ──→ /run/secrets/ta.priv.jwk  (RAM only)
+  ta.pub.jwk  (plain)  ──→ bind-mount :ro → /app/keys/ta.pub.jwk
+
+services/tmi-server/keys/
+  tmi.priv.jwe (PBES2) ──→ tmi-decrypt ──→ /run/secrets/tmi.priv.jwk (RAM only)
+  tmi.pub.jwk  (plain) ──→ bind-mount :ro → /app/keys/tmi.pub.jwk
+```
+
+**Startup dependency order:**
+```
+ta-decrypt(exit:0) ─┐
+tmi-decrypt(exit:0)─┼─→ tmi-server(:8080 healthy) ─→ ta-server(:8090)
+                    └─────────────────────────────────────────────────
+```
+
+---
+
+## 5. OIDF Federation Trust Model
+
+```
+Trust Anchor (letsfederate.org)      [Increment D]
+  └── subordinate statement for TMI
+        └── Trust Mark Issuer (tmi-server)
+              ├── /.well-known/openid-federation  (self-signed entity statement)
+              ├── /.well-known/jwks.json           (public JWKS)
+              └── /trustmarks/issue               (signed trustmark JWS)
+                        └── attached to OCI image via cosign attest
+```
+
+**OIDF compliance checklist:**
+
+| Requirement | Status |
+|---|---|
+| Signed entity configurations (application/entity-statement+jwt) | ✅ |
+| `exp` claim in entity statements | ✅ |
+| `jwks` in entity statement payload (pub only) | ✅ |
+| `metadata.federation_entity` block | ✅ |
+| `authority_hints` for non-TA entities | ✅ |
+| `federation_list_endpoint` (TA) | ✅ |
+| `federation_fetch_endpoint` (TA) | ✅ |
+| TA vouches for TMI via subordinate statement | ✅ |
+| Intermediate entity support | ⏳ Increment E |
+| Full trust chain verification (every link) | ⏳ Increment E |
+| Trust mark status endpoint | ⏳ Increment E |
+
+---
+
+## 6. Security Properties
+
+| Property | Mechanism |
+|---|---|
+| No naked private keys on disk | PBES2 JWE (step CLI) |
+| Key only in RAM at runtime | tmpfs (`/dev/shm` or Docker `type:tmpfs`) |
+| Key wiped on process exit | `trap cleanup EXIT` in `tmi-decrypt.sh` |
+| Startup validation | `TMI_ISSUER`, `TMI_JWKS_URL` validated before `app.listen()` |
+| JWKS never includes private `d` | `SoftKmsProvider.jwks()` strips `d` |
+| `x-powered-by` header removed | `app.disable('x-powered-by')` |
+| Non-root container user | `tmi` user (uid created in Dockerfile) |
+
+---
+
+## 7. Testing
+
+```
+npm test        # structure tests + every workspace (node --test, spec reporter)
+```
+
+As of 2026-08-06 the workspace suite is **328 tests, 0 failures** (a handful
+of SoftHSM2-gated integration tests skip without hardware). Highlights per
+package: kms (SoftKMS sign/JWKS safety/alg policy), oidf-verify (§10 chain +
+trust-mark verification incl. negative cases), ta-server (registry, statement
+signing, chain verify, enrollment), tmi-server (statement claims/typ/exp),
+fedmgr (CLI + entity config + CBOM), site (corpus + scorecard).
+
+See also: `docs/history/ralph-loop/` for per-increment test details.
+
+---
+
+## 8. Roadmap
+
+| Increment | Status | Description |
+|---|---|---|
+| 1 — KMS + TMI | ✅ | KeyProvider interface, SoftKmsProvider, tmi-server JWKS + issue |
+| A — Docker | ✅ | Multi-stage Dockerfile, tmpfs compose lab, registry:2 |
+| B — CLI | ✅ | `fedmgr keys init softkms`, `trustmark issue/verify`, `oci attach/verify` |
+| C — OIDF scaffolding | ✅ | Entity statements, `/.well-known/openid-federation`, oidf-cert.sh |
+| D — Trust Anchor | ✅ | TA entity config, `federation_list`, `federation_fetch`, ta-server in compose |
+| E — Full chain + PKCS#11 | ⏳ | Trust chain verification (every link), intermediate entities, SoftHSM2 |
+| F — CI/CD publish | ⏳ | GitHub Actions: test matrix, semantic-release, npm publish |
+
+---
+
+## 9. Cross-implementation interop (go-oidfed)
+
+fedmgr interoperates with the reference Go stack (go-oidfed/lib, lighthouse,
+offa) at the wire level — same `typ` headers, `trust_mark_type` claim,
+`authority_hints` chain walk, and (since the ES512 default) overlapping
+signing algorithms. We deliberately do **not** embed lighthouse or any
+go-oidfed code in this workspace: interop is proven at the protocol boundary
+(cross-anchored Trust Anchors), not by vendoring. The full assessment —
+interop matrix, cross-anchoring plan, ranked frictions, and the Go stack's
+PQC posture — is preserved in
+`docs/analysis/go-oidfed-interop-pqc-2026-08.html`.

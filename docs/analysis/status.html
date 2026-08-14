@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>What we're working on — fedmgr</title>
+<style>
+  :root{
+    --bg:#0b0f14; --panel:#121821; --panel2:#161d28; --ink:#e6edf3; --muted:#9fb0c3;
+    --line:#22303f; --accent:#4dd0a7; --accent2:#5aa9ff; --warn:#f5c451; --bad:#ff6b6b;
+    --radius:14px; --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 600px at 70% -10%,#132030 0,var(--bg) 55%);
+    color:var(--ink);font:16px/1.6 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;}
+  .wrap{max-width:1000px;margin:0 auto;padding:40px 24px 80px;}
+  a{color:var(--accent2);text-decoration:none} a:hover{text-decoration:underline}
+  .back{font:600 13px/1 var(--mono);color:var(--muted)}
+  .kicker{color:var(--accent);font:600 13px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;margin-top:18px}
+  h1{font-size:30px;margin:.3em 0 .1em}
+  .sub{color:var(--muted);max-width:74ch}
+  h2{font-size:20px;margin:38px 0 6px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+  h3{font-size:15px;margin:20px 0 6px;color:var(--accent)}
+  .card{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line);
+    border-radius:var(--radius);padding:18px 20px;margin:14px 0}
+  .mission{border-left:3px solid var(--accent)}
+  ul{margin:8px 0 8px 2px;padding-left:20px} li{margin:5px 0}
+  code{font-family:var(--mono);background:#0e141c;border:1px solid var(--line);padding:2px 6px;border-radius:6px;font-size:.88em}
+  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:14.5px}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font:600 12px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase}
+  .q{color:var(--accent2);font-weight:700;font-family:var(--mono)}
+  .st{font:600 11px/1 var(--mono);padding:4px 8px;border-radius:6px;white-space:nowrap}
+  .done{color:#0b1a14;background:var(--accent)} .prog{color:#1a1405;background:var(--warn)}
+  .todo{color:var(--muted);border:1px solid var(--line)}
+  .steps{counter-reset:s;list-style:none;padding-left:0}
+  .steps li{position:relative;padding:12px 12px 12px 46px;border:1px solid var(--line);border-radius:10px;margin:9px 0;background:var(--panel)}
+  .steps li::before{counter-increment:s;content:counter(s);position:absolute;left:12px;top:12px;width:24px;height:24px;
+    border-radius:50%;background:#0e1a16;border:1px solid #1f4a3c;color:var(--accent);
+    font:700 13px/24px var(--mono);text-align:center}
+  .gate{color:var(--bad);font:600 12px/1 var(--mono)}
+  .muted{color:var(--muted)}
+  footer{margin-top:40px;color:var(--muted);font-size:13px;border-top:1px solid var(--line);padding-top:18px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="index.html">← workbench</a>
+  <div class="kicker">Working on now · snapshot 2026-07-11</div>
+  <h1>What we're building</h1>
+  <p class="sub">Turning fedmgr from two overlapping codebases into one clean, self-verifying trust tool with a
+  single front door. Below: the decisions we locked in, the plan in flight, and how we're keeping it legible
+  to both an AI assistant and a human.</p>
+
+  <div class="card mission">
+    <strong>The mission in one line.</strong> When an AI assistant reaches for an MCP tool server, it should be
+    able to <em>cryptographically verify</em> that server belongs to a federation you trust — chain of trust
+    TMI&nbsp;→&nbsp;TA, a signed trustmark, an SBOM, and provenance — instead of taking it on faith. fedmgr is the
+    tool that mints, manages, and enforces that trust.
+  </div>
+
+  <h2>Decisions locked in (your Q1–Q5)</h2>
+  <table>
+    <tr><th>#</th><th>Question</th><th>Decision</th></tr>
+    <tr><td class="q">Q1</td><td>npm identity / front door</td>
+        <td>One umbrella command, openssl-style: <code>npx @letsfederate/fedmgr &lt;verb&gt;</code>. We renamed the
+        old <code>@letsfederate/fedmgr-cli</code> → <code>@letsfederate/fedmgr</code> (the name was freed by
+        deleting the monolith, which squatted it). One package, one binary. <span class="st done">done</span></td></tr>
+    <tr><td class="q">Q2</td><td>delete the monolith?</td>
+        <td>Yes — verified the new base doesn't depend on it. Annotated tag <code>pre-monolith-removal</code>
+        marks the return point <span class="st done">done</span>, then it's deleted.</td></tr>
+    <tr><td class="q">Q3</td><td>pedigree / provenance</td>
+        <td><code>init</code> mints a self-signing local ecosystem: a <strong>validate-before-run</strong>
+        fail-fast (checksum our own files — honest about npm's no-code-signing gap), a local registry, and a
+        demo that signs + SBOMs + attests its own artifacts.</td></tr>
+    <tr><td class="q">Q4</td><td>first deployment target</td>
+        <td>The person running <code>init</code>. It mints <em>their</em> local environment — no external infra
+        assumed.</td></tr>
+    <tr><td class="q">Q5</td><td>enforcement model</td>
+        <td><code>init</code> builds <strong>waypoint</strong>, runs the <strong>SSC</strong> scanner suite on it,
+        and <span class="gate">refuses to issue a trustmark until zero HIGH/CRITICAL</span> — your SLA, enforced.
+        Own-CA supported; container hardening tuned <em>after</em> it runs.</td></tr>
+  </table>
+
+  <h2>Phase 1 — clean base <span class="st done">complete ✓</span></h2>
+  <div class="card">
+    <table>
+      <tr><td><span class="st done">done</span></td><td>Tag <code>pre-monolith-removal</code> + commit the fedvec Docker fix, SSC import, assessment docs</td></tr>
+      <tr><td><span class="st done">done</span></td><td>Deleted the legacy monolith (<code>src/</code>, <code>server.js</code>, root compose + 4 Dockerfiles, <code>scripts/tests/</code>) — 76 files, −28k lines — and reduced root <code>package.json</code> to a pure private workspace root</td></tr>
+      <tr><td><span class="st done">done</span></td><td>Renamed CLI → <code>@letsfederate/fedmgr</code> (name + dir); <code>fedmgr</code> front door verified</td></tr>
+      <tr><td><span class="st done">done</span></td><td>Adapted SSC to this repo (fixed <code>REPO_ROOT</code>, Bandit auto-skips no-Python, Hadolint lints all <code>Dockerfile.*</code>, reports → <code>SSC/reports/</code>, README fixed)</td></tr>
+      <tr><td><span class="st done">done</span></td><td>Full suite <strong>156 tests green</strong>, 0 fail; lab rebuilt — TA + TMI healthy, <code>federation_search</code> live in-container</td></tr>
+    </table>
+    <p class="muted" style="margin:10px 0 0">Bonus catch: a clean reinstall repaired ~20+ <code>node_modules</code> files left NUL-corrupted by the earlier disk-full event.</p>
+  </div>
+
+  <h2>Phase 2 — <code>fedmgr init</code>: mint a trust ecosystem <span class="st prog">spine shipped</span></h2>
+  <p class="sub">Each step is a fail-fast gate; if it can't be proven, <code>init</code> stops rather than pretend.
+  The spine — the observability core, the <code>init</code> phase runner, and <code>fedmgr doctor</code> — is
+  built (<strong>166 tests green</strong>). Phases below are wired ✓ or planned.</p>
+  <ol class="steps">
+    <li><strong>Validate before run.</strong> <span class="st done">armed ✓</span> Hash our own shipped files against a manifest (generated at publish); abort on mismatch. Proven: tampering <code>dist/ca.js</code> makes <code>init</code> exit 1. <span class="muted">(Self-consistency, not authorship — the authorship gap rides npm/sigstore provenance.)</span></li>
+    <li><strong>Mint a local CA.</strong> <span class="st done">wired ✓</span> Root CA into <code>~/.letsfederate/ca/</code> via step-cli, idempotent. <code>--accept-ca &lt;file&gt;</code> to trust a provider CA. Every CA is <em>independently re-verified by Node's X.509 parser</em> (a different tool than the one that made it) or <code>init</code> aborts.</li>
+    <li><strong>Stand up the minimal ecosystem.</strong> <span class="st done">wired ✓</span> Local OCI registry + Trust Anchor + Trustmark Issuer, keys auto-generated (<code>init</code> drives the lab).</li>
+    <li><strong>Self-provenance demo.</strong> <span class="st done">wired ✓</span> SBOM the workspace (321 real components) → sign with cosign → <em>independently verify with Node's crypto</em> (and cross-checked by <code>cosign verify-blob</code>). Push-to-registry + trustmark attestation is the next sub-slice. <code>fedmgr init --no-up</code> runs this as a fast "prove my supply chain" path.</li>
+    <li><strong>Enforce the SLA.</strong> <span class="st done">green ✓</span> Scan the workspace; compute the block/allow verdict. <span class="gate">No trustmark while any HIGH/CRITICAL exists.</span> The gate did its job twice: it <strong>blocked</strong> at 0 critical / 11 high (fast-uri, hono, path-to-regexp, tar), then we remediated — overrides + a tar-7 compat patch for fastembed — and the full six-scanner rescan reports <strong>0 / 0 / 0 / 0</strong> (report20260710.v3). The SLA holds.</li>
+  </ol>
+  <div class="card">
+    <strong>Run it now (SSH'd into the VM):</strong>
+    <pre style="margin:8px 0 4px;padding:12px;background:#0e141c;border:1px solid var(--line);border-radius:8px;overflow-x:auto;font:13px/1.5 var(--mono);color:var(--ink)">cd /home/vagrant/fedmgr
+npm install &amp;&amp; npm run build          <span style="color:var(--muted)"># once</span>
+node packages/fedmgr/dist/bin.js doctor
+node packages/fedmgr/dist/bin.js init --dry-run
+<span style="color:var(--muted)"># handy alias:</span>
+alias fedmgr='node /home/vagrant/fedmgr/packages/fedmgr/dist/bin.js'
+fedmgr doctor</pre>
+    <p class="muted" style="margin:6px 0 0">Full guide: <code>docs/dev/running.md</code> (logging knobs, the lab, running tests). Logs → stderr, data → stdout.</p>
+  </div>
+
+  <h2>Phase 3 — daily driver: waypoint live in Claude Code, trust made cryptographic <span class="st done">shipped ✓</span></h2>
+  <p class="sub">The repo got honest about what everything is (packages = npm, services = containers, deploy = how
+  to run it), the dependency gate went green, and then we used it in anger: waypoint is now the one MCP server
+  Claude Code talks to, and its downstream is admitted by a <em>validated §10 chain to a pinned anchor</em> —
+  not by config say-so.</p>
+  <div class="card">
+    <table>
+      <tr><td><span class="st done">done</span></td><td><strong>Restructure</strong> — <code>services/</code> split (Dockerfiles beside code, services <code>private:true</code>), <code>deploy/</code> = operations, <code>docs/history/</code> tidy; 7 repo-structure guard tests ratchet it (incl. dep-direction + no-tracked-keys)</td></tr>
+      <tr><td><span class="st done">done</span></td><td><strong>Zero HIGH/CRITICAL</strong> — 11 HIGHs cleared via overrides + regenerated lockfile; fastembed adapted to security-pinned tar 7 (both compiled loaders, patch dropped when upstream catches up); proven by downloading a real model through tar 7</td></tr>
+      <tr><td><span class="st done">done</span></td><td><strong>Waypoint = the MCP front door</strong> — registered in Claude Code (user scope); first dogfood finding fixed same-day: per-downstream <code>env</code> (SDK strips parent env; a PEP passes exactly what the operator declares)</td></tr>
+      <tr><td><span class="st done">done</span></td><td><strong>Enrollment is a command</strong> — <code>fedmgr entity config</code> + new <code>fedmgr entity enroll</code> (proof-of-key, two-step) work from the published CLI, no repo checkout; lab <code>entity-host</code> serves leaf statements from ta-server's own network namespace so <code>http://localhost:9631</code> is one origin for the TA, the containers, and the host</td></tr>
+      <tr><td><span class="st done">done</span></td><td><strong>Chain-validated admission live</strong> — fedmgr-mcp enrolled (active subordinate); <code>requireValidChain:true</code> + <code>WAYPOINT_ANCHOR_JWKS</code> pin → <code>ADMITTED · chain VALID</code>, 13 tools; the same policy <em>denied</em> it before enrollment (fail-closed observed, not assumed)</td></tr>
+    </table>
+  </div>
+
+  <h3>The MCP elements, as deployed today</h3>
+  <div class="card" style="overflow-x:auto">
+  <svg viewBox="0 0 980 470" width="100%" style="min-width:760px;font-family:var(--mono)" role="img" aria-label="waypoint MCP trust topology">
+    <defs>
+      <marker id="arr" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+        <path d="M0 0 L8 4 L0 8 z" fill="#5aa9ff"/>
+      </marker>
+      <marker id="arrg" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+        <path d="M0 0 L8 4 L0 8 z" fill="#4dd0a7"/>
+      </marker>
+    </defs>
+
+    <!-- client -->
+    <rect x="20" y="70" width="165" height="64" rx="10" fill="#121821" stroke="#22303f"/>
+    <text x="102" y="97" text-anchor="middle" fill="#e6edf3" font-size="14" font-weight="700">Claude Code</text>
+    <text x="102" y="117" text-anchor="middle" fill="#9fb0c3" font-size="11">MCP client · one server</text>
+
+    <!-- waypoint -->
+    <rect x="265" y="30" width="270" height="160" rx="10" fill="#121821" stroke="#4dd0a7"/>
+    <text x="400" y="56" text-anchor="middle" fill="#4dd0a7" font-size="15" font-weight="700">waypoint  (PEP · the only edge)</text>
+    <text x="283" y="82" fill="#9fb0c3" font-size="11">policy: acceptedAnchors = [TA]</text>
+    <text x="283" y="100" fill="#f5c451" font-size="11">requireValidChain: true</text>
+    <text x="283" y="118" fill="#9fb0c3" font-size="11">anchor key PINNED (WAYPOINT_ANCHOR_JWKS)</text>
+    <text x="283" y="136" fill="#9fb0c3" font-size="11">per-downstream env (explicit, not inherited)</text>
+    <text x="283" y="154" fill="#9fb0c3" font-size="11">tools re-exposed as &lt;name&gt;__&lt;tool&gt;</text>
+    <text x="283" y="172" fill="#9fb0c3" font-size="11">fail-closed: no chain ⇒ no connection</text>
+
+    <line x1="185" y1="102" x2="258" y2="102" stroke="#5aa9ff" stroke-width="1.6" marker-end="url(#arr)"/>
+    <text x="221" y="92" text-anchor="middle" fill="#5aa9ff" font-size="10.5">stdio MCP</text>
+
+    <!-- downstreams -->
+    <rect x="640" y="30" width="320" height="78" rx="10" fill="#0e1a16" stroke="#4dd0a7" stroke-width="1.6"/>
+    <text x="800" y="55" text-anchor="middle" fill="#e6edf3" font-size="13" font-weight="700">fedmgr-mcp</text>
+    <text x="800" y="74" text-anchor="middle" fill="#4dd0a7" font-size="11">ADMITTED · chain VALID (1 hop, pinned TA)</text>
+    <text x="800" y="92" text-anchor="middle" fill="#9fb0c3" font-size="11">13 tools → fedmgr__*   ·   spawned NODE_ENV=development</text>
+    <line x1="535" y1="80" x2="633" y2="68" stroke="#4dd0a7" stroke-width="1.6" marker-end="url(#arrg)"/>
+
+    <rect x="640" y="128" width="320" height="52" rx="10" fill="#121821" stroke="#5aa9ff" stroke-dasharray="5 4"/>
+    <text x="800" y="150" text-anchor="middle" fill="#5aa9ff" font-size="12.5">git MCP — next downstream (planned)</text>
+    <text x="800" y="168" text-anchor="middle" fill="#9fb0c3" font-size="11">enroll under the same anchor → git__* tools</text>
+    <line x1="535" y1="140" x2="633" y2="152" stroke="#5aa9ff" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#arr)"/>
+
+    <rect x="640" y="200" width="320" height="50" rx="10" fill="#1a0f10" stroke="#ff6b6b"/>
+    <text x="800" y="221" text-anchor="middle" fill="#ff6b6b" font-size="12.5">unenrolled / unchained MCP — DENIED ✗</text>
+    <text x="800" y="239" text-anchor="middle" fill="#9fb0c3" font-size="11">never connected · 0 tools exposed (observed live)</text>
+    <line x1="535" y1="175" x2="600" y2="210" stroke="#ff6b6b" stroke-width="1.4"/>
+    <text x="612" y="216" fill="#ff6b6b" font-size="15" font-weight="700">✗</text>
+
+    <!-- chain fetch -->
+    <line x1="400" y1="190" x2="400" y2="333" stroke="#5aa9ff" stroke-width="1.5" stroke-dasharray="6 4" marker-end="url(#arr)"/>
+    <text x="408" y="255" fill="#5aa9ff" font-size="10.5">§10 chain resolution:</text>
+    <text x="408" y="270" fill="#9fb0c3" font-size="10.5">leaf statement (:9631) +</text>
+    <text x="408" y="285" fill="#9fb0c3" font-size="10.5">federation_fetch (:8090)</text>
+    <text x="408" y="300" fill="#9fb0c3" font-size="10.5">verified against pinned key</text>
+
+    <!-- fedmgr-mcp tool traffic -->
+    <line x1="800" y1="108" x2="655" y2="333" stroke="#22303f" stroke-width="1.4" marker-end="url(#arr)"/>
+    <text x="760" y="300" fill="#9fb0c3" font-size="10.5">tool calls → TA / TMI</text>
+
+    <!-- infra row -->
+    <rect x="40" y="340" width="230" height="92" rx="10" fill="#121821" stroke="#22303f"/>
+    <text x="155" y="363" text-anchor="middle" fill="#e6edf3" font-size="12.5" font-weight="700">entity-host  :9631</text>
+    <text x="155" y="381" text-anchor="middle" fill="#9fb0c3" font-size="10.5">serves leaf identities (.well-known)</text>
+    <text x="155" y="396" text-anchor="middle" fill="#9fb0c3" font-size="10.5">fedmgr-mcp's statement + JWKS live here</text>
+    <text x="155" y="414" text-anchor="middle" fill="#f5c451" font-size="10.5">shares ta-server netns → one origin</text>
+
+    <rect x="300" y="340" width="220" height="92" rx="10" fill="#121821" stroke="#4dd0a7"/>
+    <text x="410" y="363" text-anchor="middle" fill="#e6edf3" font-size="12.5" font-weight="700">Trust Anchor  :8090</text>
+    <text x="410" y="381" text-anchor="middle" fill="#9fb0c3" font-size="10.5">subordinates: tmi, fedmgr-mcp</text>
+    <text x="410" y="396" text-anchor="middle" fill="#9fb0c3" font-size="10.5">enroll (proof-of-key) · federation_fetch</text>
+    <text x="410" y="414" text-anchor="middle" fill="#9fb0c3" font-size="10.5">federation_search (fedvec)</text>
+
+    <rect x="550" y="340" width="200" height="92" rx="10" fill="#121821" stroke="#22303f"/>
+    <text x="650" y="363" text-anchor="middle" fill="#e6edf3" font-size="12.5" font-weight="700">Trustmark Issuer  :8080</text>
+    <text x="650" y="381" text-anchor="middle" fill="#9fb0c3" font-size="10.5">issues marks, gated on SSC</text>
+    <text x="650" y="396" text-anchor="middle" fill="#9fb0c3" font-size="10.5">zero HIGH/CRITICAL SLA</text>
+
+    <rect x="780" y="340" width="180" height="92" rx="10" fill="#121821" stroke="#22303f"/>
+    <text x="870" y="363" text-anchor="middle" fill="#e6edf3" font-size="12.5" font-weight="700">OCI registry  :5000</text>
+    <text x="870" y="381" text-anchor="middle" fill="#9fb0c3" font-size="10.5">signed images + SBOMs</text>
+    <text x="870" y="396" text-anchor="middle" fill="#9fb0c3" font-size="10.5">trustmarks attached to digests</text>
+
+    <line x1="270" y1="386" x2="300" y2="386" stroke="#f5c451" stroke-width="1.4"/>
+  </svg>
+  <p class="muted" style="margin:8px 0 0;font-size:12.5px">One lab (<code>./deploy/lab/up.sh</code>), one client
+  entry point, one enforcement point. The identity chain: fedmgr-mcp's self-signed statement (hosted at
+  <code>:9631</code>) → TA's subordinate statement (<code>federation_fetch</code>) → pinned anchor key in
+  waypoint. Break any link and the tools simply don't appear.</p>
+  </div>
+
+  <h3>What remains — the road to trustmarket</h3>
+  <div class="card">
+    <table>
+      <tr><th></th><th>Item</th><th>Why it's next</th></tr>
+      <tr><td><span class="st done">done</span></td><td><strong>Options A+G</strong> — lab speaks TLS (Caddy internal CA, identities <code>https://localhost:9443/9444/9445</code>); <code>FEDMGR_ALLOW_ORIGINS</code> exact-origin exceptions replace the global dev flag everywhere</td><td>Prod posture end-to-end: enrollment, §10 chain VALID, waypoint admission — all over https with <code>NODE_ENV</code> gone; 14 new guard tests + TLS structure guard</td></tr>
+      <tr><td><span class="st todo">next</span></td><td>Merge to <code>main</code> (fast-forward, 90+ commits)</td><td>Triggers the <em>first npm release</em> of the 5 libs + CLI via semantic-release — merge <strong>is</strong> the release event</td></tr>
+      <tr><td><span class="st done">done</span></td><td>TA database → named volume (<code>ta-data:/data</code>); <code>down.sh</code> durable by default, <code>--wipe</code> to reset</td><td>Proven: fedmgr-mcp enrollment survived a full <code>down</code>/<code>up</code> cycle (subordinates intact, chain still VALID)</td></tr>
+      <tr><td><span class="st todo">todo</span></td><td>Second real downstream: a git MCP under the anchor</td><td>Makes admission non-trivial and starts the actual tool-elevation story (git__* through the PEP)</td></tr>
+      <tr><td><span class="st todo">todo</span></td><td>Issue <strong>waypoint its own trustmark</strong> (SSC-gated — already green)</td><td>Patient zero: the doorman becomes the trustmarket's first verified listing</td></tr>
+      <tr><td><span class="st todo">todo</span></td><td>Extract entity/subordinate-statement signing out of ta-server into a lib</td><td>fedmgr-mcp → ta-server dep blocks its npm publish; the boundary test allowlists the debt so it can't grow, but it must shrink to zero</td></tr>
+      <tr><td><span class="st todo">todo</span></td><td>Waypoint containerization design</td><td>stdio mux: how do downstreams get into (or out of) the image? Open design, deliberately not faked with a symmetry Dockerfile</td></tr>
+      <tr><td><span class="st todo">todo</span></td><td>Continuous revocation re-checks + E9 catalogue</td><td>Admission is at-connect today; live <code>/trust-mark-status</code> makes it continuous</td></tr>
+      <tr><td><span class="st todo">todo</span></td><td>trustmarket naming &amp; hosting</td><td><code>trust.letsfederate.org</code> stays the protocol anchor (identifiers are forever); <code>letsfederate.org/trustmarket</code> as the human catalog; <em>trustmarQ</em> reserved as brand candidate</td></tr>
+    </table>
+  </div>
+
+  <h2>Observability — legible to LLM &amp; human <span class="st done">built: @letsfederate/obs</span></h2>
+  <div class="card">
+    <ul>
+      <li><strong>Dual-format logs.</strong> <span class="st done">done</span> Syslog-style decorated lines for people, structured JSON for machines/LLMs, one global <code>LOG_LEVEL</code>; logs to stderr so stdout stays machine-clean.</li>
+      <li><strong>OpenTelemetry-friendly.</strong> OTel <em>API</em> in the code (near-zero cost, no forced exporter); a heavier collector/Grafana sink stays an opt-in compose profile.</li>
+      <li><strong>Single pane, lightweight.</strong> <code>docker compose logs</code> as the floor; our own <code>fedmgr logs</code> / <code>fedmgr doctor</code> console as the default pane — minimal deps, minimal support surface.</li>
+      <li><strong>Mission-aligned traces.</strong> Span names map to trust operations: <code>mint-ca · build · sbom · sign · push · trustmark · verify</code> — so an assistant can reason about exactly where trust was established or broke.</li>
+    </ul>
+  </div>
+
+  <h2>How we test — no theatre</h2>
+  <div class="card">
+    <ul>
+      <li><strong>Independent cross-checks.</strong> When one tool produces an artifact, a <em>different</em>
+      tool verifies it. The CA is minted by <code>step</code> and re-verified by Node's own X.509 parser (and
+      spot-checked with <code>openssl</code>) — a green means two implementations agree, not that one function
+      returned.</li>
+      <li><strong>Negative tests.</strong> Every checker has a test that feeds it something bad (a non-CA leaf
+      cert) and asserts it's <em>rejected</em>. A rubber-stamp check can't pass those.</li>
+      <li><strong>Honest skips.</strong> Docker-gated tests print <code># SKIP</code> when Docker is absent —
+      reported as skipped, never counted as a pass. We don't manufacture green.</li>
+      <li><strong>Tests are drift detection for you too.</strong> <code>npm test</code> doubles as an
+      environment health check: if a tool's output drifts, an independent verifier stops agreeing and the
+      suite fails loudly. <strong>291 tests passing, 0 fail, honest skips preserved</strong> — including 7
+      repo-structure guards (services stay private, packages can't depend on services, Dockerfiles stay in
+      SSC scan reach, no key material ever tracked) and negative admission tests (wrong key rejected,
+      unenrolled downstream denied).</li>
+    </ul>
+  </div>
+
+  <footer>
+    Live snapshot, hand-updated as we go. For the full teardown that produced these decisions, see the
+    <a href="trustworthy-mcp-assessment.html">trustworthy-MCP assessment</a> and its
+    <a href="trustworthy-mcp-progress.html">progress addendum</a>.
+  </footer>
+</div>
+</body>
+</html>

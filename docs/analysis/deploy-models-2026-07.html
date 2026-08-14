@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>fedmgr — Deploy models: laptop → VM → K8s-as-a-service</title>
+<style>
+  :root{
+    --bg:#0b0f14; --panel:#121821; --panel2:#161d28; --ink:#e6edf3; --muted:#9fb0c3;
+    --line:#22303f; --accent:#4dd0a7; --accent2:#5aa9ff; --warn:#f5c451; --bad:#ff6b6b;
+    --radius:14px; --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 600px at 70% -10%,#132030 0,var(--bg) 55%);
+    color:var(--ink);font:16px/1.6 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;}
+  .wrap{max-width:1060px;margin:0 auto;padding:40px 24px 80px;}
+  a{color:var(--accent2);text-decoration:none} a:hover{text-decoration:underline}
+  .back{font:600 13px/1 var(--mono);color:var(--muted)}
+  .kicker{color:var(--accent);font:600 13px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;margin-top:18px}
+  h1{font-size:30px;margin:.3em 0 .1em}
+  .sub{color:var(--muted);max-width:78ch}
+  h2{font-size:20px;margin:38px 0 6px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+  h3{font-size:15px;margin:20px 0 6px;color:var(--accent)}
+  .card{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line);
+    border-radius:var(--radius);padding:18px 20px;margin:14px 0}
+  .hero{border-left:3px solid var(--accent)}
+  ul{margin:8px 0 8px 2px;padding-left:20px} li{margin:5px 0}
+  code{font-family:var(--mono);background:#0e141c;border:1px solid var(--line);padding:2px 6px;border-radius:6px;font-size:.88em}
+  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:14px}
+  th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font:600 12px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase}
+  .st{font:600 11px/1 var(--mono);padding:4px 8px;border-radius:6px;white-space:nowrap}
+  .done{color:#0b1a14;background:var(--accent)} .prog{color:#1a1405;background:var(--warn)}
+  .todo{color:var(--muted);border:1px solid var(--line)}
+  .muted{color:var(--muted)}
+  .gate{color:var(--bad);font:600 12px/1 var(--mono)}
+  footer{margin-top:40px;color:var(--muted);font-size:13px;border-top:1px solid var(--line);padding-top:18px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="index.html">← workbench</a>
+  <div class="kicker">Analysis · 2026-07-11 · deploy models &amp; IaC — decided BEFORE the OpenBao step</div>
+  <h1>From laptop to K8s-as-a-service</h1>
+  <p class="sub">A dev should be able to <em>deploy</em> fedmgr somewhere (a VM, OKE/EKS/AKS) and then just
+  <em>connect</em> to it — MCP over the network — instead of running everything on their laptop. This maps the
+  tiers, what changes at each, and why the key-management upgrade (OpenBao) is sequenced <em>after</em> this
+  analysis: the right vault wiring depends on where the thing runs.</p>
+
+  <div class="card hero">
+    <strong>The one structural insight.</strong> Almost everything that feels "hard to deploy" today is a single
+    root cause: the lab runs on <code>http://localhost</code> identities, which forces
+    <code>NODE_ENV=development</code> through every URL guard. The moment a deployment has a real DNS name and
+    TLS, entity ids become their production form (<code>https://trust.example.com/…</code>), the dev flags
+    vanish, and the same code runs unmodified — the guards were built for exactly that. Deployment work is
+    therefore mostly <em>origin and transport work</em>, not trust-engine work.
+  </div>
+
+  <h2>The three tiers</h2>
+  <div class="card">
+    <table>
+      <tr><th></th><th>T0 · Laptop (today)</th><th>T1 · Shared VM / team box</th><th>T2 · K8s-as-a-service (OKE · EKS · AKS)</th></tr>
+      <tr><td><b>Status</b></td>
+          <td><span class="st done">working, verified</span></td>
+          <td><span class="st prog">90% — knob missing</span></td>
+          <td><span class="st todo">designed here, not built</span></td></tr>
+      <tr><td><b>Trust infra</b></td>
+          <td>compose lab (<code>up.sh</code>): registry + TA + TMI + entity-host; durable <code>ta-data</code> volume (proven by <code>verify-durability.sh</code>)</td>
+          <td>same compose, unchanged</td>
+          <td>Helm chart (new): TA/TMI Deployments, PVC replaces <code>ta-data</code>, entity statements move from nginx sidecar to an Ingress path or the TA itself</td></tr>
+      <tr><td><b>MCP surface</b></td>
+          <td>host stdio: Claude Code spawns waypoint → waypoint spawns fedmgr-mcp</td>
+          <td><b>waypoint HTTP mode</b> (<code>bin-http.js</code> — Streamable HTTP + OAuth edge, already built) exposed via <code>deploy/tunnels/</code> (cloudflared/zrok) or a LAN port; remote Claude Code/claude.ai adds it as a remote MCP connector</td>
+          <td>waypoint as a Deployment behind Ingress+TLS; downstreams as <b>sidecar containers</b> in the waypoint pod (stdio stays intra-pod — resolves the containerization question without inventing a new transport)</td></tr>
+      <tr><td><b>Identity origins</b></td>
+          <td><code>http://localhost:*</code> + <code>NODE_ENV=development</code> everywhere</td>
+          <td><span class="gate">gap:</span> one <code>PUBLIC_ORIGIN</code> knob (compose env + up.sh + CLI defaults) so <code>10.0.0.191</code>/DNS cases are a variable, not a code edit</td>
+          <td>real DNS + TLS via Ingress/cert-manager → <b>https identities, dev flags gone</b>; leaf entity ids minted against the public origin from day one</td></tr>
+      <tr><td><b>Keys</b></td>
+          <td>SoftKms: JWE at rest + decrypt sidecars into shared volumes; honest weakness: <code>.pass</code> sits beside the JWE</td>
+          <td><b>OpenBao slot #1</b>: an OpenBao container in the same compose; TA/TMI get keys via a <code>BaoKeyProvider</code> — "safer than local, not an HSM"</td>
+          <td>OpenBao in-cluster (or managed alternative) via Secrets Store CSI; cloud KMS as the step after (OCI Vault / AWS KMS / Azure Key Vault, Managed HSM at the top)</td></tr>
+      <tr><td><b>Registry</b></td><td>local :5000</td><td>same, or GHCR</td><td>OCIR / ECR / ACR — trustmark-attached digests work unchanged (ORAS)</td></tr>
+      <tr><td><b>IaC</b></td><td>compose (is the IaC)</td><td>compose + <code>.env</code></td><td>Terraform (cluster + DNS + registry + vault) handing off to one Helm chart with per-cloud values files</td></tr>
+    </table>
+  </div>
+
+  <h2>How a remote dev actually connects (the T1/T2 promise)</h2>
+  <div class="card">
+    <ul>
+      <li><b>Deploy:</b> operator runs the compose (T1) or <code>terraform apply</code> + <code>helm install</code> (T2). The TA, TMI, registry, and waypoint come up with real origins.</li>
+      <li><b>Connect:</b> the dev adds ONE remote MCP server — waypoint's <code>/mcp</code> URL — authenticating via the OAuth edge (their IdP: GitHub/Google/Okta). No local checkout, no node, no docker on the laptop.</li>
+      <li><b>Use:</b> every tool call rides waypoint's admission: policy + §10 chain to the pinned anchor, exactly as verified locally. Enrollment of new MCPs is <code>fedmgr entity config</code> + <code>entity enroll</code> from anywhere (published CLI), pointed at the deployed TA.</li>
+      <li><b>What must be true first:</b> waypoint HTTP/OAuth mode needs tests (assessment R5 — it is wired but unverified); multi-user session semantics need a decision (one shared waypoint policy vs per-team policies).</li>
+    </ul>
+  </div>
+
+  <h2>Key-management ladder (each rung = a KeyProvider implementation, nothing more)</h2>
+  <div class="card">
+    <table>
+      <tr><th>Rung</th><th>What holds the signing keys</th><th>Threat honestly addressed</th><th>Status</th></tr>
+      <tr><td>Crawl</td><td><code>SoftKmsProvider</code> — encrypted JWE on disk, decrypt sidecar, tmpfs-style volume</td><td>keys never plaintext in an image layer; NOT safe against a host-level reader (<code>.pass</code> adjacent)</td><td><span class="st done">today</span></td></tr>
+      <tr><td>Walk</td><td><b>OpenBao</b> (transit/KV) via a new <code>BaoKeyProvider</code> — private key material leaves disk entirely; signing happens server-side or keys are fetched at boot with short-lived auth</td><td>host-file exfiltration; adds audit + rotation; still software custody — "safer than local, not a true HSM" is the accurate claim</td><td><span class="st todo">next, AFTER this analysis — wiring differs per tier (compose service vs CSI)</span></td></tr>
+      <tr><td>Run</td><td>Cloud KMS via per-cloud providers: <b>OCI Vault</b>, <b>AWS KMS</b>, <b>Azure Key Vault</b> (Managed HSM for FIPS-level custody)</td><td>hardware-backed custody, IAM-scoped signing, per-call audit</td><td><span class="st todo">later; same seam</span></td></tr>
+    </table>
+    <p class="muted" style="margin:8px 0 0">The seam is <code>KeyProvider</code> in <code>@letsfederate/kms</code>
+    (<code>kid() · jwks() · signJwt()</code>) — TA, TMI, and the CLI already sign through it. No rung requires
+    touching trust logic; the abstraction predates this analysis and is reused, not reinvented.</p>
+  </div>
+
+  <h2>Decision points before building T2</h2>
+  <div class="card">
+    <table>
+      <tr><th>#</th><th>Decision</th><th>Recommendation</th></tr>
+      <tr><td class="gate">D1</td><td>First cloud target</td><td><b>OKE (Oracle OCI)</b> per stated preference — always-free ARM shapes make a standing lab affordable; keep the chart cloud-neutral, park OCI specifics in a values file</td></tr>
+      <tr><td class="gate">D2</td><td>Downstream MCPs in-cluster</td><td><b>Sidecars in the waypoint pod</b> (stdio intra-pod). Rejects two worse options: baking downstreams into waypoint's image (coupling) or MCP-over-network to each downstream (invents transport + auth surface prematurely)</td></tr>
+      <tr><td class="gate">D3</td><td>Entity-statement hosting in K8s</td><td>Ingress path on the trust domain (the nginx-in-netns trick was a lab workaround for one-origin; Ingress gives one origin natively)</td></tr>
+      <tr><td>D4</td><td>OpenBao placement</td><td>T1: compose service beside the lab. T2: in-cluster with CSI. Build <code>BaoKeyProvider</code> once; only mounting differs</td></tr>
+      <tr><td>D5</td><td>IaC repo layout</td><td><code>deploy/k8s/chart</code> (Helm) + <code>deploy/terraform/&lt;cloud&gt;</code>; compose stays the T0/T1 truth — do NOT port the lab to K8s, deploy the <em>product</em> to K8s</td></tr>
+    </table>
+  </div>
+
+  <h2>Sequencing (and why OpenBao waits)</h2>
+  <div class="card">
+    <ul>
+      <li><b>1. <code>PUBLIC_ORIGIN</code> knob</b> — unblocks T1 today and is a prerequisite for every tier above it (small: compose env + up.sh + CLI defaults).</li>
+      <li><b>2. Waypoint HTTP/OAuth verified</b> — tests + one live tunnel session (the T1 "connect from anywhere" proof; R5).</li>
+      <li><b>3. OpenBao as a compose service + <code>BaoKeyProvider</code></b> — now the vault lands in a topology that matches where it will run, and the <code>.pass</code> weakness dies. <span class="muted">(This is the "walk" the crawl/walk/run plan called for — doing it before 1–2 would have wired it to localhost assumptions we're about to remove.)</span></li>
+      <li><b>4. Helm chart + Terraform for OKE</b> — T2 becomes real; same images, same KeyProvider, PVC for state, Ingress for origins.</li>
+    </ul>
+  </div>
+
+  <footer>
+    Analysis 2026-07-11 · builds on the <a href="deep-assessment-2026-07-11.html">deep assessment</a> (R2, R5,
+    R6 feed this) · verified inputs: durable lab state (<code>verify-durability.sh</code> PASS), enrollment
+    suite 12/12, waypoint chain-validated admission live · key seam: <code>@letsfederate/kms KeyProvider</code>.
+  </footer>
+</div>
+</body>
+</html>

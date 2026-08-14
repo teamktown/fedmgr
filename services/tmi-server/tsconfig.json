@@ -1,0 +1,21 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "references": [
+    {
+      "path": "../../packages/kms"
+    },
+    {
+      "path": "../../packages/oidf-verify"
+    },
+    {
+      "path": "../../packages/ssc-attest"
+    }
+  ],
+  "include": [
+    "src/**/*"
+  ]
+}

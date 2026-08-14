@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>fedmgr — Trustworthy MCP Assessment</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c2330; --ink:#e6edf3; --mut:#9aa7b4;
+    --line:#2a3340; --accent:#58a6ff; --good:#3fb950; --warn:#d29922; --bad:#f85149;
+    --crit:#ff5c5c; --high:#ff9f45; --med:#e3c04b; --low:#6ea8fe; --chip:#21262d;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  a{color:var(--accent);text-decoration:none}
+  a:hover{text-decoration:underline}
+  code{background:#0b0f14;border:1px solid var(--line);border-radius:4px;padding:.05em .35em;font:12.5px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;color:#c9d5e1}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 22px 90px}
+  header.top{position:sticky;top:0;z-index:20;background:rgba(13,17,23,.9);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+  header.top .bar{max-width:1080px;margin:0 auto;padding:12px 22px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+  header.top h1{font-size:16px;margin:0;font-weight:650;letter-spacing:.2px}
+  header.top .meta{color:var(--mut);font-size:12.5px}
+  nav.jump{margin-left:auto;display:flex;gap:14px;flex-wrap:wrap;font-size:12.5px}
+  .hero{padding:34px 0 6px}
+  .hero h2{font-size:30px;margin:.1em 0 .2em;letter-spacing:-.4px}
+  .hero p.lead{color:var(--mut);font-size:16px;max-width:820px}
+  .grid{display:grid;gap:14px}
+  .scorecards{grid-template-columns:repeat(auto-fit,minmax(190px,1fr));margin:22px 0}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+  .card .k{color:var(--mut);font-size:12px;text-transform:uppercase;letter-spacing:.6px}
+  .card .v{font-size:26px;font-weight:700;margin-top:4px}
+  .bar{height:7px;border-radius:6px;background:#0b0f14;margin-top:9px;overflow:hidden}
+  .bar>i{display:block;height:100%}
+  .sec{background:var(--panel);border:1px solid var(--line);border-radius:14px;margin:20px 0;overflow:hidden}
+  .sec>h3{margin:0;padding:15px 18px;font-size:17px;cursor:pointer;display:flex;align-items:center;gap:10px;user-select:none;border-bottom:1px solid transparent}
+  .sec>h3:hover{background:var(--panel2)}
+  .sec>h3 .tw{color:var(--mut);transition:transform .15s;font-size:12px}
+  .sec.open>h3{border-bottom-color:var(--line)}
+  .sec.open>h3 .tw{transform:rotate(90deg)}
+  .sec .body{padding:6px 18px 20px;display:none}
+  .sec.open .body{display:block}
+  .sec h4{margin:20px 0 6px;font-size:14.5px;color:#cdd9e5}
+  p{margin:.5em 0}
+  ul{margin:.4em 0 .6em;padding-left:20px}
+  li{margin:.25em 0}
+  table{border-collapse:collapse;width:100%;margin:10px 0;font-size:13.5px}
+  th,td{border:1px solid var(--line);padding:7px 9px;text-align:left;vertical-align:top}
+  th{background:var(--panel2);color:#cdd9e5;font-weight:600}
+  tr:nth-child(even) td{background:#12171f}
+  .chip{display:inline-block;font-size:11px;font-weight:700;border-radius:20px;padding:2px 9px;letter-spacing:.3px;white-space:nowrap}
+  .c-crit{background:rgba(255,92,92,.16);color:#ff8f8f;border:1px solid rgba(255,92,92,.4)}
+  .c-high{background:rgba(255,159,69,.14);color:#ffbe86;border:1px solid rgba(255,159,69,.38)}
+  .c-med{background:rgba(227,192,75,.13);color:#ecd581;border:1px solid rgba(227,192,75,.36)}
+  .c-low{background:rgba(110,168,254,.13);color:#9dc0ff;border:1px solid rgba(110,168,254,.36)}
+  .c-good{background:rgba(63,185,80,.14);color:#79d18b;border:1px solid rgba(63,185,80,.36)}
+  .eff{font-size:11px;color:var(--mut);border:1px solid var(--line);border-radius:20px;padding:2px 8px}
+  .rank{font-weight:800;color:#fff;background:#233;border:1px solid var(--line);border-radius:8px;min-width:30px;text-align:center;display:inline-block;padding:3px 0}
+  .q{background:linear-gradient(180deg,#17202b,#141a22);border:1px solid #26415e;border-left:3px solid var(--accent);border-radius:10px;padding:13px 15px;margin:12px 0}
+  .q .qid{color:var(--accent);font-weight:700;font-size:12.5px;letter-spacing:.4px}
+  .q .why{color:var(--mut);font-size:12.5px;margin-top:5px}
+  .answer{margin-top:8px;border:1px dashed var(--line);border-radius:7px;padding:7px 10px;color:#6f7d8a;font-size:12.5px;font-style:italic}
+  .callout{border-left:3px solid var(--warn);background:rgba(210,153,34,.07);padding:10px 14px;border-radius:8px;margin:12px 0}
+  .callout.bad{border-color:var(--bad);background:rgba(248,81,73,.07)}
+  .callout.good{border-color:var(--good);background:rgba(63,185,80,.07)}
+  .pill{display:inline-block;background:var(--chip);border:1px solid var(--line);border-radius:6px;padding:1px 7px;font-size:11.5px;color:#b7c3cf;margin:2px 3px 2px 0}
+  .filterbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:6px 0 12px}
+  .filterbtn{cursor:pointer;background:var(--chip);border:1px solid var(--line);border-radius:20px;padding:3px 11px;font-size:12px;color:#c3ccd6}
+  .filterbtn.active{background:#243244;border-color:var(--accent);color:#fff}
+  .muted{color:var(--mut)}
+  .mono{font:12.5px/1.5 ui-monospace,Menlo,monospace;color:#c9d5e1;background:#0b0f14;border:1px solid var(--line);border-radius:8px;padding:11px 13px;white-space:pre-wrap;overflow:auto}
+  .foot{color:var(--mut);font-size:12.5px;text-align:center;margin-top:30px;border-top:1px solid var(--line);padding-top:16px}
+  .tag{font-size:11px;color:var(--mut)}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:760px){.two{grid-template-columns:1fr}}
+  .del{color:#ff8f8f}.arc{color:#ecd581}.kp{color:#79d18b}
+  button.print{cursor:pointer;background:var(--chip);border:1px solid var(--line);color:#cdd9e5;border-radius:8px;padding:5px 11px;font-size:12.5px}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="bar">
+    <h1>🛡️ fedmgr — Trustworthy‑MCP Assessment</h1>
+    <span class="meta">OpenID Federation for MCP · deep audit · 2026‑07‑04</span>
+    <nav class="jump">
+      <a href="#summary">Summary</a>
+      <a href="#questions">Questions</a>
+      <a href="#tests">Tests</a>
+      <a href="#recs">Recommendations</a>
+      <a href="#security">Trust gaps</a>
+      <a href="#usecases">Use cases</a>
+      <a href="#docs">Doc prune</a>
+      <a href="#next">Next</a>
+    </nav>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <section class="hero" id="summary">
+    <h2>Strong proof‑of‑concept. Two things block adoption: <span style="color:var(--warn)">credibility</span> and <span style="color:var(--warn)">enforced pedigree</span>.</h2>
+    <p class="lead">fedmgr is an architecturally sound OpenID‑Federation trust backplane for MCP — clean layering (KMS → TA/TMI → MCP → Waypoint), fail‑closed admission, comprehensive SSRF defense, 156 real hermetic tests. But a project selling <em>trust</em> currently ships a headline <code>npm test</code> that fakes success, an ambiguous "what do I install" story, two coexisting architectures, and a "code pedigree" promise that is <em>demonstrated but not enforced</em>. Fix the credibility gaps (cheap) and close the pedigree loop (the flagship feature) and this becomes genuinely adoptable.</p>
+  </section>
+
+  <div class="grid scorecards">
+    <div class="card"><div class="k">Overall</div><div class="v">62<span class="muted" style="font-size:14px">/100</span></div><div class="bar"><i style="width:62%;background:var(--warn)"></i></div></div>
+    <div class="card"><div class="k">Architecture / design</div><div class="v">82</div><div class="bar"><i style="width:82%;background:var(--good)"></i></div></div>
+    <div class="card"><div class="k">Trust crypto (what's verified)</div><div class="v">78</div><div class="bar"><i style="width:78%;background:var(--good)"></i></div></div>
+    <div class="card"><div class="k">Code‑pedigree delivered</div><div class="v">45</div><div class="bar"><i style="width:45%;background:var(--bad)"></i></div></div>
+    <div class="card"><div class="k">Real test coverage</div><div class="v">88</div><div class="bar"><i style="width:88%;background:var(--good)"></i></div></div>
+    <div class="card"><div class="k">Test‑harness credibility</div><div class="v">30</div><div class="bar"><i style="width:30%;background:var(--bad)"></i></div></div>
+    <div class="card"><div class="k">Docker / demo UX</div><div class="v">62</div><div class="bar"><i style="width:62%;background:var(--warn)"></i></div></div>
+    <div class="card"><div class="k">npm packaging / adoption</div><div class="v">55</div><div class="bar"><i style="width:55%;background:var(--warn)"></i></div></div>
+    <div class="card"><div class="k">Production readiness</div><div class="v">40</div><div class="bar"><i style="width:40%;background:var(--bad)"></i></div></div>
+    <div class="card"><div class="k">Docs currency</div><div class="v">72</div><div class="bar"><i style="width:72%;background:var(--warn)"></i></div></div>
+  </div>
+
+  <!-- QUESTIONS -->
+  <section class="sec open" id="questions">
+    <h3><span class="tw">▶</span>❓ Questions for you (answer on return)</h3>
+    <div class="body">
+      <p class="muted">These are the genuine product‑intent decisions I can't make for you. They gate the rank‑ordered plan below. Jot answers inline.</p>
+
+      <div class="q"><span class="qid">Q1 · npm identity</span> — What is the ONE canonical thing a new user installs? Today there's a broken root <code>fedmgr</code> (its <code>main: "index.js"</code> doesn't exist), a <em>legacy</em> <code>@letsfederate/fedmgr</code> built from <code>src/fedmgr/</code>, and the maintained <code>@letsfederate/fedmgr</code>. Pick the front door: <code>fedmgr</code>? <code>waypoint</code>? a meta <code>@letsfederate/fedmgr</code> umbrella?
+        <div class="why">Blocks R2. Determines README, install docs, and what we deprecate.</div>
+        <div class="answer">Your answer…</div>
+      </div>
+
+      <div class="q"><span class="qid">Q2 · legacy monolith</span> — Delete the pre‑workspace monolith outright (<code>server.js</code>, <code>src/mcp-core/</code>, <code>src/fedmgr/</code>, root <code>docker-compose.yml</code> + <code>Dockerfile.fedmgr/mcp-core/federation-admin/token-exchange</code>), or keep it quarantined for a migration window?
+        <div class="why">Blocks R3. It's the single biggest source of "which architecture is real?" confusion.</div>
+        <div class="answer">Your answer…</div>
+      </div>
+
+      <div class="q"><span class="qid">Q3 · pedigree ambition</span> — Is "code pedigree = <em>enforced</em> runtime attestation (running container digest ↔ signed provenance/SBOM, checked at call time)" a near‑term flagship goal, or is the current digest‑bound‑trustmark <em>demo</em> sufficient for the first adopters?
+        <div class="why">Determines whether R5 (the hard, high‑value feature) is next or deferred. It's the actual product promise.</div>
+        <div class="answer">Your answer…</div>
+      </div>
+
+      <div class="q"><span class="qid">Q4 · first deployment target</span> — Where do the first real adopters run this: local lab only, Docker Compose, or Kubernetes/cloud?
+        <div class="why">Prioritizes config management (R8), Postgres store (R12), and docker hygiene (R11) vs. leaving them.</div>
+        <div class="answer">Your answer…</div>
+      </div>
+
+      <div class="q"><span class="qid">Q5 · enforcement model</span> — Should trust be enforced by a <strong>gateway</strong> (Waypoint in front of MCP servers), by <strong>in‑process middleware</strong> inside each MCP server, or stay <strong>advisory tools</strong> the client opts into? Today it's advisory — a server is only "gated" if it voluntarily calls <code>validate_mcp_invocation</code>.
+        <div class="why">Determines how much to invest in Waypoint (R7) vs. an SDK middleware.</div>
+        <div class="answer">Your answer…</div>
+      </div>
+
+      <div class="q"><span class="qid">Q6 · revocation SLA</span> — Acceptable staleness for a revoked trust mark: re‑check every call, every ~30s, or just rely on short token TTL? Today revocation is never live‑checked and is lost on TA restart.
+        <div class="why">Shapes R4 (live revocation + persistence).</div>
+        <div class="answer">Your answer…</div>
+      </div>
+
+      <div class="q"><span class="qid">Q7 · doc prune approval</span> — OK to delete the 8 stale docs and move the ralph‑loop/evidence/buildjournal into <code>docs/history/</code> (see Doc Prune section)? Any you want kept verbatim in place?
+        <div class="why">Unblocks the cleanup PR. Reversible via git regardless.</div>
+        <div class="answer">Your answer…</div>
+      </div>
+
+      <div class="q"><span class="qid">Q8 · signing backend</span> — Is HSM‑backed signing (PKCS#11 / OpenBao Transit) a real near‑term requirement, or is file‑backed SoftKMS fine for the first adopters? PKCS#11 is currently a stub and OpenBao is an in‑memory mock.
+        <div class="why">Shapes R9 and the production‑readiness story.</div>
+        <div class="answer">Your answer…</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS -->
+  <section class="sec open" id="how">
+    <h3><span class="tw">▶</span>🧱 How OIDF‑in‑MCP is handled today</h3>
+    <div class="body">
+      <h4>The library (7 TypeScript packages, <code>@letsfederate/*</code>, all v0.0.1)</h4>
+      <table>
+        <tr><th>Package</th><th>Role</th><th>Publishable as a library?</th></tr>
+        <tr><td><code>kms</code></td><td>Crypto base: <code>KeyProvider</code> (SoftKMS / PKCS#11 / OpenBao), <code>validateTrustmark</code>, <code>validateTrustChain</code>, SSRF guard <code>assertSafeUrl</code></td><td><span class="chip c-good">Yes</span> self‑contained</td></tr>
+        <tr><td><code>ta-server</code></td><td>Trust Anchor: entity/subordinate statements, <code>/federation_list</code>, <code>/federation_fetch</code>, enrollment (proof‑of‑key), <code>/trust-mark-status</code>, <code>/federation_search</code></td><td><span class="chip c-med">Partial</span> Express app, embed‑first</td></tr>
+        <tr><td><code>tmi-server</code></td><td>Trust Mark Issuer: <code>POST /trustmarks/issue</code> (digest‑bound), bearer‑gated</td><td><span class="chip c-med">Partial</span> Express app</td></tr>
+        <tr><td><code>fedmgr-mcp</code></td><td>MCP server: 13 tools incl. the critical <code>validate_mcp_invocation</code> fail‑closed verdict; advertises <code>org.letsfederate/oidf-trust</code> at handshake</td><td><span class="chip c-med">Partial</span> deep‑imports <code>ta-server</code></td></tr>
+        <tr><td><code>fedmgr</code></td><td><code>fedmgr</code> CLI: keys / trustmark / oci / search</td><td><span class="chip c-good">Yes</span></td></tr>
+        <tr><td><code>waypoint</code></td><td>MCP multiplexer / gateway: admits downstream MCPs by accepted‑anchor policy + chain verification; HTTP/SSE + OAuth edge</td><td><span class="chip c-good">Yes</span> (routing still PoC)</td></tr>
+        <tr><td><code>fedvec</code></td><td>Semantic search over federation entities (RuVector <code>.rvf</code>, offline embeddings) — new</td><td><span class="chip c-good">Yes</span></td></tr>
+      </table>
+      <p><strong>End‑to‑end trust flow:</strong> enroll (proof‑of‑key, origin‑bound) → TA signs subordinate statement → TMI issues digest‑bound trust mark → verifier walks the chain to the anchor (<code>validateTrustChain</code>) → <code>validate_mcp_invocation</code> checks signatures of subordinate + entity + invocation token, that <code>aud</code> includes the endpoint, and that the required trust mark is present. Clean DAG, no circular deps.</p>
+
+      <div class="callout bad"><strong>The npm story is broken/ambiguous.</strong> Root <code>package.json</code> is <code>name:"fedmgr" v1.0.0</code> with <code>main:"index.js"</code> — but <code>index.js</code> does not exist. There are two "fedmgr" libraries: the <em>legacy</em> <code>@letsfederate/fedmgr</code> (built from <code>src/fedmgr/</code>, what <code>Dockerfile.fedmgr</code> installs and runs) and the maintained <code>@letsfederate/fedmgr</code> (<code>packages/fedmgr</code>). An adopter typing <code>npm i @letsfederate/fedmgr</code> gets the old monolith. → <strong>Q1.</strong></p></div>
+
+      <h4>The demos (three stacks, very uneven)</h4>
+      <table>
+        <tr><th>Stack</th><th>What it proves</th><th>Verdict</th></tr>
+        <tr><td><code>examples/lab/</code> (TA+TMI+registry)</td><td>Real end‑to‑end OIDF crypto; <code>up.sh</code> one command, generates keys, waits for health</td><td><span class="chip c-good">Excellent</span> canonical</td></tr>
+        <tr><td><code>examples/01-trust-circle/round-trip.sh</code></td><td>build → cosign sign → syft SBOM → digest‑bound trust mark → verify; preflights tools, aborts rather than fake</td><td><span class="chip c-good">Exemplary</span></td></tr>
+        <tr><td>root <code>docker-compose.yml</code> (federation‑admin + mcp‑core + openbao)</td><td>Legacy stack; needs <code>scripts/setup.sh</code>, prebuilt tarballs, keys, GitHub OAuth first; <code>docker-compose up</code> → opaque "keys not found"</td><td><span class="chip c-high">Fragile / legacy</span></td></tr>
+      </table>
+      <p class="muted">Note: I could not run the lab live here — this environment has no <code>docker compose</code> v2 plugin (docker socket is reachable via sudo, but compose isn't installed). The docker assessment is a careful static read.</p>
+    </div>
+  </section>
+
+  <!-- TESTS -->
+  <section class="sec open" id="tests">
+    <h3><span class="tw">▶</span>🧪 Test run — results &amp; the harness problem</h3>
+    <div class="body">
+      <div class="callout bad"><strong>The headline <code>npm test</code> is theater.</strong> <code>scripts/run_tests.sh</code> reports <code>Total tests: 4</code> — it counts four <em>categories</em> (unit/integration/e2e/security), each a jest run against a separate <em>legacy</em> <code>scripts/tests/</code> tree (14 files), and prints a green ✓. It <strong>never runs the 156 real package tests</strong>. For a product whose entire value is trust, a headline test command that manufactures a green checkmark is a credibility landmine. → <strong>R1.</strong></div>
+
+      <h4>Real coverage (measured via <code>npm run test:packages</code>) — all green</h4>
+      <table>
+        <tr><th>Package</th><th>Tests</th><th>Pass</th><th>Notes</th></tr>
+        <tr><td>ta-server</td><td>62</td><td>62</td><td>OIDF endpoints, chain, enrollment, mgmt‑auth, federation‑search</td></tr>
+        <tr><td>fedmgr-mcp</td><td>31</td><td>31</td><td>tools, invocation verdict, oidf‑trust extension</td></tr>
+        <tr><td>kms</td><td>25</td><td>17</td><td><span class="chip c-med">8 skipped</span> — PKCS#11/HSM (needs SoftHSM)</td></tr>
+        <tr><td>waypoint</td><td>23</td><td>23</td><td>policy, mux, crypto admission, HTTP/OAuth</td></tr>
+        <tr><td>tmi-server</td><td>10</td><td>10</td><td>issue schema, signing</td></tr>
+        <tr><td>fedmgr</td><td>8</td><td>8</td><td>commands</td></tr>
+        <tr><td>fedvec</td><td>5</td><td>5</td><td>real RVF round‑trip + ranking</td></tr>
+        <tr><td><strong>Total</strong></td><td><strong>164</strong></td><td><strong>156</strong></td><td><strong>0 failing · 8 skipped (HSM)</strong> · full workspace build green</td></tr>
+      </table>
+      <p><strong>Gaps:</strong> (1) two disconnected test worlds — legacy <code>scripts/tests/</code> jest vs. the real <code>packages/*/test</code> node:test suites; the top‑level command runs the wrong one. (2) HSM path is untested by default (8 skips). (3) committed <code>test-results/*.json</code> artifacts churn on every run. (4) no cross‑package integration test that stands up TA+TMI+MCP together in‑process (only the shell lab does, and it can't run in CI without docker+cosign+syft).</p>
+    </div>
+  </section>
+
+  <!-- RECOMMENDATIONS -->
+  <section class="sec open" id="recs">
+    <h3><span class="tw">▶</span>⭐ Rank‑ordered recommendations</h3>
+    <div class="body">
+      <p class="muted">Ranked by <em>impact on the adoption + trust goal ÷ cost</em>. Filter:</p>
+      <div class="filterbar" id="recfilter">
+        <span class="filterbtn active" data-f="all">All</span>
+        <span class="filterbtn" data-f="crit">Critical</span>
+        <span class="filterbtn" data-f="high">High</span>
+        <span class="filterbtn" data-f="med">Medium</span>
+        <span class="filterbtn" data-f="credibility">Credibility</span>
+        <span class="filterbtn" data-f="trust">Trust</span>
+        <span class="filterbtn" data-f="adoption">Adoption</span>
+      </div>
+      <table id="rectable">
+        <tr><th>#</th><th>Recommendation</th><th>Why it matters</th><th>Sev</th><th>Effort</th></tr>
+
+        <tr data-sev="crit" data-theme="credibility">
+          <td><span class="rank">R1</span></td>
+          <td><strong>Make <code>npm test</code> tell the truth.</strong> Point it at the real package suites (<code>test:packages</code>), delete or wire in the legacy <code>scripts/tests/</code> tree, gitignore <code>test-results/*.json</code>.</td>
+          <td>A trust product with a fake‑green test command is disqualifying. Cheapest possible credibility win.</td>
+          <td><span class="chip c-crit">Critical</span></td><td><span class="eff">~½ day</span></td>
+        </tr>
+
+        <tr data-sev="crit" data-theme="adoption">
+          <td><span class="rank">R2</span></td>
+          <td><strong>Fix the npm identity.</strong> Choose the canonical published surface; repair/remove the broken root <code>fedmgr</code> package; deprecate or delete the legacy <code>@letsfederate/fedmgr</code>; write one "what do I install" page.</td>
+          <td>Adopters literally can't tell what to install; the obvious name resolves to dead code. → Q1.</td>
+          <td><span class="chip c-crit">Critical</span></td><td><span class="eff">1–2 days</span></td>
+        </tr>
+
+        <tr data-sev="high" data-theme="credibility">
+          <td><span class="rank">R3</span></td>
+          <td><strong>Retire the dual architecture.</strong> Delete (or quarantine) the <code>src/</code> monolith + legacy root compose/Dockerfiles; make <code>packages/*</code> + <code>examples/lab</code> the single source of truth. Add a bold "src/ is legacy" banner until then.</td>
+          <td>Two live architectures + two demo stacks = every reader asks "which is real?". → Q2.</td>
+          <td><span class="chip c-high">High</span></td><td><span class="eff">2–4 days</span></td>
+        </tr>
+
+        <tr data-sev="crit" data-theme="trust">
+          <td><span class="rank">R4</span></td>
+          <td><strong>Make revocation live.</strong> Have admission (<code>validate_mcp_invocation</code> + Waypoint) query <code>/trust-mark-status</code>, and persist the revocation registry to the existing SQLite (survive restart).</td>
+          <td>Today the kill‑switch exists but is never pulled and is lost on restart — a revoked‑but‑unexpired mark is still accepted. → Q6.</td>
+          <td><span class="chip c-crit">Critical</span></td><td><span class="eff">2–3 days</span></td>
+        </tr>
+
+        <tr data-sev="crit" data-theme="trust">
+          <td><span class="rank">R5</span></td>
+          <td><strong>Close the code‑pedigree loop.</strong> Enforce the container digest at call time and verify provenance/SBOM (cosign attestation → SLSA/in‑toto); actually validate the trust mark's <code>evidence</code>/<code>adopted_from_jws</code> fields.</td>
+          <td>This is the product's headline promise. Right now the digest is decorative — nothing proves the running server is the attested code (TOCTOU). → Q3.</td>
+          <td><span class="chip c-crit">Critical</span></td><td><span class="eff">2–4 wks</span></td>
+        </tr>
+
+        <tr data-sev="high" data-theme="trust">
+          <td><span class="rank">R6</span></td>
+          <td><strong>Bind trust mark ↔ subordinate statement</strong> cryptographically (include the TA entity id + subordinate hash in the mark).</td>
+          <td>A compromised/colluding TMI can currently mint a mark for an entity that has no matching subordinate; verifiers check the two artifacts independently.</td>
+          <td><span class="chip c-high">High</span></td><td><span class="eff">2–3 days</span></td>
+        </tr>
+
+        <tr data-sev="high" data-theme="trust">
+          <td><span class="rank">R7</span></td>
+          <td><strong>Harden &amp; enforce the invocation boundary.</strong> Check invocation‑token <code>exp</code>; tighten clock skew (60s→30s, configurable); make audience validation <em>middleware that blocks before dispatch</em>, not an optional tool.</td>
+          <td>Trust is only enforced if a server voluntarily calls the verdict tool; expired tokens aren't rejected. → Q5.</td>
+          <td><span class="chip c-high">High</span></td><td><span class="eff">2–4 days</span></td>
+        </tr>
+
+        <tr data-sev="high" data-theme="adoption">
+          <td><span class="rank">R8</span></td>
+          <td><strong>Configuration management.</strong> Add <code>.fedmgr.json</code> / structured env so TA/TMI URLs, anchors, policy, KMS choice aren't hardcoded to <code>localhost</code>.</td>
+          <td>You cannot deploy off localhost without editing code today. Hard blocker for any real adopter. → Q4.</td>
+          <td><span class="chip c-high">High</span></td><td><span class="eff">3–5 days</span></td>
+        </tr>
+
+        <tr data-sev="high" data-theme="trust">
+          <td><span class="rank">R9</span></td>
+          <td><strong>Key rotation + revocation signaling.</strong> Add key status/version metadata to JWKS (<code>active|deprecated|revoked</code>, <code>rotated_at</code>); sign with newest, honor grace period.</td>
+          <td>A leaked TA/entity key is usable until every issued JWS expires; there's no way to say "stop using key X now". → Q8.</td>
+          <td><span class="chip c-high">High</span></td><td><span class="eff">5–7 days</span></td>
+        </tr>
+
+        <tr data-sev="high" data-theme="trust">
+          <td><span class="rank">R10</span></td>
+          <td><strong>Harden enrollment JWKS validation.</strong> Enforce EC P‑256, <code>use:"sig"</code>, reject private‑key material — match the strict import in <code>kms</code>.</td>
+          <td>Enrollment currently stores whatever JWKS it fetched with weak checks.</td>
+          <td><span class="chip c-high">High</span></td><td><span class="eff">1–2 days</span></td>
+        </tr>
+
+        <tr data-sev="med" data-theme="adoption">
+          <td><span class="rank">R11</span></td>
+          <td><strong>Docker hygiene &amp; demo clarity.</strong> Pin <code>node:current-alpine3.21</code>→<code>node:22-slim</code>; fix the broken <code>federation-admin</code> healthcheck (uses uninstalled <code>wget</code>); multi‑stage + non‑root <code>Dockerfile.fedmgr</code>; build‑time tarball existence check; add <code>DEMOS.md</code> explaining the three stacks.</td>
+          <td>Floating base tags kill reproducibility; the root stack fails opaquely for new users. First impressions.</td>
+          <td><span class="chip c-med">Medium</span></td><td><span class="eff">1–2 days</span></td>
+        </tr>
+
+        <tr data-sev="med" data-theme="adoption">
+          <td><span class="rank">R12</span></td>
+          <td><strong>Extract <code>FederationStore</code> interface + Postgres adapter.</strong> (The fedvec doc already flags this as the multi‑replica prerequisite.)</td>
+          <td>SQLite‑only blocks k8s/cloud and multi‑replica; also the natural home for persisted revocation (R4). → Q4.</td>
+          <td><span class="chip c-med">Medium</span></td><td><span class="eff">4–6 days</span></td>
+        </tr>
+
+        <tr data-sev="med" data-theme="trust">
+          <td><span class="rank">R13</span></td>
+          <td><strong>Kill contract drift.</strong> Export <code>IssueRequestSchema</code> from <code>tmi-server</code> and validate <code>fedmgr-mcp</code>'s issue body against it at runtime (today field names are hand‑built; drift is silent).</td>
+          <td>Silent field loss between MCP tool and TMI; only a contract test catches it.</td>
+          <td><span class="chip c-med">Medium</span></td><td><span class="eff">1 day</span></td>
+        </tr>
+
+        <tr data-sev="med" data-theme="trust">
+          <td><span class="rank">R14</span></td>
+          <td><strong>Consistent admin auth middleware</strong> across all TA management/dashboard routes.</td>
+          <td>Some admin routes check <code>ADMIN_TOKEN</code>, others don't — accidental exposure risk.</td>
+          <td><span class="chip c-med">Medium</span></td><td><span class="eff">2–3 days</span></td>
+        </tr>
+
+        <tr data-sev="med" data-theme="credibility">
+          <td><span class="rank">R15</span></td>
+          <td><strong>Documentation prune.</strong> Delete 8 stale docs, archive journals/evidence to <code>docs/history/</code>, add legacy banners (see Doc Prune). → Q7.</td>
+          <td>~40% of docs describe a pre‑workspace world; good current docs are buried.</td>
+          <td><span class="chip c-med">Medium</span></td><td><span class="eff">½–1 day</span></td>
+        </tr>
+      </table>
+      <p class="muted">Quick‑win bundle (do first, ~2–3 days total): <span class="pill">R1</span><span class="pill">R7 (exp+skew)</span><span class="pill">R10</span><span class="pill">R13</span><span class="pill">R15</span> — all cheap, all raise trust/credibility immediately.</p>
+    </div>
+  </section>
+
+  <!-- SECURITY -->
+  <section class="sec" id="security">
+    <h3><span class="tw">▶</span>🔐 Trust &amp; code‑pedigree gap analysis</h3>
+    <div class="body">
+      <div class="two">
+        <div class="callout good"><strong>Verifiable end‑to‑end today</strong>
+          <ul>
+            <li>OIDF chain verification (ES256, <code>authority_hints</code> walk, jose signature checks)</li>
+            <li>SSRF defense (<code>assertSafeUrl</code>, consolidated in <code>kms</code>)</li>
+            <li>Trust‑mark JWS signature + expiry</li>
+            <li>MCP invocation verdict: subordinate + entity + invocation signatures, <code>aud</code>⊇endpoint, required mark present</li>
+            <li>Proof‑of‑key enrollment with origin binding</li>
+          </ul>
+        </div>
+        <div class="callout bad"><strong>Aspirational / demo‑only</strong>
+          <ul>
+            <li>Container digest ↔ running code — <em>bound in the mark, never enforced</em></li>
+            <li>Revocation kill‑switch — endpoint exists, never queried, in‑memory</li>
+            <li>Key rotation — no revocation signaling on JWKS</li>
+            <li>SLSA/in‑toto provenance &amp; SBOM — generated, never validated</li>
+            <li>Runtime attestation — absent</li>
+          </ul>
+        </div>
+      </div>
+      <p class="muted">20 ranked gaps were identified; the highest‑severity ones map to R4–R10 above. Condensed:</p>
+      <table>
+        <tr><th>Sev</th><th>Gap</th><th>Evidence</th><th>Fix → rec</th></tr>
+        <tr><td><span class="chip c-crit">CRIT</span></td><td>No runtime digest verification (TOCTOU)</td><td><code>kms/src/trust-validator.ts</code> — digest is display‑only</td><td>R5</td></tr>
+        <tr><td><span class="chip c-crit">CRIT</span></td><td>Revocation not checked by default</td><td><code>ta-server/.../trust-mark-status.ts</code> never called by verifiers; in‑memory <code>Set</code></td><td>R4</td></tr>
+        <tr><td><span class="chip c-crit">CRIT</span></td><td>No trust‑mark ↔ subordinate binding</td><td>independent artifacts; TMI can over‑claim</td><td>R6</td></tr>
+        <tr><td><span class="chip c-high">HIGH</span></td><td>Key rotation has no revocation signaling</td><td>JWKS flat array, no status/version</td><td>R9</td></tr>
+        <tr><td><span class="chip c-high">HIGH</span></td><td>Waypoint admits once, never re‑checks</td><td><code>waypoint/src/trust-validator.ts</code></td><td>R4/R7</td></tr>
+        <tr><td><span class="chip c-high">HIGH</span></td><td>Audience enforced only if server opts in</td><td><code>validate_mcp_invocation</code> is a tool, not middleware</td><td>R7</td></tr>
+        <tr><td><span class="chip c-high">HIGH</span></td><td>PKCS#11 optional/not built → silent SoftKMS fallback</td><td><code>kms/package.json</code> optional dep</td><td>R9/Q8</td></tr>
+        <tr><td><span class="chip c-high">HIGH</span></td><td>Invocation token <code>exp</code> not checked</td><td><code>fedmgr-mcp/src/openid-ops.ts</code></td><td>R7</td></tr>
+        <tr><td><span class="chip c-med">MED</span></td><td>No SLSA/in‑toto provenance verification</td><td><code>round-trip.sh</code> makes SBOM, never validated</td><td>R5</td></tr>
+        <tr><td><span class="chip c-med">MED</span></td><td>Revocation not persisted (lost on restart)</td><td>in‑memory <code>Set</code>; SQLite table exists but unused</td><td>R4</td></tr>
+        <tr><td><span class="chip c-med">MED</span></td><td>Clock skew 60s too permissive</td><td><code>chain-verifier.ts</code>, <code>trust-validator.ts</code></td><td>R7</td></tr>
+        <tr><td><span class="chip c-med">MED</span></td><td>Entity metadata not schema‑validated</td><td><code>Record&lt;string,unknown&gt;</code></td><td>R13‑adjacent</td></tr>
+        <tr><td><span class="chip c-low">LOW</span></td><td>No TMI issuance audit trail; evidence fields ignored; chain‑depth not configurable</td><td>tmi‑server; trust‑validator</td><td>backlog</td></tr>
+      </table>
+      <p><strong>Verdict:</strong> the trust <em>architecture</em> is sound; the trust <em>operations</em> — continuous validation, revocation propagation, runtime attestation — are incomplete. "Code pedigree" is currently a signed decoration, not an enforced guarantee.</p>
+    </div>
+  </section>
+
+  <!-- DOCKER -->
+  <section class="sec" id="docker">
+    <h3><span class="tw">▶</span>🐳 Docker &amp; demo assessment</h3>
+    <div class="body">
+      <div class="callout good"><strong>The trust lab is exemplary.</strong> <code>./examples/lab/up.sh</code> is a genuine one‑command experience (generates keys via a step‑cli image, builds TA+TMI+registry, waits for health), and <code>round-trip.sh</code> preflights <code>docker/cosign/syft/jq</code> and aborts rather than faking a result. TA/TMI Dockerfiles are model citizens: <code>node:22-slim</code>, multi‑stage, non‑root, <code>fetch</code>‑based healthchecks.</div>
+      <h4>Where it falls down</h4>
+      <ul>
+        <li><strong>Root compose is legacy &amp; fragile.</strong> Builds federation‑admin + mcp‑core + openbao; requires <code>scripts/setup.sh</code>, prebuilt tarballs, keys, and GitHub OAuth <em>first</em>. Bare <code>docker-compose up</code> → opaque "keys not found", exit 1. No README.</li>
+        <li><strong>Floating base images.</strong> <code>Dockerfile.fedmgr/federation-admin/mcp-core/token-exchange</code> use <code>node:current-alpine3.21</code> → non‑reproducible day‑to‑day. <code>Dockerfile.fedmgr</code> is single‑stage, unpruned, runs as <strong>root</strong>.</li>
+        <li><strong>Broken healthcheck.</strong> <code>federation-admin</code>'s HEALTHCHECK calls <code>wget</code>, which isn't installed in the image.</li>
+        <li><strong>Unpinned public images</strong> (<code>registry:2</code>, <code>step-cli:latest</code>, <code>openbao:latest</code>); no digest pinning. <code>.env.example</code> ships <code>OPENBAO_TOKEN=dev-only-root-token</code>.</li>
+        <li><strong>Orphaned scripts:</strong> <code>validate-infrastructure.sh</code> (self‑notes "OIDC mock deprecated"), <code>bootstrap-federation.sh</code>, <code>enhanced-conformance.sh</code> (no integration point).</li>
+      </ul>
+      <p>All of this rolls up into <span class="pill">R11</span> and the legacy‑removal decision <span class="pill">Q2 / R3</span>.</p>
+    </div>
+  </section>
+
+  <!-- USE CASES -->
+  <section class="sec" id="usecases">
+    <h3><span class="tw">▶</span>🎯 Use cases — where letsfederate makes MCP trustworthy</h3>
+    <div class="body">
+      <p class="muted">Ordered roughly by how ready the codebase is to deliver them today.</p>
+      <table>
+        <tr><th>Use case</th><th>What it delivers</th><th>Ready?</th></tr>
+        <tr><td><strong>Enterprise MCP allow‑listing</strong></td><td>An AI platform only admits MCP servers cryptographically vouched by its trust anchor — supply‑chain gating for agent tools.</td><td><span class="chip c-good">Now</span> (needs R7 middleware to be non‑optional)</td></tr>
+        <tr><td><strong>Zero‑trust MCP gateway (Waypoint)</strong></td><td>A multiplexer in front of many MCP servers admits each only if chain‑valid to an accepted anchor + required mark; OAuth edge for identity.</td><td><span class="chip c-med">Near</span> (routing is PoC; R4/R7)</td></tr>
+        <tr><td><strong>Multi‑vendor MCP registry / marketplace</strong></td><td>Discover &amp; verify third‑party MCP servers by federation membership + trust marks; semantic discovery via <code>fedvec</code> ("who can sign containers?").</td><td><span class="chip c-good">Now</span></td></tr>
+        <tr><td><strong>CI/CD provenance issuance</strong></td><td>At build time, sign the container (cosign), generate an SBOM (syft), and mint a digest‑bound trust mark so downstream consumers can verify pedigree (<code>round-trip.sh</code>).</td><td><span class="chip c-good">Now</span> (issuance); <span class="chip c-high">verification gap</span> (R5)</td></tr>
+        <tr><td><strong>Agent‑to‑agent trust</strong></td><td>One AI agent verifies another agent's MCP server (chain + mark) before delegating a task.</td><td><span class="chip c-med">Near</span></td></tr>
+        <tr><td><strong>Regulated / audited environments</strong></td><td>HSM‑backed signing (PKCS#11/OpenBao), audit trail of who vouched for what, revocation kill‑switch.</td><td><span class="chip c-high">Later</span> (R4/R9/Q8 + audit)</td></tr>
+        <tr><td><strong>Enforced code pedigree</strong></td><td>Refuse to invoke an MCP server whose <em>running</em> code isn't attested to a signed digest + provenance — the flagship promise.</td><td><span class="chip c-crit">Not yet</span> (R5, the big one)</td></tr>
+      </table>
+    </div>
+  </section>
+
+  <!-- DOCS -->
+  <section class="sec" id="docs">
+    <h3><span class="tw">▶</span>🧹 Documentation — prune &amp; keep</h3>
+    <div class="body">
+      <p>Docs are ~85% accurate but the good current set is buried under a pre‑workspace layer. Everything below is reversible via git.</p>
+      <div class="two">
+        <div>
+          <h4 class="del">Delete (stale / superseded / duplicate)</h4>
+          <ul>
+            <li class="del"><code>docs/architecture-april2025.md</code> — self‑marked "needs refinement"; superseded by <code>architecture.md</code></li>
+            <li class="del"><code>docs/quickstart.md</code> — generic, superseded by trust‑lab‑quickstart</li>
+            <li class="del"><code>docs/fedmgr-quickstart.md</code> — pre‑workspace <code>build-npm.sh</code> flow</li>
+            <li class="del"><code>docs/specs/fedmgr-spec.md</code>, <code>docs/specs/mcp-core-spec.md</code> — pre‑workspace CommonJS specs</li>
+            <li class="del"><code>docs/specs/improvement-add-npx.md</code> + <code>docs/assessmentresults-add-npx.md</code> — implemented; merge a line into README</li>
+            <li class="del"><code>plans/arch-prd-chatgpt-candidate-20250620.md</code>, <code>plans/arch-codereview-20250620.md</code> — 2025 PRD/review, findings resolved</li>
+            <li class="del"><code>build/readme.md</code> — no operational value</li>
+          </ul>
+        </div>
+        <div>
+          <h4 class="arc">Archive → <code>docs/history/</code></h4>
+          <ul>
+            <li class="arc"><code>docs/ralph-loop/increment-A…F</code> — dev journal (valuable history, not operational)</li>
+            <li class="arc"><code>docs/evidence/phase-6.*</code> — raw test‑evidence proofs</li>
+            <li class="arc"><code>docs/buildjournal/IMPLEMENTATION_SUMMARY.md</code> — pre‑workspace web‑UI journal</li>
+          </ul>
+          <h4 class="kp">Keep (canonical)</h4>
+          <ul>
+            <li class="kp"><code>README.md</code>, <code>docs/architecture.md</code>, <code>docs/decisions.md</code>, <code>docs/proposed-workplan.md</code></li>
+            <li class="kp"><code>docs/walkthroughs/*</code> (trust‑lab, openid‑ops‑mcp, validate‑mcp‑invocation)</li>
+            <li class="kp"><code>docs/trust-guide.md</code>, <code>security-faq.md</code>, <code>signing.md</code>, <code>extending-trustmarks.md</code>, <code>testing.md</code></li>
+            <li class="kp"><code>docs/architecture/trust-fabric-architecture.md</code>, <code>docs/specs/openid-federation-trust-backplane-mvp.md</code>, <code>docs/fedvec-vector-search.md</code></li>
+          </ul>
+        </div>
+      </div>
+      <div class="callout"><strong>Add:</strong> a bold "⚠️ <code>src/</code> is legacy — all work is in <code>packages/</code>" banner in <code>architecture.md</code>; a <code>docs/deployment-guide.md</code> and <code>docs/troubleshooting.md</code> (both currently missing and both blockers for adopters).</div>
+    </div>
+  </section>
+
+  <!-- NEXT -->
+  <section class="sec open" id="next">
+    <h3><span class="tw">▶</span>🚀 What we'd work on next (sequenced)</h3>
+    <div class="body">
+      <h4>Sprint 0 — "earn the trust badge" (½ week, all cheap)</h4>
+      <p><span class="pill">R1 real tests</span><span class="pill">R7 exp+skew</span><span class="pill">R10 JWKS validation</span><span class="pill">R13 schema contract</span><span class="pill">R15 doc prune</span> — removes the credibility landmines with almost no risk.</p>
+      <h4>Sprint 1 — "one clear front door" (1–2 weeks) — needs Q1, Q2</h4>
+      <p><span class="pill">R2 npm identity</span><span class="pill">R3 kill legacy</span><span class="pill">R11 docker hygiene + DEMOS.md</span> — a new adopter can now find, install, and run the right thing.</p>
+      <h4>Sprint 2 — "operational trust" (1–2 weeks) — needs Q5, Q6</h4>
+      <p><span class="pill">R4 live revocation + persist</span><span class="pill">R6 mark↔subordinate binding</span><span class="pill">R8 config</span> — trust decisions become enforceable and deployable off localhost.</p>
+      <h4>Sprint 3 — "the flagship: enforced pedigree" (2–4 weeks) — needs Q3</h4>
+      <p><span class="pill">R5 runtime attestation + provenance</span><span class="pill">R9 key rotation</span><span class="pill">R12 Postgres store</span> — the promise becomes a guarantee; production/k8s viable.</p>
+      <div class="callout good">Sequencing rationale: credibility first (nobody adopts a trust tool they can't trust), then a clean front door (so they <em>can</em> adopt), then the operational + flagship features (so it's worth adopting). Every sprint is independently shippable.</div>
+    </div>
+  </section>
+
+  <!-- FALL DOWN -->
+  <section class="sec open" id="falldown">
+    <h3><span class="tw">▶</span>💥 Where we fall down (blunt)</h3>
+    <div class="body">
+      <ul>
+        <li>A product that sells <em>trust</em> ships a headline test command that <strong>manufactures a green checkmark</strong> and hides the 156 real tests.</li>
+        <li>The obvious install name (<code>@letsfederate/fedmgr</code>) resolves to <strong>legacy dead code</strong>; the root package's <code>main</code> doesn't even exist.</li>
+        <li><strong>Two architectures and two demo stacks run side by side</strong> — readers can't tell which is real.</li>
+        <li>"Code pedigree" is <strong>demonstrated, not enforced</strong> — the container digest is decorative at verification time.</li>
+        <li>Revocation is a <strong>kill‑switch nobody pulls</strong> (never queried, lost on restart).</li>
+        <li>Trust is enforced <strong>only if the MCP server volunteers</strong> to call the verdict tool — no gate by default.</li>
+        <li>You <strong>can't run it off localhost</strong> without editing code, and <strong>can't scale past SQLite</strong>.</li>
+      </ul>
+      <p class="muted">None of these are architectural dead‑ends — they're finishing work and clarity. The bones are good; the promises just aren't paid off yet.</p>
+    </div>
+  </section>
+
+  <div style="text-align:right;margin-top:10px"><button class="print" onclick="window.print()">🖨 Print / Save PDF</button></div>
+  <div class="foot">
+    Assessment generated 2026‑07‑04 · commit <code>13c7f33</code> · fedmgr @ branch <code>codex/refactor-docker-compose-for-trust-anchor-implementation</code><br/>
+    Method: 4 parallel static‑analysis passes (library, docker, docs, security) + measured test run. Docker lab not run live (no <code>docker compose</code> plugin in this env). Findings carry <code>file:line</code> evidence in the source reports.
+  </div>
+</div>
+
+<script>
+  // collapse/expand
+  document.querySelectorAll('.sec>h3').forEach(function(h){
+    h.addEventListener('click',function(){h.parentElement.classList.toggle('open');});
+  });
+  // recommendation filter
+  var fb=document.getElementById('recfilter');
+  if(fb){
+    fb.addEventListener('click',function(e){
+      var b=e.target.closest('.filterbtn'); if(!b)return;
+      fb.querySelectorAll('.filterbtn').forEach(function(x){x.classList.remove('active');});
+      b.classList.add('active');
+      var f=b.dataset.f;
+      document.querySelectorAll('#rectable tr[data-sev]').forEach(function(row){
+        var show = f==='all' || row.dataset.sev===f || row.dataset.theme===f;
+        row.style.display = show?'':'none';
+      });
+    });
+  }
+</script>
+</body>
+</html>

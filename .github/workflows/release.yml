@@ -1,0 +1,89 @@
+name: Release
+
+# Publishes the REUSABLE LIBRARIES and the CLI to npm via semantic-release.
+# Deployable services (ta-server, tmi-server, waypoint) are NOT npm packages —
+# they ship as container images (see containers.yml). Libraries publish first,
+# then the CLI (which depends on them).
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: release
+  cancel-in-progress: false   # never cancel a running release
+
+permissions:
+  contents: write        # push changelog + tag
+  issues: write          # create release issues
+  pull-requests: write   # update PRs with release notes
+  id-token: write        # npm provenance (OIDC)
+
+jobs:
+  # ── Verify everything passes before releasing ─────────────────────────────
+  pre-release-check:
+    name: Pre-release verification
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.x"
+          cache: npm
+      - run: npm ci
+      - run: npm run build -ws --if-present
+      - run: npm test
+
+  # ── Stage 1: reusable libraries (no internal @letsfederate deps) ──────────
+  release-libs:
+    name: "Release lib: ${{ matrix.pkg }}"
+    needs: pre-release-check
+    runs-on: ubuntu-latest
+    strategy:
+      max-parallel: 1          # sequential: shared git tags/changelog commits
+      matrix:
+        pkg: [kms, obs, oidf-verify, ssc-attest]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0       # full history for commit-analyzer
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.x"
+          registry-url: "https://registry.npmjs.org"
+          cache: npm
+      - run: npm ci
+      - run: npm run build -w @letsfederate/${{ matrix.pkg }}
+      - name: Semantic release — @letsfederate/${{ matrix.pkg }}
+        working-directory: packages/${{ matrix.pkg }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_PROVENANCE: "true"
+        run: npx semantic-release-monorepo
+
+  # ── Stage 2: the CLI (depends on the libraries above) ─────────────────────
+  release-fedmgr:
+    name: Release @letsfederate/fedmgr
+    needs: release-libs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24.x"
+          registry-url: "https://registry.npmjs.org"
+          cache: npm
+      - run: npm ci
+      - run: npm run build -w @letsfederate/fedmgr
+      - name: Semantic release — @letsfederate/fedmgr
+        working-directory: packages/fedmgr
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_PROVENANCE: "true"
+        run: npx semantic-release-monorepo

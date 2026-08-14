@@ -1,0 +1,55 @@
+{
+  "name": "@letsfederate/fedmgr-mcp",
+  "version": "0.0.1",
+  "description": "MCP server for fedmgr — interact with letsfederate trust infrastructure via AI assistants",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "fedmgr-mcp": "./dist/bin.js"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -b",
+    "start": "node dist/bin.js",
+    "dev": "tsx src/bin.ts",
+    "test": "node --test test/*.test.mjs",
+    "test:report": "node --test test/*.test.mjs --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=../../test-results/fedmgr-mcp.junit.xml",
+    "pretest": "npm run build --silent"
+  },
+  "dependencies": {
+    "@letsfederate/kms": "*",
+    "@letsfederate/oidf-verify": "*",
+    "@letsfederate/ta-server": "*",
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@opentelemetry/api": "^1.9.1",
+    "commander": "^12.0.0",
+    "jose": "^6.2.8"
+  },
+  "devDependencies": {
+    "@letsfederate/tmi-server": "*",
+    "@types/node": "^24.0.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.0"
+  },
+  "engines": {
+    "node": ">=24.0.0 <27.0.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/letsfederate/fedmgr.git",
+    "directory": "packages/fedmgr-mcp"
+  },
+  "license": "MIT"
+}

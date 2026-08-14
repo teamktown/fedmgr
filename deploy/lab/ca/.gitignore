@@ -1,0 +1,4 @@
+# Lab TLS root (public cert) is exported here by up.sh — machine-specific,
+# never committed. Private CA keys stay inside the caddy-data volume.
+*
+!.gitignore

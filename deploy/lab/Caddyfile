@@ -1,0 +1,30 @@
+# Lab TLS edge (option A) — Caddy terminates https for the trust lab using its
+# embedded internal CA (smallstep-derived). It runs INSIDE ta-server's network
+# namespace, so `localhost:<backend>` below reaches the TA and entity-host
+# directly, and `https://localhost:944x` is the SAME origin from the host, the
+# TA's own fetches, and every other lab container — one identity everywhere.
+#
+# The root certificate is exported to deploy/lab/ca/root.crt by up.sh; point
+# NODE_EXTRA_CA_CERTS at it (containers get it mounted at /lab-ca/root.crt).
+{
+	local_certs
+	skip_install_trust
+}
+
+# Trust Anchor — identity origin https://localhost:9443
+localhost:9443 {
+	tls internal
+	reverse_proxy localhost:8090
+}
+
+# Trustmark Issuer — identity origin https://localhost:9444
+localhost:9444 {
+	tls internal
+	reverse_proxy tmi-server:8080
+}
+
+# Entity host (leaf statements/JWKS) — identity origin https://localhost:9445
+localhost:9445 {
+	tls internal
+	reverse_proxy localhost:9631
+}

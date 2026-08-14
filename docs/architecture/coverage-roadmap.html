@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Trust Fabric — Coverage & Roadmap</title>
+<script>
+  (function () {
+    const saved = localStorage.getItem('theme');
+    const dark = saved ? saved === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+    document.documentElement.classList.toggle('dark', dark);
+  })();
+</script>
+<style>
+  :root {
+    --bg:#FAF9F5; --surface:#FFFFFF; --surface2:#F0EEE6;
+    --ink:#141413; --body:#3D3D3A; --muted:#87867F;
+    --line:#D1CFC5; --line-soft:#E6E3DA;
+    --clay:#D97757; --olive:#788C5D; --blue:#5B7E96; --violet:#8A6BA8; --gold:#C9A45C;
+    --serif: ui-serif, Georgia, "Times New Roman", serif;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  html.dark {
+    --bg:#141413; --surface:#1F1F1D; --surface2:#2A2A28;
+    --ink:#FAF9F5; --body:#D1CFC5; --muted:#87867F;
+    --line:#3D3D3A; --line-soft:#2A2A28;
+    --clay:#E48A6E; --olive:#9DB07C; --blue:#7FA3BC; --violet:#B496D0; --gold:#D4B36F;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--body); font-family:var(--sans); font-size:15px; line-height:1.6;
+    -webkit-font-smoothing:antialiased; padding:48px 24px 120px; }
+  .page { max-width:980px; margin:0 auto; }
+  .eyebrow { font-family:var(--mono); font-size:11px; letter-spacing:0.09em; text-transform:uppercase; color:var(--muted); margin-bottom:10px; }
+  h1 { font-family:var(--serif); font-weight:500; font-size:32px; color:var(--ink); letter-spacing:-0.01em; margin-bottom:10px; }
+  h2 { font-family:var(--serif); font-weight:500; font-size:22px; color:var(--ink); margin:38px 0 12px; padding-bottom:6px; border-bottom:1px solid var(--line-soft); }
+  h3 { font-size:14px; font-family:var(--mono); letter-spacing:0.04em; text-transform:uppercase; color:var(--muted); margin:20px 0 8px; }
+  p { margin-bottom:12px; max-width:760px; }
+  code { font-family:var(--mono); font-size:.88em; color:var(--clay); }
+  a { color:var(--blue); }
+  .lead { font-size:16.5px; color:var(--body); max-width:760px; }
+  .toggle { position:fixed; top:16px; right:16px; font-family:var(--mono); font-size:10.5px; text-transform:uppercase; letter-spacing:0.08em;
+    padding:6px 11px; border:1px solid var(--line); border-radius:6px; background:var(--surface); color:var(--muted); cursor:pointer; }
+  .planes { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px; margin:16px 0; }
+  .plane { background:var(--surface); border:1px solid var(--line); border-radius:10px; border-left:3px solid var(--muted); padding:13px 15px; }
+  .plane.identity { border-left-color:var(--violet); } .plane.data { border-left-color:var(--clay); }
+  .plane.control { border-left-color:var(--olive); } .plane.pedigree { border-left-color:var(--blue); }
+  .plane .pt { font-weight:600; color:var(--ink); font-size:14.5px; }
+  .plane .pk { font-family:var(--mono); font-size:10px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); margin-bottom:5px; }
+  .plane .pd { font-size:12.5px; color:var(--body); margin-top:4px; }
+  .callout { background:var(--surface2); border:1px solid var(--line); border-radius:10px; padding:14px 16px; margin:16px 0; }
+  .callout .ct { font-family:var(--serif); font-size:16px; color:var(--ink); margin-bottom:5px; }
+  table { border-collapse:collapse; width:100%; margin:10px 0 4px; font-size:13.5px; }
+  th, td { border:1px solid var(--line); padding:7px 10px; text-align:left; vertical-align:top; }
+  th { background:var(--surface2); font-family:var(--mono); font-size:11px; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); font-weight:500; }
+  td.pct { font-family:var(--mono); font-weight:600; white-space:nowrap; }
+  .bar { display:inline-block; height:7px; border-radius:4px; background:var(--clay); vertical-align:middle; margin-left:6px; }
+  .barbg { display:inline-block; width:64px; height:7px; border-radius:4px; background:var(--line); vertical-align:middle; }
+  .rank { display:flex; gap:12px; align-items:flex-start; padding:11px 0; border-bottom:1px solid var(--line-soft); }
+  .rank .n { font-family:var(--serif); font-size:22px; color:var(--clay); width:30px; flex:none; line-height:1; }
+  .rank .b { font-weight:600; color:var(--ink); }
+  .rank .meta { font-family:var(--mono); font-size:11px; color:var(--muted); margin-top:2px; }
+  .pill { font-family:var(--mono); font-size:10px; padding:2px 7px; border-radius:999px; border:1px solid var(--line); color:var(--muted); }
+  .pill.lo { color:var(--olive); border-color:var(--olive); } .pill.md { color:var(--gold); border-color:var(--gold); } .pill.hi { color:var(--clay); border-color:var(--clay); }
+  ul { margin:6px 0 12px 20px; } li { margin-bottom:5px; }
+</style>
+</head>
+<body>
+<button class="toggle" id="t">Theme</button>
+<div class="page">
+  <div class="eyebrow">fedmgr · waypoint · letsfederate.org — assessment 2026-06-15</div>
+  <h1>Trust Fabric — Coverage &amp; Roadmap</h1>
+  <p class="lead">A pressure-test of where the trust fabric stands and what to build next. Companion to the interactive
+  <a href="./trust-fabric.html">architecture diagram</a> and the <a href="./preview.html">full markdown</a>.</p>
+
+  <h2>The four planes</h2>
+  <div class="planes">
+    <div class="plane identity"><div class="pk">peer of data</div><div class="pt">Identity</div><div class="pd">Inbound <b>OAuth/OIDC</b> sign-in (GitHub, Google, Okta, Entra). <b>Not</b> OpenID Federation. Required for HTTP/SSE; skipped for local stdio.</div></div>
+    <div class="plane data"><div class="pk">runtime · PEP</div><div class="pt">Data — waypoint</div><div class="pd">OAuth <b>in</b>, OIDF <b>out</b>: gates downstream MCPs by accepted-anchor + VALID chain; exposes only trusted tools.</div></div>
+    <div class="plane control"><div class="pk">source of truth</div><div class="pt">Control — fedmgr</div><div class="pd">Owns trust topology (TAs, MCPs, endpoints) via the registry. Sign it; waypoint consumes &amp; drift-checks it.</div></div>
+    <div class="plane pedigree"><div class="pk">distribution</div><div class="pt">Pedigree — letsfederate.org</div><div class="pd">Signs the fedmgr/waypoint <b>code you run</b> (cosign + SBOM + OIDF mark) — independent of your runtime CA.</div></div>
+  </div>
+
+  <div class="callout">
+    <div class="ct">Finalized scope: waypoint HTTP/SSE + OAuth edge auth (the identity plane)</div>
+    <p style="margin:0">The pivot insight: <b>signing into waypoint is plain OAuth/OIDC — not OpenID Federation.</b> The moment
+    waypoint turns downstream it <b>becomes</b> OpenID Federation (chain validation + trust marks). So the cloud/web capability is
+    one bundle: a remote transport (Streamable HTTP/SSE) + an OAuth edge (reuse the GitHub/token-exchange bones in
+    <code>src/fedmgr</code>). Inbound = identity; outbound = federation; waypoint is the boundary.</p>
+  </div>
+
+  <h2>Matrix A — coverage by component</h2>
+  <table>
+    <tr><th>Component</th><th>%</th><th></th><th>Rationale / gap</th></tr>
+    <tr><td>kms (signing, validators, SSRF)</td><td class="pct">85%</td><td><span class="barbg"><span class="bar" style="width:54px"></span></span></td><td>most mature; PKCS11 stub, no Cloud-KMS provider</td></tr>
+    <tr><td>ta-server</td><td class="pct">75%</td><td><span class="barbg"><span class="bar" style="width:48px"></span></span></td><td>statements, federation_list/fetch, enrollment, mgmt; bootstrap fragility, no signed registry export</td></tr>
+    <tr><td>tmi-server</td><td class="pct">70%</td><td><span class="barbg"><span class="bar" style="width:45px"></span></span></td><td>issue + schemas + status; adoption/revocation lifecycle thin</td></tr>
+    <tr><td>fedmgr-mcp (+ oidf-trust ext)</td><td class="pct">70%</td><td><span class="barbg"><span class="bar" style="width:45px"></span></span></td><td>tools incl. validate_mcp_invocation + extension + OTel; extension not client-enforceable</td></tr>
+    <tr><td>fedmgr CLI (TS) + src/fedmgr (JS)</td><td class="pct">50%</td><td><span class="barbg"><span class="bar" style="width:32px"></span></span></td><td>registry/list/inspect + signing exist but <b>unconverged</b>; no signed registry</td></tr>
+    <tr><td><b>waypoint</b></td><td class="pct">45%</td><td><span class="barbg"><span class="bar" style="width:29px"></span></span></td><td>multiplexer + accepted-anchor + crypto admission proven; <b>no HTTP transport, no identity edge, no status/hydration</b></td></tr>
+    <tr><td>Identity / inbound auth</td><td class="pct">25%</td><td><span class="barbg"><span class="bar" style="width:16px"></span></span></td><td>GitHub OAuth/token-exchange bones in src/fedmgr; not wired to waypoint or HTTP</td></tr>
+    <tr><td>Trust mechanisms (chain/mark/digest/revoke/audit)</td><td class="pct">55%</td><td><span class="barbg"><span class="bar" style="width:35px"></span></span></td><td>chain ✓, mark ✓, digest ✓; <b>revocation re-check ✗, audit ledger ✗</b></td></tr>
+    <tr><td>Signing / distribution (patient zero)</td><td class="pct">55%</td><td><span class="barbg"><span class="bar" style="width:35px"></span></span></td><td>CI cosign+SBOM+provenance ✓; OIDF mark over releases ✗, public TA hosting ✗</td></tr>
+    <tr><td>Deployment (local/hosted/enterprise/aggregator)</td><td class="pct">30%</td><td><span class="barbg"><span class="bar" style="width:19px"></span></span></td><td>local stdio ✓; hosted/remote ✗, enterprise mgmt ✗, aggregator ✗</td></tr>
+  </table>
+
+  <h2>Matrix B — coverage by user journey</h2>
+  <table>
+    <tr><th>Journey</th><th>%</th><th></th><th>Works → missing</th></tr>
+    <tr><td>Local individual (Claude Code, stdio)</td><td class="pct">60%</td><td><span class="barbg"><span class="bar" style="width:38px"></span></span></td><td>gate + crypto admission work → no status/registry hydration</td></tr>
+    <tr><td><b>Cloud / web (Claude.ai, OpenAI)</b> ⭐</td><td class="pct">10%</td><td><span class="barbg"><span class="bar" style="width:6px"></span></span></td><td>trust material HTTP-reachable → <b>no remote transport, no OAuth edge, no hosted model</b></td></tr>
+    <tr><td>Enterprise / VSCode managed</td><td class="pct">15%</td><td><span class="barbg"><span class="bar" style="width:10px"></span></span></td><td>trust mechanics exist → no managed config push, no signed-registry distribution</td></tr>
+    <tr><td>Aggregator (Portkey / metaMCP)</td><td class="pct">20%</td><td><span class="barbg"><span class="bar" style="width:13px"></span></span></td><td>policy reusable → no integration; clients strip the extension</td></tr>
+    <tr><td>Bootstrap your own trust in minutes</td><td class="pct">65%</td><td><span class="barbg"><span class="bar" style="width:42px"></span></span></td><td>up.sh + round-trip work → not packaged/signed as "trust in a box"</td></tr>
+    <tr><td>Verify code pedigree (letsfederate.org)</td><td class="pct">40%</td><td><span class="barbg"><span class="bar" style="width:26px"></span></span></td><td>cosign+SBOM in CI → no OIDF mark over releases, no public TA</td></tr>
+  </table>
+
+  <h2>Critical path (ranked)</h2>
+  <div class="rank"><div class="n">1</div><div><span class="b">waypoint HTTP/SSE transport + OAuth edge auth (identity plane)</span> <span class="pill md">Med</span><div class="meta">unlocks the entire cloud/web journey · single biggest blocker · inbound OIDC, outbound OIDF</div></div></div>
+  <div class="rank"><div class="n">2</div><div><span class="b">Hosted-waypoint deployment (container + HTTPS)</span> <span class="pill md">Med</span><div class="meta">the .com / service model · trust material already reachable</div></div></div>
+  <div class="rank"><div class="n">3</div><div><span class="b">Sign registry.json + waypoint hydrate-from-registry</span> <span class="pill md">Med</span><div class="meta">kills split-brain; enables waypoint_status as a runtime view + drift check</div></div></div>
+  <div class="rank"><div class="n">4</div><div><span class="b">Continuous revocation re-check (kill-switch)</span> <span class="pill lo">Low</span><div class="meta">high security value, primitives exist · finishes E8</div></div></div>
+  <div class="rank"><div class="n">5</div><div><span class="b">Audit ledger (hash-chain + sign)</span> <span class="pill md">Med</span><div class="meta">a trust tool must be more trustworthy than what it polices</div></div></div>
+  <div class="rank"><div class="n">6</div><div><span class="b">One-command signed "trust-in-a-box"</span> <span class="pill lo">Low–Med</span><div class="meta">packaging of what already works · bootstrap-in-minutes</div></div></div>
+  <div class="rank"><div class="n">7</div><div><span class="b">OIDF trust mark over releases (patient zero)</span> <span class="pill md">Med</span><div class="meta">code-pedigree round trip vs letsfederate.org</div></div></div>
+  <div class="rank"><div class="n">8</div><div><span class="b">fedmgr CLI convergence + managed config</span> <span class="pill hi">Med–High</span><div class="meta">the enterprise journey · after the cloud core</div></div></div>
+  <div class="rank"><div class="n">9</div><div><span class="b">Aggregator policy module (Portkey/metaMCP)</span> <span class="pill lo">Low</span><div class="meta">reuse evaluateOidfTrust · opportunistic</div></div></div>
+
+  <h2>Open decisions</h2>
+  <ul>
+    <li><b>Trust default:</b> self-host your own CA (primary, agency) + optionally <code>trust.letsfederate.org</code> as the code-pedigree signer (secondary).</li>
+    <li><b>Identity providers:</b> GitHub first (base example); design the edge for generic OIDC (Google/Okta/Entra) from day one.</li>
+    <li><b>Enforcement tiers:</b> observe → guardrail → enforce → ironhand — operator-selected; honest that it's bypassable until clients embed the obligation.</li>
+    <li><b>waypoint stays a view</b> over fedmgr's signed registry — never a second registry.</li>
+  </ul>
+
+  <p style="color:var(--muted);font-size:12.5px;margin-top:30px">Overall fabric ≈ 45–50%. Trust mechanics are strong and lab-proven; delivery surfaces (cloud transport, identity edge, hosted service, revocation/audit) are the work ahead. Items 1–2 gate the cloud priority.</p>
+</div>
+<script>
+  document.getElementById('t').addEventListener('click',()=>{
+    const dark=!document.documentElement.classList.contains('dark');
+    document.documentElement.classList.toggle('dark',dark);
+    localStorage.setItem('theme',dark?'dark':'light');
+  });
+</script>
+</body>
+</html>

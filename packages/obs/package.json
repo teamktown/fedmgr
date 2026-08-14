@@ -1,0 +1,39 @@
+{
+  "name": "@letsfederate/obs",
+  "version": "0.0.1",
+  "description": "fedmgr observability core — structured/syslog dual-format logging (LOG_LEVEL) + OpenTelemetry-API spans named for trust operations. Near-zero cost, no forced exporter.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "test": "node --test test/*.test.mjs",
+    "prepublishOnly": "npm run build && npm test",
+    "pretest": "npm run build --silent"
+  },
+  "dependencies": {
+    "@opentelemetry/api": "^1.9.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.4.0"
+  },
+  "engines": {
+    "node": ">=24.0.0 <27.0.0"
+  },
+  "license": "MIT"
+}

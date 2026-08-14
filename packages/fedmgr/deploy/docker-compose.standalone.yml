@@ -1,0 +1,44 @@
+# fedmgr — STANDALONE ecosystem (TARGET SHAPE, not yet functional)
+#
+# This is the image-based compose `npx @letsfederate/fedmgr init` would use with
+# NO checkout: pull pre-built TA/TMI images instead of building from source.
+#
+# ⚠️  The images below are NOT published yet (no operational registry). Until
+#     they are, use the checkout path (deploy/lab/, built from source).
+#     `fedmgr doctor` will tell you what's available.
+#
+# Override the image refs via env once a registry exists:
+#   FEDMGR_TA_IMAGE, FEDMGR_TMI_IMAGE
+
+networks:
+  trust-lab:
+    driver: bridge
+
+volumes:
+  registry-data:
+
+services:
+  registry:
+    image: registry:2
+    ports: ["5000:5000"]
+    volumes: ["registry-data:/var/lib/registry"]
+    networks: [trust-lab]
+    restart: unless-stopped
+
+  ta-server:
+    image: "${FEDMGR_TA_IMAGE:-ghcr.io/letsfederate/fedmgr-ta:latest}"  # not published yet
+    ports: ["8090:8090"]
+    environment:
+      PORT: "8090"
+      TA_ENTITY_ID: "${TA_ENTITY_ID:-http://localhost:8090}"
+    networks: [trust-lab]
+    restart: unless-stopped
+
+  tmi-server:
+    image: "${FEDMGR_TMI_IMAGE:-ghcr.io/letsfederate/fedmgr-tmi:latest}"  # not published yet
+    ports: ["8080:8080"]
+    environment:
+      PORT: "8080"
+      TMI_ISSUER: "${TMI_ISSUER:-http://localhost:8080}"
+    networks: [trust-lab]
+    restart: unless-stopped

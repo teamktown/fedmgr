@@ -1,0 +1,40 @@
+# docker-compose.softhsm-test.yml
+#
+# Runs the Pkcs11Provider integration tests against a real SoftHSM2 library
+# inside a throwaway Docker container.
+#
+# Usage (from repo root):
+#   # Build the kms package first:
+#   npm run build --workspace packages/kms
+#
+#   # Run the test:
+#   docker compose -f deploy/lab/docker-compose.softhsm-test.yml up \
+#     --build --exit-code-from test
+#
+#   # Clean up:
+#   docker compose -f deploy/lab/docker-compose.softhsm-test.yml down --rmi local
+#
+# The container:
+#   1. Installs SoftHSM2 + pkcs11js native addon
+#   2. Inits a token and generates an EC P-256 key via pkcs11-tool
+#   3. Sets SOFTHSM2_MODULE, PKCS11_PIN, PKCS11_KEY_LABEL
+#   4. Runs node --test test/pkcs11.test.mjs
+#      (all 8 tests that are otherwise skipped in CI will now execute)
+#
+# Exit code from the `test` service propagates to the host shell, making this
+# suitable for optional CI stages (e.g. a nightly job with HSM availability).
+
+version: "3.9"
+
+services:
+  test:
+    build:
+      context: ../..
+      dockerfile: deploy/lab/Dockerfile.softhsm-test
+    container_name: fedmgr-pkcs11-test
+    environment:
+      # Override these to match your token setup if needed
+      PKCS11_PIN: "testpin"
+      PKCS11_KEY_LABEL: "kms-test-key"
+    # No ports needed — pure compute test
+    restart: "no"

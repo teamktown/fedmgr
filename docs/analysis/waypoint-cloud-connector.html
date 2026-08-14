@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Waypoint → Claude cloud — readiness</title>
+<style>
+  :root{--bg:#0b0f14;--panel:#121821;--panel2:#161d28;--ink:#e6edf3;--muted:#9fb0c3;--line:#22303f;--accent:#4dd0a7;--accent2:#5aa9ff;--warn:#f5c451;--bad:#ff6b6b;--radius:14px;--mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;}
+  *{box-sizing:border-box}
+  body{margin:0;background:radial-gradient(1200px 600px at 70% -10%,#132030 0,var(--bg) 55%);color:var(--ink);font:16px/1.6 ui-sans-serif,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;}
+  .wrap{max-width:1000px;margin:0 auto;padding:40px 24px 80px}
+  a{color:var(--accent2);text-decoration:none}a:hover{text-decoration:underline}
+  .back{font:600 13px/1 var(--mono);color:var(--muted)}
+  .kicker{color:var(--accent);font:600 13px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;margin-top:18px}
+  h1{font-size:30px;margin:.3em 0 .1em}
+  .sub{color:var(--muted);max-width:76ch}
+  h2{font-size:20px;margin:32px 0 6px;padding-bottom:8px;border-bottom:1px solid var(--line)}
+  .card{background:linear-gradient(180deg,var(--panel),var(--panel2));border:1px solid var(--line);border-radius:var(--radius);padding:18px 20px;margin:14px 0}
+  .verdict{border-left:3px solid var(--warn)}
+  ul{margin:8px 0 8px 2px;padding-left:20px}li{margin:6px 0}
+  code{font-family:var(--mono);background:#0e141c;border:1px solid var(--line);padding:2px 6px;border-radius:6px;font-size:.88em}
+  table{width:100%;border-collapse:collapse;margin:10px 0;font-size:14px}
+  th,td{text-align:left;padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{color:var(--muted);font:600 12px/1 var(--mono);letter-spacing:.06em;text-transform:uppercase}
+  .st{font:600 11px/1 var(--mono);padding:4px 8px;border-radius:6px;white-space:nowrap}
+  .ok{color:#0b1a14;background:var(--accent)}.gap{color:#1a1405;background:var(--warn)}.no{color:var(--muted);border:1px solid var(--line)}
+  pre{margin:8px 0;padding:12px;background:#0e141c;border:1px solid var(--line);border-radius:8px;overflow-x:auto;font:13px/1.5 var(--mono);color:var(--ink)}
+  footer{margin-top:36px;color:var(--muted);font-size:13px;border-top:1px solid var(--line);padding-top:18px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="index.html">← workbench</a>
+  <div class="kicker">Great test · 2026-07-05</div>
+  <h1>Waypoint → Claude cloud: can we, safely?</h1>
+  <p class="sub">Waypoint is the trust-enforcing MCP multiplexer. The test: could a Claude cloud instance
+  connect to <em>our local</em> waypoint over the internet, safely? Verdict below is from actually running it
+  and probing every endpoint — not from reading the code.</p>
+
+  <div class="card verdict">
+    <strong>Verdict: the transport + security are sound and fail-closed, but waypoint is not yet
+    <em>auto-connectable</em> by claude.ai.</strong> It authenticates like a resource server that trusts an
+    external IdP's tokens; a remote MCP client can't <em>discover where to log in</em>, because the MCP
+    OAuth-discovery endpoints aren't served yet. Bridgeable — see the path below.
+  </div>
+
+  <h2>What works (verified live)</h2>
+  <table>
+    <tr><th>Check</th><th>Result</th></tr>
+    <tr><td><code>GET /health</code></td><td><span class="st ok">200</span> open, <code>{"status":"ok","tools":N}</code></td></tr>
+    <tr><td><code>POST /mcp</code> no token</td><td><span class="st ok">401</span> fail-closed, <code>WWW-Authenticate: Bearer</code></td></tr>
+    <tr><td><code>POST /mcp</code> bogus token</td><td><span class="st ok">401</span> (was a 500 — <strong>fixed this pass</strong>: invalid tokens now reject as <code>InvalidTokenError</code>)</td></tr>
+    <tr><td>Transport</td><td>Streamable HTTP (modern MCP remote spec): <code>POST/GET/DELETE /mcp</code></td></tr>
+    <tr><td>Bearer verification</td><td>issuer + audience + signature + <code>exp</code> checked against IdP JWKS; missing <code>exp</code> → denied</td></tr>
+    <tr><td>Downstream trust</td><td>accepted-anchor policy + optional cryptographic chain validation; untrusted downstreams never connect, their tools never reachable</td></tr>
+  </table>
+
+  <h2>The gaps (what a claude.ai remote connector needs)</h2>
+  <table>
+    <tr><th>Gap</th><th>Status</th><th>Why it matters</th></tr>
+    <tr><td>OAuth discovery metadata</td><td><span class="st gap">missing</span></td><td><code>/.well-known/oauth-protected-resource</code> → 404, and the 401 has no <code>resource_metadata=…</code> pointer. Per the MCP auth spec, that's how a client <em>discovers</em> the authorization server. Without it, claude.ai can't start the login flow.</td></tr>
+    <tr><td>Authorization server + DCR</td><td><span class="st gap">missing</span></td><td>Waypoint verifies tokens from an external IdP but isn't an AS and does no Dynamic Client Registration (RFC 7591). claude.ai auto-registers with the AS — it can't with an external Google/Okta IdP.</td></tr>
+    <tr><td>CORS</td><td><span class="st no">none</span></td><td>No CORS headers; a browser-origin preflight would fail. Needs a proxy or explicit CORS for the browser leg.</td></tr>
+    <tr><td>Public HTTPS URL</td><td><span class="st no">n/a</span></td><td>The VM is a private IP; Claude cloud can't reach it without a tunnel.</td></tr>
+  </table>
+
+  <h2>The safe path to actually connect it</h2>
+  <div class="card">
+    <ol>
+      <li><strong>Add the MCP OAuth-discovery layer</strong> (scoped follow-up): serve
+      <code>/.well-known/oauth-protected-resource</code>, add <code>resource_metadata</code> to the 401
+      <code>WWW-Authenticate</code>, and either become a minimal AS with DCR + PKCE or front waypoint with one
+      claude.ai can register against. This is the real "make it a spec-compliant remote MCP server" work.</li>
+      <li><strong>Expose over HTTPS with a tunnel</strong> — e.g. a Cloudflare quick tunnel
+      (<code>cloudflared tunnel --url http://localhost:8077</code>) gives an ephemeral public HTTPS URL, no
+      inbound firewall change. <em>Not done here — exposing the VM to the internet needs your explicit go.</em></li>
+      <li><strong>Add it in claude.ai</strong> → Settings → Connectors → Add custom connector → the tunnel URL.
+      The OAuth flow gates access; waypoint's downstream trust policy gates which tools are reachable.</li>
+    </ol>
+    <p class="sub" style="margin:6px 0 0">Safety holds throughout: <code>/mcp</code> is bearer-gated (fail-closed)
+    and downstreams are trust-gated, so even an exposed waypoint won't hand an unauthenticated caller a tool —
+    but exposure is still an outward-facing step that's yours to authorize.</p>
+  </div>
+
+  <h2>What you can do today (no new code)</h2>
+  <p class="sub">A non-browser MCP client with a manually-obtained bearer token from your IdP can already call
+  the local endpoint:</p>
+  <pre>WAYPOINT_CONFIG=./waypoint.json \
+WAYPOINT_OIDC_ISSUER=https://accounts.google.com \
+WAYPOINT_OIDC_AUDIENCE=http://localhost:8077 \
+WAYPOINT_OIDC_JWKS_URI=https://www.googleapis.com/oauth2/v3/certs \
+node packages/waypoint/dist/bin-http.js      # :8077
+curl -s localhost:8077/health                # {"status":"ok","tools":0}
+curl -s -X POST localhost:8077/mcp -H "authorization: Bearer &lt;id-token&gt;" ...</pre>
+
+  <footer>
+    Recommendation: the connector-readiness layer (discovery + DCR) is a clean next slice — say the word and I'll
+    build it doc→test→code, then we can flip on a tunnel with your go. Back to the
+    <a href="index.html">workbench</a>.
+  </footer>
+</div>
+</body>
+</html>

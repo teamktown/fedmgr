@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>fedmgr — Federation Dashboard</title>
+<style>
+  :root {
+    --bg:      #0f172a;
+    --surface: #1e293b;
+    --border:  #334155;
+    --text:    #e2e8f0;
+    --muted:   #94a3b8;
+    --accent:  #38bdf8;
+    --green:   #4ade80;
+    --yellow:  #fbbf24;
+    --red:     #f87171;
+    --purple:  #a78bfa;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  /* Layout */
+  .layout { display: flex; min-height: 100vh; }
+  .sidebar { width: 220px; background: var(--surface); border-right: 1px solid var(--border); padding: 1.5rem 1rem; flex-shrink: 0; }
+  .main    { flex: 1; padding: 2rem; overflow: auto; }
+
+  /* Sidebar */
+  .brand   { font-size: 1.1rem; font-weight: 700; color: var(--accent); margin-bottom: 2rem; display: flex; align-items: center; gap: 0.5rem; }
+  .brand span { font-size: 1.4rem; }
+  .nav-item {
+    display: block; padding: 0.5rem 0.75rem; border-radius: 6px;
+    color: var(--muted); text-decoration: none; cursor: pointer;
+    margin-bottom: 0.25rem; transition: all 0.15s;
+  }
+  .nav-item:hover, .nav-item.active { background: rgba(56,189,248,0.1); color: var(--accent); }
+  .nav-section { font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin: 1rem 0.75rem 0.5rem; }
+
+  /* Cards */
+  .stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+  .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; }
+  .stat-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+  .stat-value { font-size: 2rem; font-weight: 700; margin-top: 0.25rem; }
+  .stat-value.green  { color: var(--green); }
+  .stat-value.yellow { color: var(--yellow); }
+  .stat-value.red    { color: var(--red); }
+  .stat-value.purple { color: var(--purple); }
+  .stat-value.accent { color: var(--accent); }
+
+  /* Tables */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; margin-bottom: 1.5rem; }
+  .card-header { padding: 1rem 1.25rem; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+  .card-title  { font-weight: 600; font-size: 0.95rem; }
+  table        { width: 100%; border-collapse: collapse; }
+  th, td       { padding: 0.6rem 1.25rem; text-align: left; font-size: 13px; }
+  th           { color: var(--muted); font-weight: 500; border-bottom: 1px solid var(--border); }
+  tr:not(:last-child) td { border-bottom: 1px solid rgba(51,65,85,0.5); }
+  tr:hover td  { background: rgba(56,189,248,0.03); }
+
+  /* Badges */
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+  .badge-active         { background: rgba(74,222,128,0.15); color: var(--green); }
+  .badge-pending        { background: rgba(251,191,36,0.15); color: var(--yellow); }
+  .badge-revoked        { background: rgba(248,113,113,0.15); color: var(--red); }
+  .badge-decommissioned { background: rgba(148,163,184,0.15); color: var(--muted); }
+  .badge-intermediate   { background: rgba(167,139,250,0.15); color: var(--purple); }
+
+  /* Buttons */
+  .btn { display: inline-block; padding: 5px 12px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; border: none; transition: all 0.15s; }
+  .btn-danger   { background: rgba(248,113,113,0.15); color: var(--red); }
+  .btn-danger:hover { background: rgba(248,113,113,0.3); }
+  .btn-success  { background: rgba(74,222,128,0.15); color: var(--green); }
+  .btn-success:hover { background: rgba(74,222,128,0.3); }
+  .btn-ghost    { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+  .btn-ghost:hover { color: var(--text); border-color: var(--text); }
+
+  /* Page header */
+  .page-header { margin-bottom: 1.5rem; }
+  .page-title  { font-size: 1.5rem; font-weight: 700; }
+  .page-sub    { color: var(--muted); font-size: 13px; margin-top: 0.25rem; font-family: monospace; }
+
+  /* Section */
+  .section     { display: none; }
+  .section.active { display: block; }
+
+  /* Entity ID */
+  .entity-id { font-family: monospace; font-size: 12px; color: var(--accent); max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  /* Refresh */
+  .refresh-btn { font-size: 18px; cursor: pointer; color: var(--muted); background: none; border: none; }
+  .refresh-btn:hover { color: var(--accent); }
+
+  /* Enroll modal */
+  .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 100; }
+  .modal          { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 2rem; width: min(480px, 90vw); }
+  .modal-title    { font-size: 1.1rem; font-weight: 600; margin-bottom: 1.25rem; }
+  .form-group     { margin-bottom: 1rem; }
+  label           { display: block; font-size: 12px; color: var(--muted); margin-bottom: 0.4rem; }
+  input[type=text], textarea {
+    width: 100%; background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+    padding: 0.5rem 0.75rem; color: var(--text); font-size: 13px; outline: none;
+  }
+  input:focus, textarea:focus { border-color: var(--accent); }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 1.25rem; }
+  .hidden { display: none !important; }
+
+  /* Toast */
+  .toast { position: fixed; bottom: 1.5rem; right: 1.5rem; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem 1.25rem; font-size: 13px; z-index: 200; max-width: 360px; }
+  .toast.error { border-color: var(--red); color: var(--red); }
+  .toast.success { border-color: var(--green); color: var(--green); }
+
+  /* Empty state */
+  .empty { text-align: center; padding: 3rem 1rem; color: var(--muted); }
+  .empty-icon { font-size: 2.5rem; margin-bottom: 0.5rem; }
+</style>
+</head>
+<body>
+
+<div class="layout">
+  <!-- Sidebar -->
+  <nav class="sidebar">
+    <div class="brand"><span>🔐</span> fedmgr</div>
+    <div class="nav-section">Federation</div>
+    <a class="nav-item active" onclick="showSection('overview')">Overview</a>
+    <a class="nav-item" onclick="showSection('subordinates')">Subordinates</a>
+    <a class="nav-item" onclick="showSection('enrollment')">Enrollment</a>
+    <div class="nav-section">Security</div>
+    <a class="nav-item" onclick="showSection('revocations')">Revocations</a>
+    <a class="nav-item" onclick="showSection('audit')">Audit Log</a>
+    <div class="nav-section">Links</div>
+    <a class="nav-item" href="/.well-known/openid-federation" target="_blank">Entity Config ↗</a>
+    <a class="nav-item" href="/.well-known/jwks.json" target="_blank">JWKS ↗</a>
+    <a class="nav-item" href="/federation_list" target="_blank">Federation List ↗</a>
+    <a class="nav-item" href="/health" target="_blank">Health ↗</a>
+  </nav>
+
+  <!-- Main -->
+  <main class="main">
+
+    <!-- Overview -->
+    <div id="section-overview" class="section active">
+      <div class="page-header">
+        <div class="page-title">Federation Overview</div>
+        <div id="ta-entity-id" class="page-sub">Loading...</div>
+      </div>
+      <div id="stat-grid" class="stat-grid">
+        <div class="stat-card"><div class="stat-label">Active</div><div id="s-active" class="stat-value green">—</div></div>
+        <div class="stat-card"><div class="stat-label">Pending</div><div id="s-pending" class="stat-value yellow">—</div></div>
+        <div class="stat-card"><div class="stat-label">Revoked</div><div id="s-revoked" class="stat-value red">—</div></div>
+        <div class="stat-card"><div class="stat-label">Decommissioned</div><div id="s-decomm" class="stat-value" style="color:var(--muted)">—</div></div>
+        <div class="stat-card"><div class="stat-label">Intermediates</div><div id="s-inter" class="stat-value purple">—</div></div>
+        <div class="stat-card"><div class="stat-label">Total</div><div id="s-total" class="stat-value accent">—</div></div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Recent Activity</span>
+          <button class="refresh-btn" onclick="loadAll()">↻</button>
+        </div>
+        <table>
+          <thead><tr><th>Time</th><th>Event</th><th>Entity</th></tr></thead>
+          <tbody id="audit-mini"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Subordinates -->
+    <div id="section-subordinates" class="section">
+      <div class="page-header" style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div>
+          <div class="page-title">Subordinates</div>
+          <div class="page-sub">Entities registered with this Trust Anchor</div>
+        </div>
+        <button class="btn btn-ghost" onclick="showEnrollModal()">+ Enroll new</button>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">All Subordinates</span>
+          <button class="refresh-btn" onclick="loadSubordinates()">↻</button>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Entity ID</th>
+              <th>Type</th>
+              <th>Status</th>
+              <th>Enrolled</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="subs-table"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Enrollment -->
+    <div id="section-enrollment" class="section">
+      <div class="page-header">
+        <div class="page-title">Enrollment</div>
+        <div class="page-sub">Two-step proof-of-key-ownership enrollment</div>
+      </div>
+      <div class="card">
+        <div class="card-header"><span class="card-title">Enrollment Flow</span></div>
+        <div style="padding:1.25rem">
+          <p style="color:var(--muted);margin-bottom:1rem">
+            Use the MCP or CLI to enroll new entities. The flow requires:
+          </p>
+          <ol style="color:var(--muted);padding-left:1.5rem;line-height:2">
+            <li>POST <code style="color:var(--accent)">/enroll</code> with entity_id + jwks_url → receive nonce</li>
+            <li>Sign the nonce with your private key → compact JWS</li>
+            <li>POST <code style="color:var(--accent)">/enroll/:id/complete</code> with proof_jws → receive signed entity statement</li>
+          </ol>
+          <div style="margin-top:1.5rem;background:var(--bg);padding:1rem;border-radius:8px;font-family:monospace;font-size:12px;color:var(--accent)">
+# Via fedmgr MCP (recommended):<br>
+# Tell Claude: "Enroll https://mymcp.example.com into the federation"<br><br>
+# Via CLI:<br>
+curl -X POST http://localhost:8090/enroll \<br>
+  -H "Content-Type: application/json" \<br>
+  -d '{"entity_id":"https://mymcp.example","jwks_url":"https://mymcp.example/.well-known/jwks.json"}'
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Revocations -->
+    <div id="section-revocations" class="section">
+      <div class="page-header">
+        <div class="page-title">Revocations</div>
+        <div class="page-sub">Individual trustmark revocations (not full entity decommission)</div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Revoked Trustmarks</span>
+          <button class="refresh-btn" onclick="loadRevocations()">↻</button>
+        </div>
+        <table>
+          <thead><tr><th>Entity ID</th><th>Trustmark ID</th><th>Reason</th><th>Revoked At</th><th>Restored</th></tr></thead>
+          <tbody id="revocations-table"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Audit -->
+    <div id="section-audit" class="section">
+      <div class="page-header">
+        <div class="page-title">Audit Log</div>
+        <div class="page-sub">Immutable record of all federation events</div>
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Recent Events (last 50)</span>
+          <button class="refresh-btn" onclick="loadAudit()">↻</button>
+        </div>
+        <table>
+          <thead><tr><th>Time</th><th>Event</th><th>Entity ID</th><th>Actor</th></tr></thead>
+          <tbody id="audit-table"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- Enroll Modal -->
+<div id="enroll-modal" class="modal-backdrop hidden">
+  <div class="modal">
+    <div class="modal-title">Enroll New Entity</div>
+    <div class="form-group">
+      <label>Entity ID (URL)</label>
+      <input type="text" id="enroll-entity-id" placeholder="https://mymcp.example.com">
+    </div>
+    <div class="form-group">
+      <label>JWKS URL</label>
+      <input type="text" id="enroll-jwks-url" placeholder="https://mymcp.example.com/.well-known/jwks.json">
+    </div>
+    <div class="form-group">
+      <label>Notes (optional)</label>
+      <textarea id="enroll-notes" rows="2" placeholder="Description of this entity..."></textarea>
+    </div>
+    <div id="enroll-result" class="hidden" style="background:var(--bg);padding:1rem;border-radius:8px;font-family:monospace;font-size:12px;margin-top:1rem;word-break:break-all;"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" onclick="hideEnrollModal()">Cancel</button>
+      <button class="btn btn-success" onclick="submitEnrollment()">Start Enrollment</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+<script>
+  const BASE = '';
+
+  // ── Navigation ─────────────────────────────────────────────────────────
+  function showSection(name) {
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    document.getElementById('section-' + name).classList.add('active');
+    event.target.classList.add('active');
+    if (name === 'overview')      { loadOverview(); loadAuditMini(); }
+    if (name === 'subordinates')  loadSubordinates();
+    if (name === 'revocations')   loadRevocations();
+    if (name === 'audit')         loadAudit();
+  }
+
+  // ── Data loaders ────────────────────────────────────────────────────────
+  async function apiFetch(path) {
+    const r = await fetch(BASE + path);
+    if (!r.ok) throw new Error(`${r.status} ${r.statusText}`);
+    return r.json();
+  }
+
+  async function loadAll() { await Promise.all([loadOverview(), loadAuditMini()]); }
+
+  async function loadOverview() {
+    try {
+      const d = await apiFetch('/dashboard/api/overview');
+      document.getElementById('ta-entity-id').textContent = d.entity_id;
+      document.getElementById('s-active').textContent  = d.counts.active;
+      document.getElementById('s-pending').textContent = d.counts.pending;
+      document.getElementById('s-revoked').textContent = d.counts.revoked;
+      document.getElementById('s-decomm').textContent  = d.counts.decommissioned;
+      document.getElementById('s-inter').textContent   = d.counts.intermediates;
+      document.getElementById('s-total').textContent   = d.counts.total;
+    } catch(e) { showToast('Failed to load overview: ' + e.message, 'error'); }
+  }
+
+  async function loadAuditMini() {
+    try {
+      const entries = await apiFetch('/dashboard/api/audit');
+      const tbody = document.getElementById('audit-mini');
+      if (!entries.length) { tbody.innerHTML = '<tr><td colspan="3" class="empty">No events yet</td></tr>'; return; }
+      tbody.innerHTML = entries.slice(0, 8).map(e => `
+        <tr>
+          <td style="color:var(--muted);font-size:12px;white-space:nowrap">${fmtDate(e.createdAt)}</td>
+          <td><span class="badge ${eventBadge(e.eventType)}">${e.eventType.replace(/_/g,' ')}</span></td>
+          <td class="entity-id">${e.entityId ?? '—'}</td>
+        </tr>`).join('');
+    } catch(e) { /* silent */ }
+  }
+
+  async function loadSubordinates() {
+    try {
+      const rows = await apiFetch('/dashboard/api/subordinates');
+      const tbody = document.getElementById('subs-table');
+      if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="5"><div class="empty"><div class="empty-icon">📭</div>No subordinates enrolled yet</div></td></tr>';
+        return;
+      }
+      tbody.innerHTML = rows.map(r => `
+        <tr>
+          <td class="entity-id" title="${r.entity_id}">${r.entity_id}</td>
+          <td>${r.is_intermediate ? '<span class="badge badge-intermediate">Intermediate</span>' : '<span style="color:var(--muted);font-size:12px">Leaf</span>'}</td>
+          <td><span class="badge badge-${r.status}">${r.status}</span></td>
+          <td style="color:var(--muted);font-size:12px">${fmtDate(r.enrolled_at)}</td>
+          <td>
+            ${r.status === 'active'  ? `<button class="btn btn-danger" onclick="revokeEntity('${esc(r.entity_id)}')">Revoke</button>` : ''}
+            ${r.status === 'revoked' ? `<button class="btn btn-success" onclick="restoreEntity('${esc(r.entity_id)}')">Restore</button>` : ''}
+            ${['active','revoked'].includes(r.status) ? `<button class="btn btn-ghost" style="margin-left:4px" onclick="decommissionEntity('${esc(r.entity_id)}')">Decommission</button>` : ''}
+          </td>
+        </tr>`).join('');
+    } catch(e) { showToast('Failed to load subordinates: ' + e.message, 'error'); }
+  }
+
+  async function loadRevocations() {
+    try {
+      const rows = await apiFetch('/dashboard/api/revocations');
+      const tbody = document.getElementById('revocations-table');
+      if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="5"><div class="empty"><div class="empty-icon">✅</div>No trustmark revocations</div></td></tr>';
+        return;
+      }
+      tbody.innerHTML = rows.map(r => `
+        <tr>
+          <td class="entity-id">${r.entityId}</td>
+          <td class="entity-id">${r.trustmarkId}</td>
+          <td style="color:var(--muted)">${r.reason ?? '—'}</td>
+          <td style="color:var(--muted);font-size:12px">${fmtDate(r.revokedAt)}</td>
+          <td>${r.restoredAt ? `<span style="color:var(--green);font-size:12px">Restored ${fmtDate(r.restoredAt)}</span>` : '<span class="badge badge-revoked">Active revocation</span>'}</td>
+        </tr>`).join('');
+    } catch(e) { showToast('Failed to load revocations: ' + e.message, 'error'); }
+  }
+
+  async function loadAudit() {
+    try {
+      const entries = await apiFetch('/dashboard/api/audit');
+      const tbody = document.getElementById('audit-table');
+      if (!entries.length) { tbody.innerHTML = '<tr><td colspan="4"><div class="empty">No audit entries</div></td></tr>'; return; }
+      tbody.innerHTML = entries.map(e => `
+        <tr>
+          <td style="color:var(--muted);font-size:12px;white-space:nowrap">${fmtDate(e.createdAt)}</td>
+          <td><span class="badge ${eventBadge(e.eventType)}">${e.eventType.replace(/_/g,' ')}</span></td>
+          <td class="entity-id">${e.entityId ?? '—'}</td>
+          <td style="color:var(--muted);font-size:12px">${e.actor ?? '—'}</td>
+        </tr>`).join('');
+    } catch(e) { showToast('Failed to load audit log: ' + e.message, 'error'); }
+  }
+
+  // ── Actions ─────────────────────────────────────────────────────────────
+  async function revokeEntity(entityId) {
+    const reason = prompt(`Revoke ${entityId}?\nReason (optional):`, '');
+    if (reason === null) return;
+    try {
+      const r = await fetch(BASE + `/subordinates/${encodeURIComponent(entityId)}/revoke`, {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ reason })
+      });
+      const d = await r.json();
+      if (!r.ok) { showToast(d.message || d.error, 'error'); return; }
+      showToast(`Revoked ${entityId}`, 'success');
+      loadSubordinates(); loadOverview(); loadAuditMini();
+    } catch(e) { showToast(e.message, 'error'); }
+  }
+
+  async function restoreEntity(entityId) {
+    if (!confirm(`Restore ${entityId} to active status?`)) return;
+    try {
+      const r = await fetch(BASE + `/subordinates/${encodeURIComponent(entityId)}/restore`, { method: 'POST' });
+      const d = await r.json();
+      if (!r.ok) { showToast(d.message || d.error, 'error'); return; }
+      showToast(`Restored ${entityId}`, 'success');
+      loadSubordinates(); loadOverview(); loadAuditMini();
+    } catch(e) { showToast(e.message, 'error'); }
+  }
+
+  async function decommissionEntity(entityId) {
+    const reason = prompt(`Decommission ${entityId}?\nThis removes it permanently from the federation.\nReason:`, 'decommissioned by administrator');
+    if (reason === null) return;
+    try {
+      const r = await fetch(BASE + `/subordinates/${encodeURIComponent(entityId)}?reason=${encodeURIComponent(reason)}`, { method: 'DELETE' });
+      const d = await r.json();
+      if (!r.ok) { showToast(d.message || d.error, 'error'); return; }
+      showToast(`Decommissioned ${entityId}`, 'success');
+      loadSubordinates(); loadOverview(); loadAuditMini();
+    } catch(e) { showToast(e.message, 'error'); }
+  }
+
+  // ── Enrollment Modal ─────────────────────────────────────────────────────
+  function showEnrollModal() {
+    document.getElementById('enroll-modal').classList.remove('hidden');
+    document.getElementById('enroll-result').classList.add('hidden');
+    document.getElementById('enroll-entity-id').value = '';
+    document.getElementById('enroll-jwks-url').value = '';
+    document.getElementById('enroll-notes').value = '';
+  }
+
+  function hideEnrollModal() {
+    document.getElementById('enroll-modal').classList.add('hidden');
+  }
+
+  async function submitEnrollment() {
+    const entity_id = document.getElementById('enroll-entity-id').value.trim();
+    const jwks_url  = document.getElementById('enroll-jwks-url').value.trim();
+    const notes     = document.getElementById('enroll-notes').value.trim();
+    if (!entity_id || !jwks_url) { showToast('entity_id and jwks_url are required', 'error'); return; }
+
+    try {
+      const r = await fetch(BASE + '/enroll', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ entity_id, jwks_url, ...(notes ? { notes } : {}) })
+      });
+      const d = await r.json();
+      if (!r.ok) { showToast(d.message || d.error, 'error'); return; }
+
+      const resultEl = document.getElementById('enroll-result');
+      resultEl.innerHTML = `<strong style="color:var(--green)">✔ Enrollment started</strong><br><br>
+<strong>enrollment_id:</strong> ${d.enrollment_id}<br>
+<strong>nonce:</strong> ${d.nonce}<br>
+<strong>expires_at:</strong> ${d.expires_at}<br><br>
+<span style="color:var(--muted)">Sign the nonce with your private key and POST to:<br>
+/enroll/${d.enrollment_id}/complete</span>`;
+      resultEl.classList.remove('hidden');
+      loadOverview();
+    } catch(e) { showToast(e.message, 'error'); }
+  }
+
+  // ── Utilities ────────────────────────────────────────────────────────────
+  function fmtDate(iso) {
+    if (!iso) return '—';
+    const d = new Date(iso);
+    return d.toLocaleDateString() + ' ' + d.toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+  }
+
+  function esc(s) { return s.replace(/'/g, "\\'"); }
+
+  function eventBadge(e) {
+    if (e.includes('revoke') || e.includes('decommission')) return 'badge-revoked';
+    if (e.includes('complete') || e.includes('restore') || e.includes('activated')) return 'badge-active';
+    if (e.includes('started') || e.includes('pending')) return 'badge-pending';
+    return '';
+  }
+
+  let toastTimer;
+  function showToast(msg, type = '') {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.className = 'toast' + (type ? ' ' + type : '');
+    el.classList.remove('hidden');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.add('hidden'), 4000);
+  }
+
+  // ── Initial load ─────────────────────────────────────────────────────────
+  loadOverview();
+  loadAuditMini();
+
+  // Auto-refresh overview every 30 seconds
+  setInterval(loadOverview, 30000);
+</script>
+</body>
+</html>

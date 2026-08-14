@@ -1,0 +1,132 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "feat/**", "fix/**"]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── Package tests (node:test, multi-node matrix) ─────────────────────────
+  package-tests:
+    name: Package tests (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ["22.x", "24.x", "26.x"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build all packages
+        run: npm run build -ws --if-present
+
+      - name: Run package tests with JUnit output
+        run: ./scripts/test-report.sh
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-node-${{ matrix.node }}
+          path: test-results/
+          retention-days: 30
+
+  # ── Legacy Jest tests ─────────────────────────────────────────────────────
+  legacy-tests:
+    name: Legacy Jest tests (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ["22.x", "24.x", "26.x"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run legacy test suite
+        run: npm test
+        env:
+          CI: "true"
+
+  # ── TypeScript type-check ─────────────────────────────────────────────────
+  typecheck:
+    name: TypeScript type-check
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+          cache: npm
+      - run: npm ci
+      - run: npm run build -ws --if-present
+
+  # ── SBOM generation (attach to each CI run) ───────────────────────────────
+  sbom:
+    name: Generate SBOM
+    runs-on: ubuntu-latest
+    needs: [package-tests]
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js 22.x
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install CycloneDX
+        run: npm install -g @cyclonedx/cyclonedx-npm
+
+      - name: Generate SBOM — root workspace
+        run: |
+          mkdir -p sbom-output
+          cyclonedx-npm --output-format JSON --output-file sbom-output/fedmgr-sbom.json
+
+      - name: Generate SBOM per shipped unit (npm packages + container services)
+        run: |
+          for dir in packages/kms packages/fedmgr services/tmi-server services/ta-server; do
+            pkg=$(basename "$dir")
+            cyclonedx-npm \
+              --package-lock-only \
+              --output-format JSON \
+              --output-file sbom-output/${pkg}-sbom.json \
+              ${dir}/package.json || true
+          done
+
+      - name: Upload SBOM artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-${{ github.sha }}
+          path: sbom-output/
+          retention-days: 90

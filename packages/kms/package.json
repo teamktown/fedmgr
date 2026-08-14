@@ -1,0 +1,49 @@
+{
+  "name": "@letsfederate/kms",
+  "version": "0.0.1",
+  "description": "Pluggable KMS interface for letsfederate — SoftKMS (step CLI JWK) and PKCS#11 providers",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "CHANGELOG.md",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/letsfederate/fedmgr.git",
+    "directory": "packages/kms"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "test": "node --test test/*.test.mjs",
+    "test:hsm": "SOFTHSM2_MODULE=${SOFTHSM2_MODULE} PKCS11_PIN=${PKCS11_PIN:-testpin} PKCS11_KEY_LABEL=${PKCS11_KEY_LABEL:-kms-test-key} node --test test/pkcs11.test.mjs",
+    "test:report": "node --test test/*.test.mjs --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=../../test-results/kms.junit.xml",
+    "test:hsm:report": "SOFTHSM2_MODULE=${SOFTHSM2_MODULE} node --test test/pkcs11.test.mjs --test-reporter=spec --test-reporter-destination=stdout --test-reporter=junit --test-reporter-destination=../../test-results/kms-hsm.junit.xml",
+    "prepublishOnly": "npm run build && npm test",
+    "pretest": "npm run build --silent"
+  },
+  "dependencies": {
+    "jose": "^6.2.8",
+    "pkcs11js": "^2.1.6"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "typescript": "^5.4.0"
+  },
+  "engines": {
+    "node": ">=24.0.0 <27.0.0"
+  },
+  "license": "MIT"
+}

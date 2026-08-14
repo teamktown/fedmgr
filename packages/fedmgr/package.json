@@ -1,0 +1,58 @@
+{
+  "name": "@letsfederate/fedmgr",
+  "version": "0.0.1",
+  "description": "fedmgr — one front door for MCP trust: init a local trust ecosystem, manage keys, issue trustmarks, attest OCI artifacts, and search a federation.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "fedmgr": "./dist/bin.js"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "provenance",
+    "deploy",
+    "CHANGELOG.md",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/letsfederate/fedmgr.git",
+    "directory": "packages/fedmgr"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "dev": "tsx src/bin.ts",
+    "test": "node --test test/*.test.mjs",
+    "provenance:gen": "node ../../scripts/gen-provenance.mjs",
+    "prepublishOnly": "npm run build && npm test && npm run provenance:gen",
+    "pretest": "npm run build --silent"
+  },
+  "dependencies": {
+    "@letsfederate/kms": "*",
+    "@letsfederate/obs": "*",
+    "@letsfederate/oidf-verify": "*",
+    "@letsfederate/ssc-attest": "*",
+    "commander": "^12.0.0",
+    "jose": "^6.2.8"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.4.0"
+  },
+  "engines": {
+    "node": ">=24.0.0 <27.0.0"
+  },
+  "license": "MIT"
+}

@@ -1,60 +1,66 @@
 {
   "name": "fedmgr",
   "version": "1.0.0",
-  "description": "`fedmgr` is a developer tool and orchestration engine for building, managing, and testing **identity federations** across **MCP servers**, **OIDC providers**, and **trust anchors**.",
-  "main": "index.js",
-  "directories": {
-    "doc": "docs",
-    "test": "test"
-  },
+  "private": true,
+  "description": "fedmgr — OpenID Federation trust backplane for MCP. Private workspace root; the published front door is @letsfederate/fedmgr (packages/fedmgr).",
+  "workspaces": [
+    "packages/*",
+    "services/*",
+    "site"
+  ],
   "scripts": {
-    "test": "scripts/run_tests.sh",
-    "test:unit": "scripts/run_tests.sh --only-unit",
-    "test:integration": "scripts/run_tests.sh --only-integration",
-    "test:e2e": "scripts/run_tests.sh --only-e2e",
-    "test:security": "scripts/run_tests.sh --only-security",
-    "test:coverage": "scripts/run_tests.sh --with-coverage",
-    "start": "node server.js",
-    "dev": "nodemon server.js",
-    "cli": "node src/fedmgr.js",
-    "version": "scripts/run-conformance.sh"
+    "postinstall": "node scripts/patch-fastembed.cjs",
+    "build": "npm run build -ws --if-present",
+    "test": "npm run test:structure && npm run test -ws --if-present",
+    "test:structure": "node --test test/*.test.mjs",
+    "test:packages": "npm run test -ws --if-present",
+    "test:convergence": "npm test -w @letsfederate/kms -- --runInBand && npm test -w @letsfederate/fedmgr-mcp -- --runInBand",
+    "docs": "node tools/docs-serve.mjs",
+    "scan": "SSC/scripts/scan-all.sh",
+    "sbom": "SSC/scripts/generate-sbom.sh",
+    "lab:up": "docker compose -f deploy/lab/docker-compose.yml up --build",
+    "lab:down": "docker compose -f deploy/lab/docker-compose.yml down",
+    "tmi:keys:init": "bash scripts/tmi-keys-init.sh",
+    "tmi:dev": "npm run dev -w @letsfederate/tmi-server",
+    "tmi:start": "bash scripts/tmi-decrypt.sh --start",
+    "ta:keys:init": "bash scripts/tmi-keys-init.sh services/ta-server/keys",
+    "ta:dev": "npm run dev -w @letsfederate/ta-server",
+    "mcp:dev": "npm run dev -w @letsfederate/fedmgr-mcp",
+    "mcp:start": "npm run start -w @letsfederate/fedmgr-mcp"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/teamktown/fedmgr.git"
+    "url": "git+https://github.com/letsfederate/fedmgr.git"
   },
-  "keywords": [],
   "author": "Chris Phillips",
   "license": "ISC",
-  "type": "commonjs",
   "bugs": {
-    "url": "https://github.com/teamktown/fedmgr/issues"
+    "url": "https://github.com/letsfederate/fedmgr/issues"
   },
-  "homepage": "https://github.com/teamktown/fedmgr#readme",
-  "dependencies": {
-    "@letsfederate/fedmgr": "file:build/npm/letsfederate-fedmgr-0.1.0.tgz",
-    "@letsfederate/mcp-core": "file:build/npm/letsfederate-mcp-core-0.1.0.tgz",
-    "commander": "^11.1.0",
-    "dotenv": "^16.5.0",
-    "express": "^4.18.2",
-    "fetch-blob": "^4.0.0",
-    "jsonwebtoken": "^9.0.2",
-    "node-jose": "^2.2.0",
-    "open": "^8.4.0",
-    "ws": "^8.16.0"
-  },
+  "homepage": "https://github.com/letsfederate/fedmgr#readme",
   "devDependencies": {
-    "chai": "^4.3.7",
-    "jest": "^29.5.0",
-    "jest-junit": "^16.0.0",
-    "mocha": "^10.2.0",
-    "node-fetch": "^2.7.0",
-    "nodemon": "^3.0.3",
+    "marked": "15.0.12",
+    "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/git": "^10.0.1",
+    "@semantic-release/github": "^10.3.5",
+    "@semantic-release/npm": "^12.0.1",
     "semantic-release": "^24.2.3",
-    "sinon": "^15.2.0",
-    "supertest": "^6.3.3"
+    "semantic-release-monorepo": "^8.0.2"
+  },
+  "overrides": {
+    "serialize-javascript": "^7.0.4",
+    "fast-uri": "^3.1.5",
+    "ip-address": "^10.3.1",
+    "hono": "^4.12.25",
+    "tar": "^7.5.11",
+    "express": {
+      "path-to-regexp": "^0.1.13"
+    },
+    "router": {
+      "path-to-regexp": "^8.4.0"
+    }
   },
   "engines": {
-    "node": ">=14.0.0"
+    "node": ">=24.0.0 <27.0.0"
   }
 }

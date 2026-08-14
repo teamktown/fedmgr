@@ -1,249 +1,85 @@
-# Federation MCP Demo
+# fedmgr — an OpenID Federation trust backplane for MCP
 
-This project demonstrates a federated MCP (Model Context Protocol) system with GitHub OAuth integration and OpenID Federation (OIDCFed) trust chains.
+`fedmgr` lets an AI assistant (and the human beside it) **verify** which MCP tool servers to trust
+instead of assuming them. It uses [OpenID Federation](https://openid.net/specs/openid-federation-1_0.html)
+to resolve a signed trust chain from a tool server up to an anchor **you** choose, carrying trust marks
+that prove the server passed your supply-chain gate.
 
-## Features
+> **Status:** active development, moving toward a stable home. The published front door is
+> `npx @letsfederate/fedmgr`. Until it's on npm, run it from a checkout (below).
 
-- 🔐 GitHub OAuth authentication
-- 🛰️ Federation trust management
-- 🤖 MCP server with federation JWT validation
-- 🐳 Docker-based deployment
-- 📊 Federation admin interface
+## What's in here
 
-## Prerequisites
+This is an npm-workspaces TypeScript monorepo (Node ≥ 24). The pieces:
 
-- Docker and Docker Compose
-- Node.js (for building npm packages)
-- Git
-- A GitHub account (for OAuth setup)
+| Package | Role |
+|---|---|
+| `packages/fedmgr` | the umbrella CLI (`fedmgr <verb>`) — the front door |
+| `packages/oidf-verify` | the OpenID Federation **§10 verifier** — every trust decision routes through it (pinned anchors, per-hop key binding, no `jku`) |
+| `packages/ssc-attest` | signed supply-chain evidence — binds artifact digest + SBOM + scan verdict + gate into one in-toto statement |
+| `services/ta-server` | Trust Anchor — subordinate registry, proof-of-key enrollment, `federation_fetch` |
+| `services/tmi-server` | Trust Mark Issuer — issues marks, gated on passing SSC evidence |
+| `services/waypoint` | trust-enforcing MCP gateway — admits a downstream only if it chains to your anchor |
+| `packages/kms` | pluggable signing (SoftKMS / PKCS#11 / OpenBao) + trust policy |
+| `packages/obs` | structured logging + OpenTelemetry |
+| `packages/fedvec` | local semantic search over federation entities (RuVector RVF) |
+| `site/` | letsfederate.org — the advocacy site (static, in-browser Q&A + readiness scorecard) |
 
-## Complete Setup Instructions
+## Quick start
 
-### 1. Clone and Navigate to Repository
+**Prerequisites:** Node **≥ 24** (native ML-KEM/ML-DSA via OpenSSL 3.5) · Docker + compose (the trust lab) ·
+optional for the container round-trip: `cosign`, `syft`, `jq`.
 
-```bash
-git clone <repository-url>
-cd <repository-name>
+```sh
+npm ci
+npm test          # the whole suite (node --test)
+npm run build     # tsc -b across the workspace
+
+# run the CLI from the checkout (until it's published to npm):
+node packages/fedmgr/dist/bin.js doctor     # preflight: what's installed, what's missing
+node packages/fedmgr/dist/bin.js --help     # all commands
 ```
 
-### 2. Setup GitHub OAuth App
+CLI verbs: `init` · `doctor` · `keys` · `entity` · `trustmark` · `oci` · `cbom` · `search`.
 
-1. Go to [GitHub Settings > Developer settings > OAuth Apps](https://github.com/settings/developers)
-2. Click "New OAuth App"
-3. Fill in the application details:
-   - **Application name**: Federation MCP Demo (or your preferred name)
-   - **Homepage URL**: `http://localhost:3006` (note: using port 3006 to avoid conflicts)
-   - **Authorization callback URL**: `http://localhost:3006/oauth/callback`
-4. Click "Register application"
-5. Note down the **Client ID** and **Client Secret** from the app settings
+Contributing? See [CONTRIBUTING.md](CONTRIBUTING.md) and the branching/release
+rules in [docs/dev/branching.md](docs/dev/branching.md) — `main` is protected and
+a merge publishes a release.
 
-### 3. Configure Environment Variables
+**Stand up a local trust lab** (Trust Anchor + Trust Mark Issuer + registry in Docker):
 
-```bash
-# Copy the example environment file
-cp .env.example .env
-
-# Edit the .env file with your GitHub OAuth credentials
-# Required variables:
-# GITHUB_CLIENT_ID=your_github_client_id_here
-# GITHUB_CLIENT_SECRET=your_github_client_secret_here
-# FEDERATION_NAME=alpha (default, can be customized)
+```sh
+./deploy/lab/up.sh          # brings the lab up with health checks
+./deploy/lab/down.sh        # tears it down
 ```
 
-Example `.env` file:
-```env
-GITHUB_CLIENT_ID=Ov23abc123def456
-GITHUB_CLIENT_SECRET=abc123def456ghi789jkl012mno345pqr678stu
-FEDERATION_NAME=alpha
-```
+## Where to start reading
 
-### 4. Run the Setup Script (Generates Keys & Default MCP)
+Browse the docs rendered locally with `npm run docs` → http://127.0.0.1:8092/
+(a ~100-line zero-config server, [tools/docs-serve.mjs](tools/docs-serve.mjs): read-only,
+loopback-bound, one exact-pinned dependency — held to the same supply-chain gate as
+everything else here). Or read them raw:
 
-`./scripts/setup.sh` is now required **before** any Docker builds. It prepares the
-filesystem layout that is mounted into the containers and creates the default
-federation and MCP instance.
+- **[docs/walkthroughs/trust-lab-quickstart.md](docs/walkthroughs/trust-lab-quickstart.md)** — the
+  fastest path to a working lab and a verified trust chain.
+- **[docs/architecture.md](docs/architecture.md)** — what the system actually is today.
+- **[docs/dev/running.md](docs/dev/running.md)** — invoking the CLI locally from a checkout.
+- **[docs/dev/trust-verification.md](docs/dev/trust-verification.md)** — the one verifier, and how to
+  pin your trust anchor on every surface.
+- **[docs/adr/](docs/adr/)** — architecture decisions (0002 is the OIDF operational model:
+  issuance, hosting, and §10 verification).
 
-```bash
-# Build packages, generate keys, and scaffold default assets
-./scripts/setup.sh
-```
+## The trust model in one paragraph
 
-Running the setup script will:
-1. Build the npm packages (`@letsfederate/fedmgr` and `@letsfederate/mcp-core`)
-2. Generate federation keys and configuration under `build/install/`
-3. Create the default MCP instance (`mcp-demo`) under `/usr/src/app/build/install/mcp_instances`
-4. Clean up any existing containers and attempt to start the stack
+Every entity publishes a signed **entity configuration** at
+`/.well-known/openid-federation`. A **Trust Anchor** issues **subordinate statements** vouching for the
+entities enrolled under it. A verifier walks from a leaf up to a **pinned** anchor, binding each entity's
+signing key to its superior's subordinate statement at every hop — so "trusted" means cryptographically
+chained to an anchor you chose, not "someone served a plausible URL". A **Trust Mark Issuer** the anchor
+authorizes (via its `trust_mark_issuers` claim) mints marks; a supply-chain mark is only issued with
+signed evidence that the artifact passed the zero-HIGH/CRITICAL gate. **waypoint** enforces all of this
+at admission before exposing any downstream tool.
 
-After the script finishes (or after the build phase if you stop it before the
-Docker step), verify that the following host directories now exist:
+## License
 
-- `build/install/keys` – shared federation anchor keys copied into containers as `/usr/src/app/keys`
-- `build/install/federations/<federation-name>` – federation configs copied to `/usr/src/app/federations`
-- `build/install/fed-reg/registry.json` – registry copied to `/usr/src/app/data/registry.json`
-- `/usr/src/app/build/install/mcp_instances/<instance-name>` – MCP runtime assets copied into the MCP container
-
-> 💡 If you prefer to start Docker manually, run the setup script once to
-> materialize these directories and then proceed with `docker-compose` commands.
-
-### 5. Start the Federation System
-
-```bash
-# (Re)build images and start services after setup assets exist
-docker-compose up --build -d
-```
-
-The containers expect the directories listed above to be present so that the
-bootstrap process can mount/copy keys and registry data into `/usr/src/app` at
-runtime.
-
-### 6. Verify the System is Running
-
-After the setup completes, you should see:
-
-```
-✅ Federation Admin is healthy
-✅ MCP Server is healthy
-
-🎉 Setup complete!
-
-📖 Next steps:
-   1. Open http://localhost:3006 in your browser
-   2. Click 'Login with GitHub'
-   3. Test the MCP API integration
-```
-
-## Container Ports
-
-The system uses the following ports (configured to avoid common conflicts):
-
-- **Federation Admin**: `http://localhost:3006` (external) → `3001` (internal)
-- **MCP Server**: `http://localhost:4006` (external) → `4001` (internal)
-
-## Troubleshooting
-
-### Port Conflicts
-
-If you encounter port binding errors, check what's using the ports:
-
-```bash
-# Check port usage
-netstat -tlnp | grep -E ":(3006|4006)"
-
-# Or use ss if netstat is not available
-ss -tlnp | grep -E ":(3006|4006)"
-```
-
-To use different ports:
-1. Edit `docker-compose.yml` and change the port mappings
-2. Update the health check URLs in `scripts/setup.sh`
-3. Update the OAuth callback URL in your GitHub app settings
-
-### Missing Keys Error
-
-If you see "Missing private key" errors:
-
-```bash
-# Regenerate keys
-./scripts/setup-keys.sh alpha
-
-# Restart containers
-docker-compose down
-docker-compose up -d
-```
-
-### Volume Mount Issues
-
-If containers can't access keys:
-
-```bash
-# Fix permissions
-sudo chown -R 1000:1000 ./build/install/
-
-# Restart containers
-docker-compose down
-docker-compose up -d
-```
-
-### View Container Logs
-
-```bash
-# View all logs
-docker-compose logs -f
-
-# View specific service logs
-docker-compose logs -f federation-admin
-docker-compose logs -f mcp-server
-```
-
-### Missing `build/install` Assets
-
-If the containers fail during bootstrap because `build/install/...` directories
-are empty or missing:
-
-```bash
-# Re-run the setup script to regenerate keys, federation data, and MCP assets
-./scripts/setup.sh
-
-# After the assets exist, rebuild the containers
-docker-compose down
-docker-compose up --build -d
-```
-
-Double-check that the directories listed in the setup section are populated
-before rebuilding the images.
-
-## Manual Container Management
-
-```bash
-# Stop all services
-docker-compose down
-
-# Start services
-docker-compose up -d
-
-# Rebuild and start services
-docker-compose up --build -d
-
-# Check container status
-docker-compose ps
-```
-
-# Refactor Opportunity
-
-```mermaid
-sequenceDiagram
-    participant MCP
-    participant FED as fedmgr-admin
-    participant AN as Anchor CA
-
-    MCP->>MCP: generate key-pair + jwks.json
-    MCP->>FED: "POST /sign-entity" (json: metadata + jwks)
-    FED-->>AN: validate + sign
-    AN-->>FED: JWS(entity_statement)
-    FED-->>MCP: entity_statement
-    MCP->>MCP: host /.well-known/openid-federation
-```
-
-# Demo quickstart
-
-- ./scripts/setup.sh
-
-````mermaid
-flowchart LR
-    subgraph docker-compose
-        direction LR
-        FM[fedmgr container<br>• Anchor CA and Entity-Stmt<br>• Token-Exchange + AS]
-        MCP[demo-mcp container<br>port 4001]
-    end
-    GH[GitHub OAuth IdP]
-    VS[VS Code / curl API caller]
-    FM -- "1️⃣ on start:<br/>generate anchor key & CA<br/>publish /.well-known" --> FM
-    MCP -- "2️⃣ boot:<br/>fetch & verify FM entity stmt<br/>cache trust-marks" --> FM
-    VS -. "3️⃣ browser to /login" .-> GH
-    GH -- "4️⃣ user MFA & consent<br/>→ auth code" --> VS
-    VS -->|"5️⃣ POST /callback<br/>auth code"| FM
-    FM -- "6️⃣ token-exchange:<br/>ID-Token ⇒ JAG<br/>issue DPoP-bound JWT" --> VS
-    VS -- "7️⃣ Authorization: Bearer <jwt><br/>DPoP: proof" --> MCP
-    MCP -- "8️⃣ verify sig  trust-mark<br/>return protected response" --> VS
-    ```
-````
+MIT (per-package). Authored by Chris Phillips.

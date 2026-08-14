@@ -1,0 +1,247 @@
+name: Daily Security Scan
+
+on:
+  schedule:
+    - cron: "0 6 * * *"    # 06:00 UTC every day
+  workflow_dispatch:        # manual trigger
+
+permissions:
+  contents: read
+  issues: write             # open issues for new CVEs
+  security-events: write    # upload SARIF
+
+jobs:
+  # ── npm dependency audit ──────────────────────────────────────────────────
+  npm-audit:
+    name: npm audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: npm audit (root + all workspaces)
+        id: audit
+        run: |
+          set +e
+          npm audit --json --workspaces --include-workspace-root \
+            > audit-report.json 2>&1
+          EXIT_CODE=$?
+          set -e
+          echo "exit_code=$EXIT_CODE" >> "$GITHUB_OUTPUT"
+
+      - name: Parse audit results
+        id: parse
+        run: |
+          CRITICAL=$(jq '.metadata.vulnerabilities.critical // 0' audit-report.json)
+          HIGH=$(jq '.metadata.vulnerabilities.high // 0' audit-report.json)
+          MODERATE=$(jq '.metadata.vulnerabilities.moderate // 0' audit-report.json)
+          echo "critical=$CRITICAL" >> "$GITHUB_OUTPUT"
+          echo "high=$HIGH" >> "$GITHUB_OUTPUT"
+          echo "moderate=$MODERATE" >> "$GITHUB_OUTPUT"
+          echo "### npm audit results" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Critical: $CRITICAL" >> "$GITHUB_STEP_SUMMARY"
+          echo "- High: $HIGH" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Moderate: $MODERATE" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Open issue for new vulnerabilities
+        if: steps.parse.outputs.critical != '0' || steps.parse.outputs.high != '0'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const critical = '${{ steps.parse.outputs.critical }}';
+            const high = '${{ steps.parse.outputs.high }}';
+            const today = new Date().toISOString().split('T')[0];
+
+            // Check if an open issue already exists for today
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: ['security', 'daily-scan'],
+              state: 'open',
+            });
+
+            const existing = issues.data.find(i =>
+              i.title.includes(`[Security] npm vulnerabilities`) && i.title.includes(today)
+            );
+
+            if (!existing) {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: `[Security] npm vulnerabilities detected ${today}`,
+                body: [
+                  `## Daily npm audit — ${today}`,
+                  '',
+                  `| Severity | Count |`,
+                  `|---|---|`,
+                  `| Critical | ${critical} |`,
+                  `| High | ${high} |`,
+                  '',
+                  'Run `npm audit` locally or check the [workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details.',
+                  '',
+                  'See `npm audit fix` or `npm audit fix --force` to resolve.',
+                ].join('\n'),
+                labels: ['security', 'daily-scan'],
+              });
+            }
+
+      - name: Upload audit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-audit-${{ github.run_id }}
+          path: audit-report.json
+          retention-days: 30
+
+  # ── Filesystem scan (Trivy) ───────────────────────────────────────────────
+  trivy-fs:
+    name: Trivy filesystem scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Trivy filesystem scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          scan-ref: .
+          format: sarif
+          output: trivy-fs.sarif
+          severity: "HIGH,CRITICAL"
+          ignore-unfixed: true
+
+      - name: Upload SARIF
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-fs.sarif
+          category: trivy-fs
+
+  # ── SBOM generation + diff ────────────────────────────────────────────────
+  sbom-scan:
+    name: SBOM — generate and diff
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install CycloneDX
+        run: npm install -g @cyclonedx/cyclonedx-npm
+
+      - name: Generate today's SBOM
+        run: |
+          mkdir -p sbom-output
+          cyclonedx-npm \
+            --output-format JSON \
+            --output-file sbom-output/fedmgr-sbom-$(date +%Y-%m-%d).json
+
+      - name: Download previous SBOM baseline
+        id: baseline
+        uses: actions/download-artifact@v4
+        with:
+          name: sbom-baseline
+          path: sbom-baseline/
+        continue-on-error: true   # first run: no baseline yet
+
+      - name: Diff SBOM against baseline
+        if: steps.baseline.outcome == 'success'
+        run: |
+          ./scripts/sbom-diff.sh \
+            sbom-baseline/fedmgr-sbom-baseline.json \
+            sbom-output/fedmgr-sbom-$(date +%Y-%m-%d).json \
+            | tee sbom-diff.txt
+          if grep -q "^NEW:" sbom-diff.txt; then
+            echo "new_deps=true" >> "$GITHUB_ENV"
+          fi
+
+      - name: Open issue for new dependencies
+        if: env.new_deps == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const diff = fs.readFileSync('sbom-diff.txt', 'utf8');
+            const today = new Date().toISOString().split('T')[0];
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `[Supply chain] New dependencies detected ${today}`,
+              body: [
+                `## SBOM diff — ${today}`,
+                '',
+                'New dependencies appeared in the dependency tree since last baseline:',
+                '',
+                '```',
+                diff.split('\n').filter(l => l.startsWith('NEW:')).join('\n'),
+                '```',
+                '',
+                'Review these additions before the next release.',
+                'Workflow: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}',
+              ].join('\n'),
+              labels: ['supply-chain', 'daily-scan'],
+            });
+
+      # Upload today's SBOM as the new baseline
+      - name: Upload SBOM as new baseline
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-baseline
+          path: sbom-output/
+          overwrite: true
+          retention-days: 365
+
+      - name: Upload SBOM artifact (daily archive)
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-${{ github.run_id }}
+          path: sbom-output/
+          retention-days: 90
+
+  # ── License compliance check ──────────────────────────────────────────────
+  license-check:
+    name: License compliance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install license-checker
+        run: npm install -g license-checker
+
+      - name: Check licenses (fail on GPL/AGPL in production deps)
+        run: |
+          license-checker \
+            --production \
+            --excludePrivatePackages \
+            --failOn "GPL;AGPL;LGPL" \
+            --json \
+            --out license-report.json
+          echo "License check passed — no copyleft licenses in production deps"
+
+      - name: Upload license report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: license-report-${{ github.run_id }}
+          path: license-report.json
+          retention-days: 30

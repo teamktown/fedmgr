@@ -1,0 +1,312 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>fedmgr / waypoint — Trust Fabric Architecture</title>
+<script>
+  (function () {
+    const saved = localStorage.getItem('theme');
+    const dark = saved ? saved === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+    document.documentElement.classList.toggle('dark', dark);
+  })();
+</script>
+<style>
+  :root {
+    --bg:#FAF9F5; --surface:#FFFFFF; --surface2:#F0EEE6;
+    --ink:#141413; --body:#3D3D3A; --muted:#87867F;
+    --line:#D1CFC5; --line-soft:#E6E3DA;
+    --clay:#D97757; --clay-soft:rgba(217,119,87,0.10);
+    --olive:#788C5D; --olive-soft:rgba(120,140,93,0.12);
+    --blue:#5B7E96; --blue-soft:rgba(91,126,150,0.12);
+    --violet:#8A6BA8; --violet-soft:rgba(138,107,168,0.13);
+    --zone:rgba(20,20,19,0.025); --zone-line:#D1CFC5;
+    --serif: ui-serif, Georgia, "Times New Roman", serif;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  }
+  html.dark {
+    --bg:#141413; --surface:#1F1F1D; --surface2:#2A2A28;
+    --ink:#FAF9F5; --body:#D1CFC5; --muted:#87867F;
+    --line:#3D3D3A; --line-soft:#2A2A28;
+    --clay:#E48A6E; --clay-soft:rgba(228,138,110,0.14);
+    --olive:#9DB07C; --olive-soft:rgba(157,176,124,0.16);
+    --blue:#7FA3BC; --blue-soft:rgba(127,163,188,0.16);
+    --violet:#B496D0; --violet-soft:rgba(180,150,208,0.16);
+    --zone:rgba(250,249,245,0.03); --zone-line:#3D3D3A;
+  }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  html, body { height:100%; }
+  body { background:var(--bg); color:var(--body); font-family:var(--sans);
+    -webkit-font-smoothing:antialiased; display:flex; flex-direction:column; overflow:hidden; }
+  .bar { display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:11px 18px;
+    border-bottom:1px solid var(--line-soft); flex:none; }
+  .bar h1 { font-family:var(--serif); font-weight:500; font-size:18px; color:var(--ink); letter-spacing:-0.01em; }
+  .bar .sub { font-family:var(--mono); font-size:10px; color:var(--muted); letter-spacing:0.06em; text-transform:uppercase; }
+  .spacer { flex:1; }
+  .chips, .seg { display:flex; gap:6px; flex-wrap:wrap; }
+  .chip { font-family:var(--mono); font-size:11px; letter-spacing:0.04em; padding:5px 10px;
+    border:1px solid var(--line); border-radius:999px; background:transparent; color:var(--muted);
+    cursor:pointer; transition:all .15s ease; }
+  .chip:hover { color:var(--ink); border-color:var(--muted); }
+  .chip.on { background:var(--ink); border-color:var(--ink); color:var(--bg); }
+  .seg { border:1px solid var(--line); border-radius:7px; overflow:hidden; }
+  .lbtn { font-family:var(--mono); font-size:10.5px; letter-spacing:0.03em; padding:5px 11px; background:transparent;
+    color:var(--muted); cursor:pointer; border:none; border-right:1px solid var(--line); }
+  .lbtn:last-child { border-right:none; }
+  .lbtn.on { background:var(--clay); color:#fff; }
+  #themeToggle, #pctToggle { font-family:var(--mono); font-size:10px; text-transform:uppercase; letter-spacing:0.08em;
+    padding:5px 9px; border:1px solid var(--line); border-radius:6px; background:transparent; color:var(--muted); cursor:pointer; }
+  #themeToggle:hover, #pctToggle:hover { color:var(--ink); border-color:var(--muted); }
+  #pctToggle.off { color:var(--muted); border-style:dashed; }
+  .stage { flex:1; position:relative; min-height:0; }
+  .stage svg { position:absolute; inset:0; width:100%; height:100%; display:block; }
+  .zone rect { fill:var(--zone); stroke:var(--zone-line); stroke-width:1; stroke-dasharray:5 5; }
+  .zone.identity rect { fill:var(--violet-soft); stroke:var(--violet); }
+  .zone.pedigree rect { fill:var(--blue-soft); stroke:var(--blue); }
+  .zone .ztitle { font-family:var(--mono); font-size:11px; letter-spacing:0.09em; text-transform:uppercase; fill:var(--muted); }
+  .node { cursor:pointer; }
+  .node rect { fill:var(--surface); stroke:var(--line); stroke-width:1.5; transition:stroke .15s ease; }
+  .node:hover rect { stroke:var(--muted); }
+  .node.sel rect { stroke:var(--clay) !important; stroke-width:2; }
+  .node .t { font-family:var(--sans); font-size:14px; font-weight:600; fill:var(--ink); pointer-events:none; }
+  .node .m { font-family:var(--mono); font-size:10.5px; fill:var(--muted); pointer-events:none; }
+  .node .k { font-family:var(--mono); font-size:9.5px; letter-spacing:0.08em; text-transform:uppercase; fill:var(--clay); pointer-events:none; }
+  .node .pct { font-family:var(--mono); font-size:11px; font-weight:600; pointer-events:none; fill:var(--clay); }
+  .arrowhead { fill:var(--muted); }
+  .node.gate rect { fill:var(--clay-soft); stroke:var(--clay); }
+  .node.store rect { fill:var(--surface2); }
+  .node.lib rect { fill:var(--olive-soft); stroke:var(--olive); }
+  .node.ext rect { fill:var(--blue-soft); stroke:var(--blue); stroke-dasharray:6 3; }
+  .node.idp rect { fill:var(--violet-soft); stroke:var(--violet); }
+  .node.idp .k { fill:var(--violet); }
+  .edge { stroke:var(--muted); stroke-width:1.6; fill:none; marker-end:url(#arrow); transition:opacity .2s ease, stroke .2s ease; }
+  .edge.dash { stroke-dasharray:6 4; }
+  .elbl { font-family:var(--mono); font-size:10px; fill:var(--muted); transition:opacity .2s ease; text-anchor:middle; }
+  .stage.flowing .edge { opacity:0.1; }
+  .stage.flowing .elbl { opacity:0.1; }
+  .stage.flowing .node { opacity:0.3; }
+  .stage.flowing .zone { opacity:0.5; }
+  .stage.flowing .edge.lit { opacity:1; stroke:var(--clay); stroke-dasharray:7 6; animation:march 1s linear infinite; }
+  .stage.flowing .elbl.lit { opacity:1; fill:var(--clay); }
+  .stage.flowing .node.lit { opacity:1; }
+  .stage.flowing .node.lit rect { stroke:var(--clay); }
+  @keyframes march { to { stroke-dashoffset:-13; } }
+  @media (prefers-reduced-motion:reduce){ .stage.flowing .edge.lit { animation:none; } }
+  .panel { position:absolute; background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:14px 16px; box-shadow:0 4px 18px rgba(0,0,0,.06); }
+  #detail { right:16px; top:16px; width:330px; }
+  #detail .dt { font-family:var(--serif); font-size:17px; color:var(--ink); margin-bottom:2px; }
+  #detail .dm { font-family:var(--mono); font-size:10.5px; color:var(--clay); margin-bottom:8px; }
+  #detail .db { font-size:13px; line-height:1.55; }
+  .pclose { position:absolute; top:7px; right:9px; border:none; background:transparent; color:var(--muted);
+    font-size:18px; line-height:1; cursor:pointer; padding:2px 5px; border-radius:5px; }
+  .pclose:hover { color:var(--ink); background:var(--surface2); }
+  body.nopct .pct, body.nopct .opct { display:none; }
+  #detail code, #flowcap code { font-family:var(--mono); font-size:11px; color:var(--clay); }
+  #flowcap { left:16px; bottom:16px; max-width:500px; display:none; }
+  #flowcap.show { display:block; }
+  #flowcap .fname { font-family:var(--mono); font-size:10.5px; letter-spacing:0.08em; text-transform:uppercase; color:var(--clay); margin-bottom:6px; }
+  #flowcap ol { margin-left:18px; } #flowcap li { font-size:12.5px; line-height:1.55; }
+  .footer { flex:none; display:flex; align-items:center; gap:18px; flex-wrap:wrap; padding:8px 18px;
+    border-top:1px solid var(--line-soft); font-family:var(--mono); font-size:11px; color:var(--muted); }
+  .footer b { color:var(--ink); } .footer .crit { color:var(--clay); }
+  @media (max-width:900px){ body{ overflow:auto; } .stage{ min-height:620px; } #detail{ position:static; width:auto; margin:12px 16px; } #flowcap{ position:static; margin:0 16px 12px; } }
+</style>
+</head>
+<body>
+<div class="bar">
+  <h1>Trust Fabric</h1>
+  <span class="sub">OAuth in · OIDF out</span>
+  <span class="seg" id="layoutSeg">
+    <button class="lbtn" data-layout="equal5">5 equal columns</button>
+    <button class="lbtn on" data-layout="found">letsfederate foundational</button>
+  </span>
+  <span class="spacer"></span>
+  <div class="chips" id="chips">
+    <button class="chip on" data-flow="all">Everything</button>
+    <button class="chip" data-flow="signin">Sign in</button>
+    <button class="chip" data-flow="local">Local (stdio)</button>
+    <button class="chip" data-flow="cloud">Cloud / web</button>
+    <button class="chip" data-flow="bootstrap">Bootstrap CA</button>
+    <button class="chip" data-flow="chain">Chain validate</button>
+    <button class="chip" data-flow="pedigree">Code pedigree</button>
+  </div>
+  <button id="pctToggle" title="show/hide coverage %">% on</button>
+  <button id="themeToggle">Theme</button>
+</div>
+
+<div class="stage" id="stage">
+  <svg id="svg" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Trust fabric architecture"></svg>
+  <div class="panel" id="detail">
+    <button class="pclose" id="d-close" aria-label="dismiss" title="dismiss">×</button>
+    <div class="dt" id="d-title">Two boundaries, one pivot</div>
+    <div class="dm" id="d-meta">click a node · pick a flow · switch layout</div>
+    <div class="db" id="d-body"><b>Inbound</b> to waypoint is identity — sign in with <code>GitHub</code>/OIDC. That is <b>not</b> OpenID Federation. The moment waypoint turns <b>downstream</b>, it <i>becomes</i> OpenID Federation. The identity plane is a peer of the data plane; fedmgr (control) is the source of truth; letsfederate.org (pedigree) signs the code you run.</div>
+  </div>
+  <div class="panel" id="flowcap"><div class="fname" id="f-name"></div><ol id="f-steps"></ol></div>
+</div>
+
+<div class="footer">
+  <span class="opct">Overall fabric ≈ <b>45–50%</b></span>
+  <span class="crit">Finalize next: waypoint <b>HTTP/SSE + OAuth edge auth (identity plane)</b> → hosted deploy → sign registry + hydrate → revocation re-check → audit ledger</span>
+</div>
+
+<script>
+const VIEWBOX = { equal5:"0 0 1570 660", found:"0 0 1260 712" };
+const ZONES = [
+  { title:"Clients", equal5:[20,56,290,470], found:[20,56,290,470] },
+  { title:"Identity plane · OAuth/OIDC sign-in", cls:"identity", equal5:[330,56,290,300], found:[330,56,290,300] },
+  { title:"Data plane · waypoint", equal5:[640,56,290,300], found:[640,56,290,300] },
+  { title:"Gated downstreams", equal5:[640,388,290,150], found:[640,372,290,150] },
+  { title:"Control plane · fedmgr (source of truth)", equal5:[950,56,290,584], found:[950,56,290,468] },
+  { title:"Pedigree · letsfederate.org — foundational layer", cls:"pedigree", equal5:[1280,56,270,300], found:[640,556,600,140] },
+];
+const NODES = {
+  clocal:{cls:"",k:"CLIENT · LOCAL",t:"Claude Code / Desktop",m:["stdio · waypoint local"],equal5:[40,112,250,64],found:[40,112,250,64]},
+  ccloud:{cls:"",k:"CLIENT · CLOUD",t:"Claude.ai / OpenAI",m:["remote MCP connector"],equal5:[40,214,250,64],found:[40,214,250,64]},
+  cide:{cls:"",k:"CLIENT · ENTERPRISE",t:"VSCode / managed",m:["SSO · MDM-pinned"],equal5:[40,316,250,64],found:[40,316,250,64]},
+  idp:{cls:"idp",k:"IDENTITY · NOT OIDF",t:"GitHub OAuth",m:["Google · Okta · Entra","OIDC sign-in → token"],equal5:[350,150,250,108],found:[350,150,250,108]},
+  waypoint:{cls:"gate",k:"DATA PLANE · PEP",t:"waypoint",m:["OAuth in · OIDF out","accepted-anchor + chain","stdio only"],pct:"45%",equal5:[660,128,250,130],found:[660,128,250,130]},
+  down:{cls:"",k:"GATED",t:"Downstream MCPs",m:["fs · shell · cloud · db…","only trusted exposed"],equal5:[660,420,250,98],found:[660,404,250,98]},
+  reg:{cls:"store",k:"CONTROL · SOURCE OF TRUTH",t:"fedmgr CLI + registry.json",m:["federations · MCPs · endpoints"],equal5:[970,104,250,62],found:[970,104,250,62]},
+  ta:{cls:"",t:"ta-server · your TA / CA",m:["federation_fetch · enroll"],pct:"75%",equal5:[970,190,250,54],found:[970,188,250,54]},
+  tmi:{cls:"",t:"tmi-server · Trust Mark Issuer",m:["issue trust marks"],pct:"70%",equal5:[970,270,250,54],found:[970,266,250,54]},
+  fmcp:{cls:"",t:"fedmgr-mcp",m:["validate_mcp_invocation · ext"],pct:"70%",equal5:[970,372,250,54],found:[970,360,250,54]},
+  kms:{cls:"lib",t:"kms · signing + validators",m:["validateTrustChain · SSRF"],pct:"85%",equal5:[970,452,250,54],found:[970,438,250,54]},
+  letsfed:{cls:"ext",k:"PEDIGREE",t:"trust.letsfederate.org",m:["signs the code you run"],pct:"40%",equal5:[1300,118,230,72],found:[662,588,288,72]},
+  oci:{cls:"store",k:"DISTRIBUTION",t:"OCI registry + npm",m:["cosign · SBOM · provenance"],equal5:[1300,252,230,64],found:[968,588,260,64]},
+};
+const EDGES = [
+  {id:"e-local",from:"clocal",to:"waypoint",label:"stdio — local, no sign-in"},
+  {id:"e-signin",from:"ccloud",to:"idp",cls:"dash",label:"OIDC sign-in"},
+  {id:"e-auth",from:"idp",to:"waypoint",cls:"dash",label:"authenticated HTTP/SSE"},
+  {id:"e-ide",from:"cide",to:"idp",label:""},
+  {id:"e-fwd",from:"waypoint",to:"down",label:"trusted tools (OIDF)"},
+  {id:"e-chain",from:"waypoint",to:"ta",cls:"dash",label:"OIDF chain validate"},
+  {id:"e-reg",from:"waypoint",to:"reg",cls:"dash",label:"consumes registry"},
+  {id:"e-mg1",from:"reg",to:"ta",label:""},
+  {id:"e-mg2",from:"ta",to:"tmi",label:""},
+  {id:"e-issue",from:"fmcp",to:"tmi",label:"issue / verify"},
+  {id:"e-pedwp",from:"letsfed",to:"waypoint",cls:"dash",label:"signs the code"},
+  {id:"e-ped1",from:"letsfed",to:"fmcp",label:""},
+  {id:"e-ped3",from:"letsfed",to:"oci",label:""},
+];
+const FLOWS = {
+  signin:{name:"Sign in — OAuth/OIDC (NOT federation)",edges:["e-signin","e-auth"],nodes:["ccloud","idp","waypoint"],
+    steps:["Human/agent signs in with <code>GitHub</code> (or Google/Okta/Entra) — plain OIDC","An IdP token/session is issued — <b>this is not OpenID Federation</b>","Authenticated, the client may now reach waypoint over HTTP/SSE"]},
+  local:{name:"Local — stdio, no sign-in",edges:["e-local","e-fwd","e-chain"],nodes:["clocal","waypoint","down","ta"],
+    steps:["Claude Code adds waypoint as a local stdio MCP — no identity plane","waypoint validates each downstream's chain to your TA (VALID?)","Only trusted tools are exposed, namespaced <code>name__tool</code>"]},
+  cloud:{name:"Cloud / web — OAuth in, OIDF out",edges:["e-signin","e-auth","e-fwd","e-chain"],nodes:["ccloud","idp","waypoint","down","ta"],
+    steps:["Cloud assistant <b>signs in</b> (OIDC) and connects to a <b>remote</b> waypoint over HTTP/SSE — <code>the capability to finalize</code>","Inbound is identity (OAuth) — not federation","<b>Downstream</b>, waypoint becomes OpenID Federation: chain-validates each MCP and forwards only trusted tools"]},
+  bootstrap:{name:"Bootstrap your own CA — minutes",edges:["e-mg1","e-mg2","e-reg"],nodes:["reg","ta","tmi","waypoint"],
+    steps:["<code>./deploy/lab/up.sh</code> stands up your TA + TMI + registry","Enroll MCPs and issue trust marks via the fedmgr CLI","waypoint reads the (signed) registry — full agency, trust nothing external"]},
+  chain:{name:"Cryptographic admission (OIDF)",edges:["e-chain","e-reg"],nodes:["waypoint","ta","reg"],
+    steps:["For each downstream, <code>validateTrustChain(entityId, TA)</code>","Chain must resolve <b>VALID</b> (not WARN/INVALID) — fail-closed","An accepted anchor that doesn't chain is still denied"]},
+  pedigree:{name:"Code pedigree — verify what you run",edges:["e-pedwp","e-ped1","e-ped3"],nodes:["letsfed","waypoint","fmcp","oci"],
+    steps:["trust.letsfederate.org signs the fedmgr/waypoint components","cosign + SBOM + an OIDF trust mark over the release","You verify the binary's pedigree — independent of your runtime CA"]},
+};
+const DETAIL = {
+  clocal:{t:"Claude Code / Desktop",m:"local · stdio",b:"Adds waypoint as a local stdio MCP. <b>No inbound sign-in</b> — local process trust. Works today; journey ≈ <b>60%</b>."},
+  ccloud:{t:"Claude.ai / OpenAI",m:"cloud · remote MCP connector",b:"<b>The priority.</b> Cloud assistants connect to a <b>remote</b> waypoint over HTTP/SSE and must <b>sign in</b> first (OAuth/OIDC). Journey ≈ <b>10%</b> — waypoint is <code>stdio only</code>."},
+  cide:{t:"VSCode / managed",m:"enterprise · SSO + MDM",b:"Hundreds of devs; SSO sign-in, config pushed via MDM. Journey ≈ <b>15%</b>."},
+  idp:{t:"Identity plane — OAuth/OIDC",m:"GitHub / Google / Okta / Entra · NOT OIDF",b:"<b>Inbound identity</b>: sign in with an IdP (base example <code>GitHub OAuth</code>) → session/bearer token to reach waypoint. Plain <b>OIDC, not federation</b>. A <b>peer of the data plane</b>. Reuses the OAuth/token-exchange bones in <code>src/fedmgr</code>. Required for HTTP/SSE; skipped for local stdio."},
+  waypoint:{t:"waypoint — the pivot (PEP)",m:"data plane · OAuth in, OIDF out",b:"Client points at <b>one</b> MCP. <b>Inbound</b> an OAuth resource server; <b>outbound</b> an OpenID Federation relying party: admits downstreams by accepted-anchor + VALID chain. <b>45%</b>: stdio only — <code>HTTP/SSE + auth is the capability to finalize</code>."},
+  down:{t:"Downstream MCPs",m:"gated · fs/shell/cloud/db…",b:"High-blast-radius servers worth gating. Only those passing the OIDF policy + VALID chain are exposed; everything else sealed (fail-closed)."},
+  reg:{t:"fedmgr CLI + registry.json",m:"control plane · SOURCE OF TRUTH",b:"Owns trust topology (TAs, MCPs, endpoints). <b>Sign it</b>; waypoint consumes + drift-checks it. Adopted foreign TAs + audit live <b>here</b>, not in waypoint."},
+  ta:{t:"ta-server — your TA / CA",m:"control · the root you run",b:"Your Trust Anchor: statements, federation_list/fetch, enrollment, trust-mark-status. <b>75%</b>. Stand up in minutes via <code>./deploy/lab/up.sh</code>."},
+  tmi:{t:"tmi-server — Trust Mark Issuer",m:"control · marks",b:"Issues signed, digest-bindable trust marks (proven in the lab). <b>70%</b>."},
+  fmcp:{t:"fedmgr-mcp",m:"mcp · tools + extension",b:"Trust ops as MCP tools + the <code>oidf-trust</code> extension (patient zero). <b>70%</b>."},
+  kms:{t:"kms — signing + validators",m:"library · crypto core",b:"SoftKMS/OpenBao, <code>validateTrustChain</code>, <code>validateTrustmark</code>, the SSRF guard. Curve-derived JWS alg (ES512 default, closed EC allowlist, jose v6). <b>85%</b> — most mature."},
+  letsfed:{t:"trust.letsfederate.org",m:"pedigree · foundational",b:"<b>Foundational</b> trust axis: signs the fedmgr/waypoint components so you verify the <i>pedigree</i> of the software you run — independent of your runtime CA. ≈ 40%."},
+  oci:{t:"OCI registry + npm",m:"distribution",b:"Signed artifacts. CI does cosign + SBOM + provenance; OIDF mark over releases is the remaining piece."},
+};
+
+let mode = "found", currentFlow = "all";
+const svg = document.getElementById('svg');
+const stage = document.getElementById('stage');
+const fcap = document.getElementById('flowcap');
+
+function box(id){ const c = NODES[id][mode]; return {x:c[0],y:c[1],w:c[2],h:c[3],cx:c[0]+c[2]/2,cy:c[1]+c[3]/2}; }
+function anchor(a,b){ const dx=b.cx-a.cx, dy=b.cy-a.cy;
+  if(Math.abs(dx)>=Math.abs(dy)) return dx>0? {x:a.x+a.w,y:a.cy,s:'r'} : {x:a.x,y:a.cy,s:'l'};
+  return dy>0? {x:a.cx,y:a.y+a.h,s:'b'} : {x:a.cx,y:a.y,s:'t'};
+}
+function pathD(p,q){ const o={l:[-60,0],r:[60,0],t:[0,-52],b:[0,52]};
+  const [px,py]=o[p.s],[qx,qy]=o[q.s];
+  return `M${p.x},${p.y} C ${p.x+px},${p.y+py} ${q.x+qx},${q.y+qy} ${q.x},${q.y}`; }
+function esc(s){ return s; }
+
+function renderNode(id){ const n=NODES[id], c=n[mode]; const x=c[0],y=c[1],w=c[2],h=c[3];
+  let cur=y+22, lines='';
+  if(n.k){ lines+=`<text class="k" x="${x+16}" y="${cur}">${n.k}</text>`; cur+=19; }
+  lines+=`<text class="t" x="${x+16}" y="${cur}">${n.t}</text>`; cur+=17;
+  (n.m||[]).forEach(mm=>{ lines+=`<text class="m" x="${x+16}" y="${cur}">${mm}</text>`; cur+=15; });
+  if(n.pct){ lines+=`<text class="pct" x="${x+w-14}" y="${y+22}" text-anchor="end">${n.pct}</text>`; }
+  return `<g class="node ${n.cls||''}" data-k="${id}"><rect x="${x}" y="${y}" width="${w}" height="${h}" rx="10"/>${lines}</g>`;
+}
+function renderZone(z){ const c=z[mode]; return `<g class="zone ${z.cls||''}"><rect x="${c[0]}" y="${c[1]}" width="${c[2]}" height="${c[3]}" rx="16"/><text class="ztitle" x="${c[0]+18}" y="${c[1]+26}">${z.title}</text></g>`; }
+function renderEdge(e){ const p=anchor(box(e.from),box(e.to)), q=anchor(box(e.to),box(e.from));
+  const lbl = e.label ? `<text class="elbl" data-e="${e.id}" x="${(p.x+q.x)/2}" y="${(p.y+q.y)/2-7}">${e.label}</text>` : '';
+  return {edge:`<path class="edge ${e.cls||''}" id="${e.id}" d="${pathD(p,q)}"/>`, lbl}; }
+
+function render(){
+  svg.setAttribute('viewBox', VIEWBOX[mode]);
+  const defs = `<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrowhead" d="M0,0 L10,5 L0,10 z"/></marker></defs>`;
+  const zones = ZONES.map(renderZone).join('');
+  const edgeParts = EDGES.map(renderEdge);
+  const edges = edgeParts.map(e=>e.edge).join('') + edgeParts.map(e=>e.lbl).join('');
+  const nodes = Object.keys(NODES).map(renderNode).join('');
+  svg.innerHTML = defs + zones + edges + nodes;
+  svg.querySelectorAll('.node').forEach(n=>n.addEventListener('click',()=>{
+    svg.querySelectorAll('.node').forEach(x=>x.classList.remove('sel'));
+    n.classList.add('sel');
+    const d=DETAIL[n.dataset.k]; if(!d) return;
+    document.getElementById('detail').style.display='';
+    document.getElementById('d-title').textContent=d.t;
+    document.getElementById('d-meta').textContent=d.m;
+    document.getElementById('d-body').innerHTML=d.b;
+  }));
+  applyLit();
+}
+function applyLit(){
+  const flowing = currentFlow!=='all';
+  stage.classList.toggle('flowing', flowing);
+  fcap.classList.toggle('show', flowing);
+  svg.querySelectorAll('.edge,.elbl,.node').forEach(e=>e.classList.remove('lit'));
+  if(!flowing) return;
+  const f=FLOWS[currentFlow];
+  f.edges.forEach(id=>{ svg.querySelector(`#${id}`)?.classList.add('lit'); svg.querySelector(`.elbl[data-e="${id}"]`)?.classList.add('lit'); });
+  f.nodes.forEach(k=>svg.querySelector(`.node[data-k="${k}"]`)?.classList.add('lit'));
+  document.getElementById('f-name').textContent=f.name;
+  document.getElementById('f-steps').innerHTML=f.steps.map(s=>`<li>${s}</li>`).join('');
+}
+document.getElementById('chips').addEventListener('click',ev=>{
+  const b=ev.target.closest('.chip'); if(!b) return;
+  currentFlow=b.dataset.flow;
+  document.querySelectorAll('.chip').forEach(c=>c.classList.toggle('on',c===b));
+  applyLit();
+});
+document.getElementById('layoutSeg').addEventListener('click',ev=>{
+  const b=ev.target.closest('.lbtn'); if(!b) return;
+  mode=b.dataset.layout;
+  document.querySelectorAll('.lbtn').forEach(l=>l.classList.toggle('on',l===b));
+  render();
+});
+document.getElementById('d-close').addEventListener('click',()=>{
+  document.getElementById('detail').style.display='none';
+});
+document.getElementById('pctToggle').addEventListener('click',()=>{
+  const off=document.body.classList.toggle('nopct');
+  const b=document.getElementById('pctToggle');
+  b.textContent = off ? '% off' : '% on';
+  b.classList.toggle('off', off);
+});
+document.getElementById('themeToggle').addEventListener('click',()=>{
+  const dark=!document.documentElement.classList.contains('dark');
+  document.documentElement.classList.toggle('dark',dark);
+  localStorage.setItem('theme',dark?'dark':'light');
+});
+render();
+</script>
+</body>
+</html>

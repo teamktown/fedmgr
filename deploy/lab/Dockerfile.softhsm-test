@@ -1,0 +1,48 @@
+# Dockerfile.softhsm-test
+#
+# A self-contained test image that:
+#   1. Installs Node.js 22 + SoftHSM2 + build tools (for pkcs11js native addon)
+#   2. Copies the pre-built @letsfederate/kms package
+#   3. Installs pkcs11js at runtime
+#   4. Runs the 8 integration tests in packages/kms/test/pkcs11.test.mjs
+#
+# Build from repo root:
+#   docker build -f deploy/lab/Dockerfile.softhsm-test -t fedmgr-pkcs11-test .
+#
+# Run (standalone):
+#   docker run --rm fedmgr-pkcs11-test
+#
+# Or via Compose:
+#   docker compose -f deploy/lab/docker-compose.softhsm-test.yml up --exit-code-from test
+
+FROM node:22-slim
+
+# Install SoftHSM2 and native build dependencies for pkcs11js
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      softhsm2 \
+      opensc \
+      python3 \
+      make \
+      g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+# SoftHSM2 stores its token database here; must be writable at runtime.
+RUN mkdir -p /var/lib/softhsm/tokens && chmod 777 /var/lib/softhsm/tokens
+
+WORKDIR /app
+
+# Copy package files first for layer caching
+COPY packages/kms/package*.json ./packages/kms/
+COPY packages/kms/dist/           ./packages/kms/dist/
+COPY packages/kms/test/           ./packages/kms/test/
+
+# Install jose (runtime dep) + pkcs11js (optional native addon)
+WORKDIR /app/packages/kms
+RUN npm install --omit=dev && npm install pkcs11js
+
+# Copy the entrypoint that initialises SoftHSM2 and runs the tests
+COPY scripts/docker-pkcs11-entrypoint.sh /usr/local/bin/docker-pkcs11-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-pkcs11-entrypoint.sh
+
+WORKDIR /app/packages/kms
+ENTRYPOINT ["/usr/local/bin/docker-pkcs11-entrypoint.sh"]
