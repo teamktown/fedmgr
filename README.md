@@ -55,6 +55,11 @@ a merge publishes a release.
 
 ## Where to start reading
 
+Browse the docs rendered locally with `npm run docs` → http://127.0.0.1:8092/
+(a ~100-line zero-config server, [tools/docs-serve.mjs](tools/docs-serve.mjs): read-only,
+loopback-bound, one exact-pinned dependency — held to the same supply-chain gate as
+everything else here). Or read them raw:
+
 - **[docs/walkthroughs/trust-lab-quickstart.md](docs/walkthroughs/trust-lab-quickstart.md)** — the
   fastest path to a working lab and a verified trust chain.
 - **[docs/architecture.md](docs/architecture.md)** — what the system actually is today.

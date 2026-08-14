@@ -15,6 +15,7 @@
     "test:structure": "node --test test/*.test.mjs",
     "test:packages": "npm run test -ws --if-present",
     "test:convergence": "npm test -w @letsfederate/kms -- --runInBand && npm test -w @letsfederate/fedmgr-mcp -- --runInBand",
+    "docs": "node tools/docs-serve.mjs",
     "scan": "SSC/scripts/scan-all.sh",
     "sbom": "SSC/scripts/generate-sbom.sh",
     "lab:up": "docker compose -f deploy/lab/docker-compose.yml up --build",
@@ -38,6 +39,7 @@
   },
   "homepage": "https://github.com/letsfederate/fedmgr#readme",
   "devDependencies": {
+    "marked": "15.0.12",
     "@semantic-release/changelog": "^6.0.3",
     "@semantic-release/git": "^10.0.1",
     "@semantic-release/github": "^10.3.5",
@@ -47,7 +49,8 @@
   },
   "overrides": {
     "serialize-javascript": "^7.0.4",
-    "fast-uri": "^3.1.2",
+    "fast-uri": "^3.1.5",
+    "ip-address": "^10.3.1",
     "hono": "^4.12.25",
     "tar": "^7.5.11",
     "express": {
