@@ -2,12 +2,50 @@ import {
   importJWK,
   exportJWK,
   SignJWT,
+  type CryptoKey,
   type JWK,
   type JWTPayload,
-  type KeyLike,
 } from "jose";
 import fs from "node:fs/promises";
 import path from "node:path";
+
+// ---------------------------------------------------------------------------
+// JWS algorithm policy
+// ---------------------------------------------------------------------------
+
+/**
+ * The closed set of JWS algorithms this stack signs and verifies with.
+ * Interop note: go-oidfed/lighthouse defaults to ES512; we accept the EC
+ * family but nothing looser — alg is always derived from the key we hold or
+ * checked against this list, never taken from an attacker-supplied header.
+ */
+export const SUPPORTED_JWS_ALGS = ["ES256", "ES384", "ES512"] as const;
+export type SupportedJwsAlg = (typeof SUPPORTED_JWS_ALGS)[number];
+
+const EC_CRV_TO_ALG: Record<string, SupportedJwsAlg> = {
+  "P-256": "ES256",
+  "P-384": "ES384",
+  "P-521": "ES512",
+};
+
+/**
+ * Derive the JWS alg for a JWK: the key's own `alg` when present (must be in
+ * the supported set), else inferred from the EC curve. jose v6 requires an
+ * explicit alg for JWKs without one, and step-cli-generated keys carry none.
+ */
+export function jwsAlgForJwk(jwk: JWK): SupportedJwsAlg {
+  if (jwk.alg) {
+    if (!(SUPPORTED_JWS_ALGS as readonly string[]).includes(jwk.alg)) {
+      throw new Error(`unsupported JWS alg "${jwk.alg}" (supported: ${SUPPORTED_JWS_ALGS.join(", ")})`);
+    }
+    return jwk.alg as SupportedJwsAlg;
+  }
+  const alg = jwk.kty === "EC" && jwk.crv ? EC_CRV_TO_ALG[jwk.crv] : undefined;
+  if (!alg) {
+    throw new Error(`cannot infer JWS alg for kty=${String(jwk.kty)} crv=${String(jwk.crv)}`);
+  }
+  return alg;
+}
 
 // ---------------------------------------------------------------------------
 // Core interface — every KMS provider must implement this.
@@ -57,7 +95,8 @@ export type SoftKmsConfig = {
 export class SoftKmsProvider implements KeyProvider {
   private readonly cfg: SoftKmsConfig;
   private _kid: string | undefined;
-  private _priv: KeyLike | undefined;
+  private _priv: CryptoKey | undefined;
+  private _alg: SupportedJwsAlg | undefined;
   private _pub: JWK | undefined;
 
   constructor(cfg: SoftKmsConfig) {
@@ -68,7 +107,7 @@ export class SoftKmsProvider implements KeyProvider {
     await this.ensureLoaded();
     if (!this._pub!.kid) {
       // Derive a stable kid from the JWK thumbprint when the file has none.
-      const k = await importJWK(this._pub as JWK, "ES256");
+      const k = await importJWK(this._pub as JWK, jwsAlgForJwk(this._pub as JWK));
       const exported = await exportJWK(k);
       this._pub!.kid = exported.kid ?? "default";
     }
@@ -91,11 +130,11 @@ export class SoftKmsProvider implements KeyProvider {
     await this.ensureLoaded();
     return new SignJWT(payload)
       .setProtectedHeader({
-        alg: "ES256",
+        alg: this._alg as SupportedJwsAlg,
         kid: await this.kid(),
         ...additionalHeader,
       })
-      .sign(this._priv as KeyLike);
+      .sign(this._priv as CryptoKey);
   }
 
   // -------------------------------------------------------------------------
@@ -113,23 +152,22 @@ export class SoftKmsProvider implements KeyProvider {
     const privJwk: JWK = JSON.parse(privRaw) as JWK;
     const pubJwk: JWK = JSON.parse(pubRaw) as JWK;
 
-    // Validate we have an EC P-256 key — fail fast rather than sign with
-    // a wrong algorithm.
-    if (privJwk.kty !== "EC" || privJwk.crv !== "P-256") {
+    // Validate we hold a supported EC key and that the pair is coherent —
+    // fail fast rather than sign with a wrong algorithm. jwsAlgForJwk throws
+    // on anything outside SUPPORTED_JWS_ALGS.
+    const privAlg = jwsAlgForJwk(privJwk);
+    const pubAlg = jwsAlgForJwk(pubJwk);
+    if (privAlg !== pubAlg) {
       throw new Error(
-        `SoftKmsProvider: expected EC P-256 private key, got kty=${privJwk.kty} crv=${privJwk.crv}`
-      );
-    }
-    if (pubJwk.kty !== "EC" || pubJwk.crv !== "P-256") {
-      throw new Error(
-        `SoftKmsProvider: expected EC P-256 public key, got kty=${pubJwk.kty} crv=${pubJwk.crv}`
+        `SoftKmsProvider: key pair mismatch — private is ${privAlg}, public is ${pubAlg}`
       );
     }
 
     this._pub = pubJwk;
-    const imported = await importJWK(privJwk, "ES256");
-    // importJWK returns KeyLike | Uint8Array; EC keys are always KeyLike.
-    this._priv = imported as KeyLike;
+    this._alg = privAlg;
+    const imported = await importJWK(privJwk, privAlg);
+    // importJWK returns CryptoKey | Uint8Array; EC keys are always CryptoKey.
+    this._priv = imported as CryptoKey;
   }
 }
 

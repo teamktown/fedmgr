@@ -42,9 +42,9 @@
     "@letsfederate/kms": "*",
     "@letsfederate/obs": "*",
     "@letsfederate/oidf-verify": "*",
+    "@letsfederate/ssc-attest": "*",
     "commander": "^12.0.0",
-    "jose": "^5.2.4",
-    "@letsfederate/ssc-attest": "*"
+    "jose": "^6.2.8"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

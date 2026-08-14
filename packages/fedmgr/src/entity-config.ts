@@ -6,8 +6,9 @@
  * `<entity-id>/.well-known/openid-federation`. The Trust Anchor separately
  * issues a Subordinate Statement about it (via enrollment); a §10 verifier binds
  * the two. This module mints the leaf's own half — the self-signed configuration
- * — which the operator then hosts. It is pure and dependency-light (jose only)
- * so it is testable end-to-end against @letsfederate/oidf-verify.
+ * — which the operator then hosts. It is pure and dependency-light (jose +
+ * the kms alg policy) so it is testable end-to-end against
+ * @letsfederate/oidf-verify.
  */
 import {
   generateKeyPair,
@@ -17,20 +18,28 @@ import {
   calculateJwkThumbprint,
   type JWK,
 } from "jose";
+import { jwsAlgForJwk } from "@letsfederate/kms";
 
 export interface LeafKeypair {
   publicJwk: JWK;
   privateJwk: JWK;
 }
 
-/** Mint a fresh ES256 leaf keypair with a stable thumbprint kid. */
-export async function mintLeafKeypair(): Promise<LeafKeypair> {
-  const { publicKey, privateKey } = await generateKeyPair("ES256", { extractable: true });
+/**
+ * Default JWS alg for freshly minted leaf keys. ES512 (P-521) matches the
+ * go-oidfed/lighthouse default; existing ES256 keys keep working because
+ * signing/verification derive the alg from the key itself.
+ */
+export const DEFAULT_LEAF_ALG = "ES512";
+
+/** Mint a fresh leaf keypair (default ES512) with a stable thumbprint kid. */
+export async function mintLeafKeypair(alg: string = DEFAULT_LEAF_ALG): Promise<LeafKeypair> {
+  const { publicKey, privateKey } = await generateKeyPair(alg, { extractable: true });
   const publicJwk = await exportJWK(publicKey);
-  publicJwk.alg = "ES256";
+  publicJwk.alg = alg;
   publicJwk.kid = await calculateJwkThumbprint(publicJwk);
   const privateJwk = await exportJWK(privateKey);
-  privateJwk.alg = "ES256";
+  privateJwk.alg = alg;
   privateJwk.kid = publicJwk.kid;
   return { publicJwk, privateJwk };
 }
@@ -97,9 +106,10 @@ export async function buildLeafEntityConfig(opts: LeafEntityConfigOptions): Prom
     metadata,
   };
 
-  const key = await importJWK(opts.privateJwk, "ES256");
+  const alg = jwsAlgForJwk(opts.privateJwk);
+  const key = await importJWK(opts.privateJwk, alg);
   return new SignJWT(payload)
-    .setProtectedHeader({ alg: "ES256", kid: opts.publicJwk.kid as string, typ: "entity-statement+jwt" })
+    .setProtectedHeader({ alg, kid: opts.publicJwk.kid as string, typ: "entity-statement+jwt" })
     .sign(key);
 }
 
@@ -115,8 +125,9 @@ export async function buildEnrollmentProof(
   privateJwk: JWK
 ): Promise<string> {
   if (!nonce) throw new Error("[TRUST:FAIL] enrollment nonce is required");
-  const key = await importJWK(privateJwk, "ES256");
+  const alg = jwsAlgForJwk(privateJwk);
+  const key = await importJWK(privateJwk, alg);
   return new SignJWT({ nonce, entity_id: entityId })
-    .setProtectedHeader({ alg: "ES256", kid: privateJwk.kid as string })
+    .setProtectedHeader({ alg, kid: privateJwk.kid as string })
     .sign(key);
 }

@@ -35,9 +35,9 @@ import {
   SignJWT,
   importJWK,
   exportJWK,
+  type CryptoKey,
   type JWK,
   type JWTPayload,
-  type KeyLike,
 } from "jose";
 import { createHash } from "node:crypto";
 import type { KeyProvider } from "../index.js";
@@ -147,10 +147,12 @@ export class Pkcs11Provider implements KeyProvider {
     payload: JWTPayload,
     additionalHeader: Record<string, unknown> = {}
   ): Promise<string> {
-    // Get the public JWK so we can reconstruct a KeyLike for SignJWT header building.
+    // Get the public JWK so we can reconstruct a CryptoKey for SignJWT header building.
     // The actual signing operation uses the HSM private key via C_Sign.
+    // ES256 is fixed in this provider: it drives a P-256 hardware key and
+    // hashes SHA-256 itself — the alg is a property of the HSM key, not config.
     const pubJwk = await this._getPublicJwk();
-    const pubKey = (await importJWK(pubJwk, "ES256")) as KeyLike;
+    const pubKey = (await importJWK(pubJwk, "ES256")) as CryptoKey;
 
     // We need to use jose's SignJWT for header/payload assembly but replace
     // the actual sign operation. Since jose's SignJWT.sign() is not easily

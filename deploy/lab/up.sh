@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # One-command local trust lab: registry(:5000) + TMI(:8080) + TA(:8090).
-# Generates EC P-256 keys (encrypted at rest) if missing — no host `step` CLI
+# Generates EC P-521 keys (ES512, encrypted at rest) if missing — no host `step` CLI
 # needed (uses the smallstep/step-cli image) — then builds and starts the lab
 # and waits for health. Idempotent: safe to re-run.
 set -euo pipefail
@@ -12,10 +12,10 @@ STEP_IMG="smallstep/step-cli:latest"
 gen_keys() { # dir pub jwe
   local dir="$1" pub="$2" jwe="$3"
   [ -f "$dir/$jwe" ] && return 0
-  echo "[lab] generating keys in $dir (EC P-256, PBES2-encrypted)"
+  echo "[lab] generating keys in $dir (EC P-521 → ES512, PBES2-encrypted)"
   docker run --rm -v "$PWD/$dir:/keys" --entrypoint sh "$STEP_IMG" -c "
     head -c 32 /dev/urandom | base64 > /keys/.pass && chmod 600 /keys/.pass &&
-    step crypto jwk create /keys/$pub /keys/$jwe --kty EC --curve P-256 --use sig --password-file /keys/.pass --force &&
+    step crypto jwk create /keys/$pub /keys/$jwe --kty EC --curve P-521 --use sig --password-file /keys/.pass --force &&
     chmod 644 /keys/$pub && chmod 600 /keys/$jwe"
 }
 

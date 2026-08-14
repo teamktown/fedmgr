@@ -66,7 +66,7 @@ export function registerEntityCommands(program: Command): void {
         fs.mkdirSync(keyDir, { recursive: true });
         fs.writeFileSync(privPath, JSON.stringify(privateJwk, null, 2), { mode: 0o600 });
         fs.writeFileSync(pubPath, JSON.stringify(publicJwk, null, 2));
-        process.stderr.write(`[entity config] minted new ES256 keypair → ${privPath} (0600), ${pubPath}\n`);
+        process.stderr.write(`[entity config] minted new ${publicJwk.alg ?? "EC"} keypair → ${privPath} (0600), ${pubPath}\n`);
       }
 
       let jwt: string;

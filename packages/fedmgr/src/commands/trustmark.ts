@@ -24,6 +24,8 @@ import {
   formatTrustMessage,
   assertSafeUrl,
   UrlSafetyError,
+  jwsAlgForJwk,
+  SUPPORTED_JWS_ALGS,
   type TrustPolicy,
   type TrustResult,
 } from "@letsfederate/kms";
@@ -206,8 +208,11 @@ export function registerTrustmarkCommands(program: Command): void {
       let verified = false;
       for (const key of jwks.keys) {
         try {
-          const cryptoKey = await importJWK(key as Parameters<typeof importJWK>[0], "ES256");
-          const { payload } = await jwtVerify(opts.jws, cryptoKey);
+          const jwk = key as Parameters<typeof jwsAlgForJwk>[0];
+          const cryptoKey = await importJWK(jwk, jwsAlgForJwk(jwk));
+          const { payload } = await jwtVerify(opts.jws, cryptoKey, {
+            algorithms: [...SUPPORTED_JWS_ALGS],
+          });
           process.stdout.write("✔ Trustmark JWS verified\n");
           process.stdout.write(JSON.stringify(payload, null, 2) + "\n");
           verified = true;

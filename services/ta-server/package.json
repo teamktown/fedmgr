@@ -21,7 +21,7 @@
     "@letsfederate/kms": "*",
     "better-sqlite3": "^12.8.0",
     "express": "^4.19.2",
-    "jose": "^5.2.4",
+    "jose": "^6.2.8",
     "zod": "^3.23.8"
   },
   "devDependencies": {

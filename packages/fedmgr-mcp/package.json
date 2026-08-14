@@ -26,12 +26,12 @@
   },
   "dependencies": {
     "@letsfederate/kms": "*",
+    "@letsfederate/oidf-verify": "*",
     "@letsfederate/ta-server": "*",
     "@modelcontextprotocol/sdk": "^1.0.0",
     "@opentelemetry/api": "^1.9.1",
     "commander": "^12.0.0",
-    "jose": "^5.2.0",
-    "@letsfederate/oidf-verify": "*"
+    "jose": "^6.2.8"
   },
   "devDependencies": {
     "@letsfederate/tmi-server": "*",

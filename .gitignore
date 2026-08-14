@@ -188,6 +188,9 @@ services/*/keys/*.priv.jwk
 packages/*/keys/.pass
 services/*/keys/.pass
 *.priv.jwk
+# key backups (e.g. keys/p256-backup-YYYY-MM-DD/) — local only, never committed
+packages/*/keys/*/
+services/*/keys/*/
 
 # TypeScript build output
 packages/*/dist/

@@ -13,8 +13,9 @@
 import {
   jwtVerify,
   createRemoteJWKSet,
+  type CryptoKey,
   type JWTVerifyGetKey,
-  type KeyLike,
+  type KeyObject,
 } from "jose";
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import type { OAuthTokenVerifier } from "@modelcontextprotocol/sdk/server/auth/provider.js";
@@ -31,7 +32,7 @@ export interface OAuthEdgeConfig {
    * Pre-resolved verification key — for tests or a pinned key. Takes precedence
    * over jwksUri. Either a key or a jose key-resolver function.
    */
-  key?: KeyLike | Uint8Array | JWTVerifyGetKey;
+  key?: CryptoKey | KeyObject | Uint8Array | JWTVerifyGetKey;
 }
 
 /**
@@ -39,7 +40,7 @@ export interface OAuthEdgeConfig {
  * issuer/audience/signature/expiry and maps OIDC claims to AuthInfo.
  */
 export function makeOAuthEdge(cfg: OAuthEdgeConfig): OAuthTokenVerifier {
-  const key: KeyLike | Uint8Array | JWTVerifyGetKey | undefined =
+  const key: CryptoKey | KeyObject | Uint8Array | JWTVerifyGetKey | undefined =
     cfg.key ?? (cfg.jwksUri ? createRemoteJWKSet(new URL(cfg.jwksUri)) : undefined);
   if (!key) {
     throw new Error("[TRUST:FAIL] OAuth edge requires a jwksUri or a key");
@@ -56,7 +57,7 @@ export function makeOAuthEdge(cfg: OAuthEdgeConfig): OAuthTokenVerifier {
         ({ payload } =
           typeof key === "function"
             ? await jwtVerify(token, key as JWTVerifyGetKey, opts)
-            : await jwtVerify(token, key as KeyLike | Uint8Array, opts));
+            : await jwtVerify(token, key as CryptoKey | KeyObject | Uint8Array, opts));
       } catch (err) {
         throw new InvalidTokenError(err instanceof Error ? err.message : "invalid token");
       }

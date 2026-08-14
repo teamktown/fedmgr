@@ -39,7 +39,7 @@ const PRIV_PATH = `${TMP}ta.priv.jwk`;
 
 await fs.mkdir(TMP, { recursive: true });
 
-const { publicKey, privateKey } = await generateKeyPair("ES256");
+const { publicKey, privateKey } = await generateKeyPair("ES256", { extractable: true });
 const pubJwk = {
   ...(await exportJWK(publicKey)),
   kty: "EC", crv: "P-256", use: "sig", kid: "ta-test-kid",
@@ -60,7 +60,7 @@ const TA_KMS = new SoftKmsProvider({
 });
 
 // Ephemeral subordinate (TMI) keys for building a mock JWKS
-const { publicKey: subPub } = await generateKeyPair("ES256");
+const { publicKey: subPub } = await generateKeyPair("ES256", { extractable: true });
 const subPubJwk = {
   ...(await exportJWK(subPub)),
   kty: "EC", crv: "P-256", use: "sig", kid: "tmi-test-kid",

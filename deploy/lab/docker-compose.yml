@@ -181,6 +181,13 @@ services:
       TA_PUBLIC_JWK: "/app/keys/ta.pub.jwk"
       TA_PRIVATE_JWK: "/run/secrets/ta.priv.jwk"
       TA_ORG_NAME: "letsfederate Trust Anchor (local lab)"
+      # Authorize the lab TMI for the lab's mark types (OIDF §5.1.1
+      # trust_mark_issuers). Verifiers are fail-closed: without this, every
+      # mark check ends [TRUST:FAIL] "issuer not authorized". go-oidfed reads
+      # the same claim, so this also keeps cross-stack verification honest.
+      TA_TRUST_MARK_ISSUERS: >-
+        {"${TA_ENTITY_ID:-https://localhost:9443}/trustmarks/AssessedAndPasses_minQuality_v1":
+         ["${TMI_ISSUER:-https://localhost:9444}"]}
       # Register TMI as a subordinate — fetched at startup.
       # entityId = the TMI's public IDENTITY (its https origin via Caddy);
       # jwksUrl  = the in-network LOCATION (docker service DNS, plain http —

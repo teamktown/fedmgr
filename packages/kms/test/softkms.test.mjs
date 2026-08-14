@@ -26,7 +26,7 @@ const PRIV_PATH = `${TMP}tmi.priv.jwk`;
 
 await fs.mkdir(TMP, { recursive: true });
 
-const { publicKey, privateKey } = await generateKeyPair("ES256");
+const { publicKey, privateKey } = await generateKeyPair("ES256", { extractable: true });
 const pubJwk = { ...(await exportJWK(publicKey)), kty: "EC", crv: "P-256", use: "sig", kid: "unit-test-kid" };
 const privJwk = { ...(await exportJWK(privateKey)), kty: "EC", crv: "P-256", use: "sig", kid: "unit-test-kid" };
 
@@ -124,7 +124,7 @@ test("SoftKmsProvider rejects non-EC keys", async () => {
     issuer: "https://tmi.local",
     jwksUrl: "https://tmi.local/.well-known/jwks.json",
   });
-  await assert.rejects(() => kms.kid(), /expected EC P-256/);
+  await assert.rejects(() => kms.kid(), /cannot infer JWS alg/);
 });
 
 // Cleanup

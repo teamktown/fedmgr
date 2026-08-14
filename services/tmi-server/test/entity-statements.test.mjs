@@ -34,7 +34,7 @@ const PRIV_PATH = `${TMP}es.priv.jwk`;
 
 await fs.mkdir(TMP, { recursive: true });
 
-const { publicKey, privateKey } = await generateKeyPair("ES256");
+const { publicKey, privateKey } = await generateKeyPair("ES256", { extractable: true });
 const pubJwk = { ...(await exportJWK(publicKey)), kty: "EC", crv: "P-256", use: "sig", kid: "es-test-kid" };
 const privJwk = { ...(await exportJWK(privateKey)), kty: "EC", crv: "P-256", use: "sig", kid: "es-test-kid" };
 await fs.writeFile(PUB_PATH, JSON.stringify(pubJwk), "utf8");

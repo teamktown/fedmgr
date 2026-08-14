@@ -40,7 +40,7 @@ import {
   signSubordinateStatement,
 } from "../federation/subordinate-statements.js";
 // SSRF guard — single source of truth lives in @letsfederate/kms (Finding #10).
-import { assertSafeUrl, UrlSafetyError } from "@letsfederate/kms";
+import { assertSafeUrl, UrlSafetyError, jwsAlgForJwk, SUPPORTED_JWS_ALGS } from "@letsfederate/kms";
 
 // Maximum JWKS response body size (64 KB) to prevent memory exhaustion
 const JWKS_MAX_BYTES = 64 * 1024;
@@ -272,12 +272,13 @@ export function createEnrollmentRouter(
       let proofPayload: Record<string, unknown> | null = null;
       for (const jwk of keys) {
         try {
-          // importJWK pins the algorithm; jwtVerify algorithms option prevents
-          // algorithm confusion attacks (e.g. RS256/HS256 substitution)
-          const cryptoKey = await importJWK(jwk, "ES256");
+          // The alg comes from the enrollee's key (curve-derived), constrained
+          // to the supported EC set; the jwtVerify algorithms option still
+          // prevents algorithm confusion (e.g. RS256/HS256 substitution).
+          const cryptoKey = await importJWK(jwk, jwsAlgForJwk(jwk));
           const { payload } = await jwtVerify(proof_jws, cryptoKey, {
             clockTolerance: 60,
-            algorithms: ["ES256"],
+            algorithms: [...SUPPORTED_JWS_ALGS],
           });
           proofPayload = payload as Record<string, unknown>;
           break;

@@ -21,7 +21,8 @@
  * extracted into its own package in a future increment.
  */
 
-import { jwtVerify, decodeJwt, importJWK, type JWK, type JWTPayload, type KeyLike } from "jose";
+import { jwtVerify, decodeJwt, importJWK, type CryptoKey, type JWK, type JWTPayload } from "jose";
+import { jwsAlgForJwk, SUPPORTED_JWS_ALGS } from "@letsfederate/kms";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -136,7 +137,7 @@ export async function verifyTrustChain(
         // Just verify its self-signature here as a final sanity check.
         try {
           const taKey = await importFirstKey(taJwksKeys);
-          await jwtVerify(currentSelfJwt, taKey, { clockTolerance });
+          await jwtVerify(currentSelfJwt, taKey, { clockTolerance, algorithms: [...SUPPORTED_JWS_ALGS] });
         } catch (err: unknown) {
           return {
             ok: false,
@@ -180,7 +181,7 @@ export async function verifyTrustChain(
     // Verify authority's own self-signed statement (signature check)
     // -----------------------------------------------------------------------
     try {
-      await jwtVerify(authoritySelfJwt, authorityKey, { clockTolerance });
+      await jwtVerify(authoritySelfJwt, authorityKey, { clockTolerance, algorithms: [...SUPPORTED_JWS_ALGS] });
     } catch (err: unknown) {
       return {
         ok: false,
@@ -228,7 +229,7 @@ export async function verifyTrustChain(
     // Verify the subordinate statement using the authority's JWKS
     // -----------------------------------------------------------------------
     try {
-      await jwtVerify(subStmtJwt, authorityKey, { clockTolerance });
+      await jwtVerify(subStmtJwt, authorityKey, { clockTolerance, algorithms: [...SUPPORTED_JWS_ALGS] });
     } catch (err: unknown) {
       return {
         ok: false,
@@ -265,11 +266,14 @@ export async function verifyTrustChain(
 // Helpers
 // ---------------------------------------------------------------------------
 
-async function importFirstKey(keys: JWK[]): Promise<KeyLike> {
+async function importFirstKey(keys: JWK[]): Promise<CryptoKey> {
   let lastErr: Error | undefined;
   for (const key of keys) {
     try {
-      return (await importJWK(key, "ES256")) as KeyLike;
+      // jwsAlgForJwk throws for keys outside the supported EC family, which
+      // moves us on to the next candidate rather than importing a key we
+      // would never accept at verification time.
+      return (await importJWK(key, jwsAlgForJwk(key))) as CryptoKey;
     } catch (err: unknown) {
       lastErr = err as Error;
     }

@@ -25,7 +25,9 @@ export interface CryptoAsset {
 
 /** fedmgr's actual crypto surface (kept in sync with the inventory). */
 export const FEDMGR_CRYPTO_ASSETS: CryptoAsset[] = [
-  { name: "ECDSA-P256", use: "trust-chain-jws", primitive: "signature", parameterSet: "P-256", oid: "1.2.840.10045.4.3.2", quantumSafe: false, migrateTo: "ML-DSA", deadline: "2031-12-31" },
+  // ES512/P-521 is the signing default since 2026-08; verifiers also accept
+  // ES256/ES384 (curve-derived alg, closed EC allowlist).
+  { name: "ECDSA-P521", use: "trust-chain-jws", primitive: "signature", parameterSet: "P-521", oid: "1.2.840.10045.4.3.4", quantumSafe: false, migrateTo: "ML-DSA", deadline: "2031-12-31" },
   { name: "ECDSA-P256", use: "local-ca", primitive: "signature", parameterSet: "P-256", oid: "1.2.840.10045.4.3.2", quantumSafe: false, migrateTo: "ML-DSA", deadline: "2031-12-31" },
   { name: "ECDSA-P256", use: "artifact-signing", primitive: "signature", parameterSet: "P-256", oid: "1.2.840.10045.4.3.2", quantumSafe: false, migrateTo: "ML-DSA", deadline: "2031-12-31" },
   { name: "SHA-256", use: "digest", primitive: "hash", parameterSet: "SHA-256", oid: "2.16.840.1.101.3.4.2.1", quantumSafe: true, note: "Grover-weakened to ~128-bit — acceptable" },

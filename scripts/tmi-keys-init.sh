@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # scripts/tmi-keys-init.sh
 #
-# Generates an encrypted EC P-256 JWK pair for the TMI server using Step CLI.
+# Generates an encrypted EC JWK pair (default P-521 → ES512; KEY_CURVE=P-256
+# to override) for the TMI server using Step CLI.
 #
 # POLICY:
 #   - Private key is NEVER stored as plaintext on disk.
@@ -38,10 +39,11 @@ if [[ ! -f "${PASS_FILE}" ]]; then
   echo "Generated passphrase at ${PASS_FILE} (chmod 600)"
 fi
 
-# Generate encrypted JWK pair (EC P-256).
+# Generate encrypted JWK pair (EC P-521 → ES512 default; P-256 keys keep
+# working because signing/verification derive the alg from the key's curve).
 # --password-file ensures the private JWK is PBES2-encrypted; no naked key.
 step crypto jwk create "${PUB_JWK}" "${PRIV_JWE}" \
-  --kty EC --curve P-256 \
+  --kty EC --curve "${KEY_CURVE:-P-521}" \
   --use sig \
   --password-file "${PASS_FILE}" \
   --no-password=false \

@@ -36,7 +36,7 @@ const TMP = new URL("./.tmp/cv/", import.meta.url).pathname;
 await fs.mkdir(TMP, { recursive: true });
 
 async function makeKms(label) {
-  const { publicKey, privateKey } = await generateKeyPair("ES256");
+  const { publicKey, privateKey } = await generateKeyPair("ES256", { extractable: true });
   const pubJwk = { ...(await exportJWK(publicKey)), kty: "EC", crv: "P-256", use: "sig", kid: `${label}-kid` };
   const privJwk = { ...(await exportJWK(privateKey)), kty: "EC", crv: "P-256", use: "sig", kid: `${label}-kid` };
   const pubPath = `${TMP}${label}.pub.jwk`;

@@ -113,6 +113,27 @@ class VerifyError extends Error {
 }
 
 /**
+ * Closed JWS alg set accepted by this verifier (EC family only — go-oidfed's
+ * lighthouse signs ES512 by default, our lab historically ES256). The alg for
+ * each candidate key is derived from the key itself, never from the JWS header
+ * alone; the allowlist is enforced again by jose at verification time.
+ * Mirrors SUPPORTED_JWS_ALGS in @letsfederate/kms — kept local so this
+ * package stays dependency-free.
+ */
+const SUPPORTED_JWS_ALGS = ["ES256", "ES384", "ES512"];
+const EC_CRV_TO_ALG: Record<string, string> = {
+  "P-256": "ES256",
+  "P-384": "ES384",
+  "P-521": "ES512",
+};
+
+/** alg for a candidate JWK: its own `alg` if supported, else from its curve. */
+function algForCandidateJwk(jwk: JWK): string | undefined {
+  if (jwk.alg) return SUPPORTED_JWS_ALGS.includes(jwk.alg) ? jwk.alg : undefined;
+  return jwk.kty === "EC" && jwk.crv ? EC_CRV_TO_ALG[jwk.crv] : undefined;
+}
+
+/**
  * Verify a compact JWS against a set of candidate JWKs.
  * Returns the payload and the JWK that verified it. A key that fails only on
  * SIGNATURE is skipped; a key that matches but yields an invalid claim (expiry,
@@ -128,15 +149,17 @@ async function verifyAgainstJwks(
   if (keys.length === 0) throw new VerifyError("no candidate keys");
   let sawMismatch = false;
   for (const jwk of keys) {
+    const alg = algForCandidateJwk(jwk);
+    if (!alg) continue; // key outside the supported EC family — never a verifier
     let key: Awaited<ReturnType<typeof importJWK>>;
     try {
-      key = await importJWK(jwk, "ES256");
+      key = await importJWK(jwk, alg);
     } catch {
       continue;
     }
     try {
       const { payload } = await jwtVerify(jws, key, {
-        algorithms: ["ES256"],
+        algorithms: SUPPORTED_JWS_ALGS,
         clockTolerance: opts.clockTolerance ?? 60,
         ...(opts.typ ? { typ: opts.typ } : {}),
       });

@@ -43,7 +43,7 @@ test("minted EC is self-signed with iss==sub and the correct typ", async () => {
   assert.equal(payload.jwks.keys[0].kid, kp.publicJwk.kid);
   // The self-signature verifies against the published public key (jose throws on mismatch).
   const { jwtVerify } = await import("jose");
-  const key = await importJWK(kp.publicJwk, "ES256");
+  const key = await importJWK(kp.publicJwk, kp.publicJwk.alg);
   await jwtVerify(jwt, key, { typ: "entity-statement+jwt" });
 });
 
@@ -121,14 +121,14 @@ test("buildEnrollmentProof: JWS carries {nonce, entity_id}, verifies under the l
   const { jwtVerify } = await import("jose");
   const kp = await mintLeafKeypair();
   const jws = await buildEnrollmentProof("abc123nonce", "http://localhost:9631/mcp/x", kp.privateJwk);
-  const key = await importJWK(kp.publicJwk, "ES256");
+  const key = await importJWK(kp.publicJwk, kp.publicJwk.alg);
   const { payload, protectedHeader } = await jwtVerify(jws, key);
   assert.equal(payload.nonce, "abc123nonce");
   assert.equal(payload.entity_id, "http://localhost:9631/mcp/x");
   assert.equal(protectedHeader.kid, kp.publicJwk.kid);
   // a different key must NOT verify it (proof of THIS key's ownership)
   const other = await mintLeafKeypair();
-  const wrongKey = await importJWK(other.publicJwk, "ES256");
+  const wrongKey = await importJWK(other.publicJwk, other.publicJwk.alg);
   await assert.rejects(() => jwtVerify(jws, wrongKey));
 });
 

@@ -11,8 +11,15 @@
       "types": "./dist/index.d.ts"
     }
   },
-  "files": ["dist", "CHANGELOG.md", "README.md"],
-  "publishConfig": { "access": "public", "provenance": true },
+  "files": [
+    "dist",
+    "CHANGELOG.md",
+    "README.md"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/letsfederate/fedmgr.git",
@@ -25,12 +32,14 @@
     "pretest": "npm run build --silent"
   },
   "dependencies": {
-    "jose": "^5.2.0"
+    "jose": "^6.2.8"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
     "typescript": "^5.4.0"
   },
-  "engines": { "node": ">=24.0.0 <27.0.0" },
+  "engines": {
+    "node": ">=24.0.0 <27.0.0"
+  },
   "license": "MIT"
 }

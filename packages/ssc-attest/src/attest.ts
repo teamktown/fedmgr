@@ -12,6 +12,22 @@
  */
 import { jwtVerify, importJWK, decodeJwt, type JWK } from "jose";
 
+/**
+ * Supported JWS algs for SSC attestation keys (EC family only). Mirrors
+ * SUPPORTED_JWS_ALGS in @letsfederate/kms — kept local so this package stays
+ * dependency-free. Alg is derived from the pinned key, never the JWS header.
+ */
+const SUPPORTED_JWS_ALGS = ["ES256", "ES384", "ES512"];
+const EC_CRV_TO_ALG: Record<string, string> = {
+  "P-256": "ES256",
+  "P-384": "ES384",
+  "P-521": "ES512",
+};
+function algForJwk(jwk: JWK): string | undefined {
+  if (jwk.alg) return SUPPORTED_JWS_ALGS.includes(jwk.alg) ? jwk.alg : undefined;
+  return jwk.kty === "EC" && jwk.crv ? EC_CRV_TO_ALG[jwk.crv] : undefined;
+}
+
 export const SSC_STATEMENT_TYPE = "https://in-toto.io/Statement/v1";
 export const SSC_PREDICATE_TYPE = "https://letsfederate.org/ssc-gate/v1";
 export const SSC_JWT_TYP = "application/vnd.letsfederate.ssc-gate+jwt";
@@ -188,8 +204,10 @@ export async function verifySscStatementJws(
   let sawMismatch = false;
   for (const jwk of keys) {
     try {
-      const key = await importJWK(jwk, "ES256");
-      const res = await jwtVerify(jws, key, { algorithms: ["ES256"], typ: SSC_JWT_TYP });
+      const alg = algForJwk(jwk);
+      if (!alg) continue; // pinned key outside the supported EC family
+      const key = await importJWK(jwk, alg);
+      const res = await jwtVerify(jws, key, { algorithms: SUPPORTED_JWS_ALGS, typ: SSC_JWT_TYP });
       payload = res.payload as Record<string, unknown>;
       break;
     } catch (err) {
